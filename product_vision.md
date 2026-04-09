@@ -26,3 +26,8 @@ Automates course planning and eliminates the need to work around an academic adv
 POWERED BY
 
 LLM Comprehension + Webapp front end
+
+
+
+
+The SCU Course Planner is an LLM-powered web app that automates schedule building for SCU undergrads by analyzing past transcripts and course ratings to recommend the optimal path forward. It eliminates the frustration of navigating Workday or waiting for an academic advisor by giving you instant, personalized course planning.
