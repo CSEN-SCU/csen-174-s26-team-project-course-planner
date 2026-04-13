@@ -1,0 +1,28 @@
+# SCU Course Planner — Cursor rules (team: fill in sections below)
+
+## Product direction (do not duplicate here)
+
+- **Product vision:** See [`product_vision.md`](product_vision.md) for the full vision (FOR / WHO / THAT / UNLIKE / OUR PRODUCT / POWERED BY). Update that file when the vision changes.
+- **Problem framing & “How Might We”:** See [`problem_framing_canvas.md`](problem_framing_canvas.md) for the Problem Framing Canvas and the current HMW statement. Do not paste the full vision or HMW into this file—reference those docs so they stay authoritative in one place. (If the course later consolidates the HMW into `product_vision.md`, update this bullet to point there instead.)
+
+## Project snapshot (fill in)
+
+- **Course / team:** <!-- e.g. CSEN 174, team name -->
+- **Stack:** <!-- e.g. frontend, backend, LLM—keep aligned with repo -->
+- **Repo purpose (one line):** <!-- -->
+
+## Conventions (fill in)
+
+- **Branching / PRs:** <!-- -->
+- **Commit messages:** <!-- -->
+- **Testing / checks before merge:** <!-- -->
+- **Environment / secrets:** <!-- never commit; where config lives -->
+
+## Code & UX expectations (fill in)
+
+- **Accessibility:** <!-- e.g. target WCAG level, keyboard, screen readers -->
+- **Style:** <!-- formatting, lint, framework patterns -->
+
+## Out of scope / non-goals (fill in)
+
+- <!-- What this project is not trying to solve in v1 -->
