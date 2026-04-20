@@ -6,10 +6,15 @@ const Datastore = require("nedb-promises");
 const dotenv = require("dotenv");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-dotenv.config();
+// Always load env from this prototype folder (cwd-independent).
+dotenv.config({ path: path.join(__dirname, ".env") });
 
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
+
+function geminiKey() {
+  return (process.env.GEMINI_API_KEY || "").trim();
+}
 
 const dataDir = path.join(__dirname, "data");
 if (!fs.existsSync(dataDir)) {
@@ -62,8 +67,16 @@ RESPONSE RULES:
 `.trim();
 }
 
+function parseModelJson(text) {
+  const cleaned = text
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+  return JSON.parse(cleaned);
+}
+
 async function generateRecommendations(payload) {
-  const key = process.env.GEMINI_API_KEY;
+  const key = geminiKey();
   if (!key) {
     return {
       plans: [
@@ -144,17 +157,19 @@ async function generateRecommendations(payload) {
         },
       ],
       advisorTip:
-        "Add your GEMINI_API_KEY in .env to replace these seeded plans with AI-generated recommendations.",
+        "Demo mode: add GEMINI_API_KEY to prototypes/Jason/.env (same folder as server.js), restart the server, then generate again.",
     };
   }
 
   const genAI = new GoogleGenerativeAI(key);
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash-lite",
+    generationConfig: { responseMimeType: "application/json" },
+  });
   const prompt = createPrompt(payload);
   const response = await model.generateContent(prompt);
   const text = response.response.text().trim();
-  const parsed = JSON.parse(text.replace(/^```json|```$/g, "").trim());
-  return parsed;
+  return parseModelJson(text);
 }
 
 app.post("/api/recommend", async (req, res) => {
@@ -165,14 +180,16 @@ app.post("/api/recommend", async (req, res) => {
     }
 
     const recommendations = await generateRecommendations(req.body);
+    const source = geminiKey() ? "gemini" : "fallback";
     const saved = await plansDb.insert({
       createdAt: new Date().toISOString(),
       input: { persona, goals, constraints, priorities },
-      output: recommendations,
+      output: { ...recommendations, source },
     });
 
     return res.json({
       id: saved._id,
+      source,
       ...recommendations,
     });
   } catch (error) {
@@ -189,7 +206,11 @@ app.get("/api/plans", async (_req, res) => {
 });
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, service: "Jason prototype API" });
+  res.json({
+    ok: true,
+    service: "Jason prototype API",
+    geminiConfigured: Boolean(geminiKey()),
+  });
 });
 
 app.use((_req, res) => {

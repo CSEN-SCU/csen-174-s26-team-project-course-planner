@@ -87,6 +87,31 @@ body {
   background: rgba(255, 255, 255, 0.03);
 }
 
+.api-status {
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  max-width: 42rem;
+  color: var(--muted);
+}
+
+.api-status.ok {
+  color: var(--accent);
+  border-color: rgba(137, 247, 200, 0.35);
+}
+
+.api-status.warn {
+  color: var(--accent-2);
+  border-color: rgba(255, 201, 122, 0.35);
+}
+
+.api-status.err {
+  color: var(--danger);
+  border-color: rgba(255, 106, 136, 0.35);
+}
+
 .wizard-header {
   display: flex;
   justify-content: space-between;

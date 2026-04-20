@@ -115,4 +115,26 @@ function renderPlans(plans) {
     .join("");
 }
 
+async function refreshApiStatus() {
+  const el = document.getElementById("apiStatus");
+  if (!el) return;
+  try {
+    const res = await fetch("/api/health");
+    const data = await res.json();
+    if (data.geminiConfigured) {
+      el.textContent =
+        "Live AI: server loaded GEMINI_API_KEY from prototypes/Jason/.env (restart after you change it).";
+      el.className = "api-status ok";
+    } else {
+      el.textContent =
+        "Demo mode: no API key loaded. Put GEMINI_API_KEY in prototypes/Jason/.env next to server.js, save, then run npm start again.";
+      el.className = "api-status warn";
+    }
+  } catch {
+    el.textContent = "Could not reach the API. Is the server running?";
+    el.className = "api-status err";
+  }
+}
+
 syncWizardUI();
+refreshApiStatus();
