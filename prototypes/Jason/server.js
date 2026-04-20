@@ -149,7 +149,7 @@ async function generateRecommendations(payload) {
   }
 
   const genAI = new GoogleGenerativeAI(key);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
   const prompt = createPrompt(payload);
   const response = await model.generateContent(prompt);
   const text = response.response.text().trim();
