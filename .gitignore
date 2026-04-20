@@ -4,3 +4,9 @@
 !.env.example
 !.env.sample
 !.env.template
+
+# Node dependencies and local artifacts
+node_modules/
+*.log
+dist/
+prototypes/Jason/data/

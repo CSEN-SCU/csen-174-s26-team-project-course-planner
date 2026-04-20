@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SCU Course Planner - Guided Wizard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Zain:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="bg-grid"></div>
+    <main class="app-shell">
+      <section class="hero card">
+        <p class="eyebrow">SCU Course Planner Prototype</p>
+        <h1>Build a realistic in-season schedule in minutes.</h1>
+        <p class="hero-copy">
+          This guided wizard helps SCU students balance graduation progress with real life constraints.
+          It is designed for high-load schedules like D1 athletes, students with jobs, and transfer transitions.
+        </p>
+        <div class="pill-row">
+          <span>Transcript-aware</span>
+          <span>Quality vs. Difficulty tradeoffs</span>
+          <span>Explainable recommendations</span>
+        </div>
+      </section>
+
+      <section class="wizard card">
+        <div class="wizard-header">
+          <h2>Advisor-style Planning Wizard</h2>
+          <p id="stepLabel">Step 1 of 5</p>
+        </div>
+
+        <div class="progress-track"><div id="progressFill"></div></div>
+
+        <form id="wizardForm">
+          <div class="step active" data-step="1">
+            <label for="persona">Who are you planning for?</label>
+            <textarea
+              id="persona"
+              required
+              placeholder="Example: Jordan Lee, third-year D1 soccer athlete with 20-hour training weeks in Fall quarter."
+            ></textarea>
+          </div>
+
+          <div class="step" data-step="2">
+            <label for="transcript">Transcript / completed classes context</label>
+            <textarea
+              id="transcript"
+              required
+              placeholder="Paste transcript details, completed requirements, AP/transfer credits, and current standing."
+            ></textarea>
+          </div>
+
+          <div class="step" data-step="3">
+            <label for="goals">What goals matter this quarter?</label>
+            <textarea
+              id="goals"
+              required
+              placeholder="Example: Stay on graduation track, complete one major requirement, avoid burnout in season."
+            ></textarea>
+          </div>
+
+          <div class="step" data-step="4">
+            <label for="constraints">Hard constraints and time limits</label>
+            <textarea
+              id="constraints"
+              required
+              placeholder="Example: Practice M-F 3-7pm, away travel twice, no Friday labs, max one high-workload class."
+            ></textarea>
+          </div>
+
+          <div class="step" data-step="5">
+            <label for="priorities">Priorities: quality vs difficulty by class type</label>
+            <textarea
+              id="priorities"
+              required
+              placeholder="Example: For major courses prioritize teaching quality; for core requirements prioritize manageable workload."
+            ></textarea>
+          </div>
+
+          <div class="actions">
+            <button type="button" id="backBtn" class="ghost">Back</button>
+            <button type="button" id="nextBtn">Next</button>
+            <button type="submit" id="submitBtn" class="hidden">Generate Plans</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="results" class="results card hidden">
+        <div class="wizard-header">
+          <h2>Recommended Schedules</h2>
+          <p>AI-generated plans with clear tradeoffs.</p>
+        </div>
+        <p id="advisorTip" class="tip"></p>
+        <div id="plansContainer" class="plans"></div>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

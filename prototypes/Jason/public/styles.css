@@ -1,0 +1,230 @@
+:root {
+  --bg: #0f1015;
+  --bg-soft: #171923;
+  --text: #ececf1;
+  --muted: #b7b9c8;
+  --accent: #89f7c8;
+  --accent-2: #ffc97a;
+  --line: #2b2f43;
+  --danger: #ff6a88;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Outfit", sans-serif;
+  color: var(--text);
+  background: radial-gradient(circle at 10% 20%, #1b1e2d, var(--bg));
+  min-height: 100vh;
+}
+
+.bg-grid {
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 42px 42px;
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+.app-shell {
+  position: relative;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 2rem 1rem 3rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.card {
+  background: linear-gradient(180deg, rgba(34, 37, 52, 0.88), rgba(23, 25, 35, 0.92));
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 1.2rem;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.24);
+}
+
+.hero h1 {
+  font-family: "Zain", sans-serif;
+  font-size: clamp(2rem, 4.5vw, 3.1rem);
+  line-height: 0.95;
+  margin: 0.4rem 0;
+  letter-spacing: 0.5px;
+}
+
+.eyebrow {
+  margin: 0;
+  text-transform: uppercase;
+  font-size: 0.72rem;
+  color: var(--accent);
+  letter-spacing: 0.2em;
+}
+
+.hero-copy {
+  margin-top: 0.8rem;
+  color: var(--muted);
+  max-width: 70ch;
+}
+
+.pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.pill-row span {
+  font-size: 0.82rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.wizard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+.wizard-header h2 {
+  margin: 0;
+}
+
+.wizard-header p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.progress-track {
+  margin: 1rem 0;
+  height: 10px;
+  width: 100%;
+  background: #121420;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+#progressFill {
+  height: 100%;
+  width: 20%;
+  background: linear-gradient(90deg, var(--accent), #67d7ff);
+  transition: width 220ms ease;
+}
+
+label {
+  display: block;
+  margin-bottom: 0.4rem;
+  font-weight: 600;
+}
+
+textarea {
+  width: 100%;
+  min-height: 140px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #111320;
+  color: var(--text);
+  font-family: inherit;
+  padding: 0.8rem;
+  resize: vertical;
+}
+
+textarea:focus {
+  outline: 2px solid rgba(137, 247, 200, 0.35);
+  border-color: var(--accent);
+}
+
+.step {
+  display: none;
+}
+
+.step.active {
+  display: block;
+  animation: fade 220ms ease;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.actions {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+button {
+  border: none;
+  border-radius: 10px;
+  padding: 0.7rem 1rem;
+  font-family: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  background: linear-gradient(90deg, var(--accent), #70d9ff);
+  color: #111;
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+.ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+
+.hidden {
+  display: none;
+}
+
+.results .tip {
+  color: var(--accent-2);
+}
+
+.plans {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.plan {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 0.9rem;
+  background: #131625;
+}
+
+.plan h3 {
+  margin-top: 0;
+}
+
+.plan-meta {
+  margin: 0.4rem 0;
+  color: var(--muted);
+}
+
+.plan ul {
+  margin: 0.6rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.error {
+  color: var(--danger);
+}
