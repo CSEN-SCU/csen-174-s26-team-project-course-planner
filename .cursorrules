@@ -2,8 +2,8 @@
 
 ## Product direction (do not duplicate here)
 
-- **Product vision:** See [`product_vision.md`](product_vision.md) for the full vision (FOR / WHO / THAT / UNLIKE / OUR PRODUCT / POWERED BY). Update that file when the vision changes.
-- **Problem framing & “How Might We”:** See [`problem_framing_canvas.md`](problem_framing_canvas.md) for the Problem Framing Canvas and the current HMW statement. Do not paste the full vision or HMW into this file—reference those docs so they stay authoritative in one place. (If the course later consolidates the HMW into `product_vision.md`, update this bullet to point there instead.)
+- **Product vision:** See [`product-vision.md`](product-vision.md) for the full vision (FOR / WHO / THAT / UNLIKE / OUR PRODUCT / POWERED BY), HMW, and summarized canvas insights. Update that file when the vision changes.
+- **Problem framing (full canvas):** See [`problem_framing_canvas.md`](problem_framing_canvas.md) for the complete Problem Framing Canvas. Do not duplicate long excerpts in `.cursorrules`—reference those docs so they stay authoritative in one place.
 
 ## Project snapshot (fill in)
 
