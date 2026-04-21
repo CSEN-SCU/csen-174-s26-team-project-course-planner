@@ -1,73 +1,69 @@
 # Jiasheng — prototype
 
-This prototype explores an end-to-end planning flow where a student enters their major, pastes a transcript (or course list), and the app searches a demo “current term” offering list to produce a ranked, explainable shortlist (separating teaching quality from workload/difficulty via adjustable weights).
+End-to-end flow: upload **Workday “View My Academic Progress”** (`.xlsx`), paste a **public major requirements URL** (e.g. SCU engineering pages), and get a **ranked list of selectable courses** for the chosen term using the bundled **course sections** export (`SCU_Find_Course_Sections.xlsx`) for schedules, tags, and instructors.
 
-Compared to teammates’ approaches that lean more on static browsing or manual filtering, this direction emphasizes transcript-driven eligibility/prereq matching, automated ranking, and transparent tradeoffs (why a course is recommended, what risks/uncertainties exist, and what alternatives look like).
+Compared with static browsing, this emphasizes **progress-driven gaps**, **major requirement parsing**, and **transparent ordering** (missing major courses first, then tag-matched electives where applicable).
 
 Path: `course-planner/prototypes/jiasheng/`
 
-## 技术栈（满足课程要求）
+## Stack (course requirements)
 
-- **Front end**: Web UI（Jinja2 模板 + 少量 JS），含 **落地介绍页**（`/`）与试用页（`/app`）
-- **Back end**: FastAPI（`app/main.py`）
-- **Database**: SQLite + SQLAlchemy（默认写入 `data/app.db`）
-- **AI API**（二选一或都配）：
-  - **Gemini**：Google Generative Language API（`generateContent` + JSON MIME type），用于成绩单结构化解析 + 推荐解释增强
-  - **OpenAI**：Chat Completions（JSON 模式），同上
-  - 未配置任何 key / 或 `AI_PROVIDER=none`：自动降级为规则解析 + 占位解释（保证展示可用）
+- **Front end**: Jinja2 templates + static JS — landing (`/`) and app (`/app`)
+- **Back end**: FastAPI (`app/main.py`)
+- **Database**: SQLite + SQLAlchemy (default `data/app.db`)
+- **AI (optional)**: Gemini and/or OpenAI for structured parsing and rationale text; set keys in environment only (never commit keys)
 
-### 选择用 Gemini（推荐你现在的方向）
-
-在运行 `uvicorn` 的终端里设置（示例）：
+### Using Gemini (optional)
 
 ```bash
-export GEMINI_API_KEY="你的key"
-export AI_PROVIDER="gemini"   # 或 auto（auto 会优先走 Gemini）
-# 可选：换模型（以 Google AI Studio 里可用的为准）
+export GEMINI_API_KEY="your-key"
+export AI_PROVIDER="gemini"   # or auto (prefers Gemini when key is set)
 # export GEMINI_MODEL="gemini-2.0-flash"
 ```
 
-> 说明：**仍然需要“接 API”**，但 key 应该只放在**后端环境变量**里，由服务器调用；不要写进前端页面或提交到 Git。
+Keys belong in **server environment variables** or a local `.env` (gitignored). Do not put secrets in the repo or front end.
 
-## 本地运行（课堂展示：works on your laptop）
+## Run locally
 
-在目录 `course-planner/prototypes/jiasheng/` 下：
+From `course-planner/prototypes/jiasheng/`:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# 可选：避免某些 macOS 环境下 Python 写入系统缓存目录失败
+# Optional: avoid macOS permission issues writing bytecode
 export PYTHONPYCACHEPREFIX="$(pwd)/.pycache_dir"
-
-# 可选：启用 AI（复制 .env.example 为 .env 自行填写）
-# export $(grep -v '^#' .env | xargs)
 
 python -m uvicorn app.main:app --reload --port 8010
 ```
 
-### 一键启动（推荐，避免在错误目录运行）
-
-在目录 `course-planner/prototypes/jiasheng/` 下：
+### One-command dev server (recommended)
 
 ```bash
 ./run_dev.sh
 ```
 
-如需换端口：
+Custom port:
 
 ```bash
 PORT=8011 ./run_dev.sh
 ```
 
-打开浏览器访问：
+Open in the browser:
 
-- `v`（介绍页：是什么 / 给谁 / 解决什么 / 怎么用）
-- `http://127.0.0.1:8010/app`（试用页）
+- `http://127.0.0.1:8010/` — landing page
+- `http://127.0.0.1:8010/app` — app (upload Academic Progress `.xlsx`, major requirements URL, generate)
 
-## API（便于你现场演示）
+## API (for demos)
 
-- `POST /api/plan`：生成推荐并写入数据库
-- `GET /api/session/{id}`：读取历史会话与推荐
+- `POST /api/upload_progress` — upload Academic Progress `.xlsx`; returns `file_id`
+- `GET /api/plan_from_progress?url=...&term=...&file_id=...` — build recommendations from uploaded file + major requirements page
+- `GET /api/major_requirements?url=...` — fetch and parse a public major requirements page
+- `POST /api/plan` — legacy transcript-based plan (if used)
+- `GET /api/session/{id}` — load a stored session and recommendations
 
+## Data files
+
+- `SCU_Find_Course_Sections.xlsx` — term offerings (sections, instructors, tags); used as the selectable course pool when present.
+- Copy `.env.example` to `.env` locally if you use environment-based API keys.
