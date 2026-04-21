@@ -10,3 +10,13 @@ node_modules/
 *.log
 dist/
 prototypes/Jason/data/
+.vite/
+
+# OS / editor noise
+.DS_Store
+.cursor/storyboard
+
+# Prototype uploads / personal exports (do not commit)
+prototypes/jiasheng/data/uploads/
+prototypes/jiasheng/View_My_Academic_Progress.xlsx
+prototypes/jiasheng/~$*.xlsx

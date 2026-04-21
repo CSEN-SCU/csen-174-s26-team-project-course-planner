@@ -29,6 +29,7 @@ An LLM-powered web app that helps SCU undergraduates plan next-quarter schedules
 | [`.cursorrules`](.cursorrules) | Cursor / AI agent project context |
 | [`prototypes/`](prototypes/) | Each teammate’s divergent prototype |
 | [`prototypes/Jason/`](prototypes/Jason/) | Jason’s guided-wizard prototype (see its `README.md`) |
+| [`prototypes/jiasheng/`](prototypes/jiasheng/) | Jiasheng’s FastAPI prototype: Academic Progress upload + major requirements + course sections (see its `README.md`) |
 
 ## Secrets
 

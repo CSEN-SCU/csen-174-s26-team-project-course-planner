@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block content %}
+  <section class="card">
+    <h1>App: Generate recommendations</h1>
+    <p class="muted">
+      Generates a selectable course list using your uploaded <code>View_My_Academic_Progress.xlsx</code> (Academic Progress).
+    </p>
+
+    <form id="planForm" class="form">
+      <div class="row">
+        <label>
+          Major
+          <input name="major" required placeholder="e.g., Computer Science and Engineering" />
+        </label>
+        <label>
+          Term
+          <input name="term" value="2026 Spring" required />
+        </label>
+      </div>
+
+      <label>
+        Academic Progress file (.xlsx)
+        <input type="file" name="progress_file" accept=".xlsx" required />
+        <div class="muted">Export from Workday: “View My Academic Progress” (XLSX).</div>
+      </label>
+
+      <label>
+        Public major requirements URL
+        <input name="major_requirements_url" required placeholder="e.g., https://www.scu.edu/.../computer-science-and-engineering-major/" />
+        <div class="muted">We parse requirements from this public webpage (no login needed).</div>
+      </label>
+
+      <div class="row">
+        <label>
+          Teaching quality weight (0–100)
+          <input type="number" name="quality_weight" min="0" max="100" value="60" />
+        </label>
+        <label>
+          Workload tolerance (0–100)
+          <input type="number" name="workload_weight" min="0" max="100" value="60" />
+        </label>
+        <label>
+          Progress/advancement weight (0–100)
+          <input type="number" name="progress_weight" min="0" max="100" value="70" />
+        </label>
+      </div>
+
+      <div class="row">
+        <label class="checkbox">
+          <input type="checkbox" name="avoid_evening" />
+          Prefer to avoid evening classes (heuristic: start time ≥ 17:00)
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" name="online_only" />
+          Online only (demo data may not encode modality; we will apply a uniform penalty)
+        </label>
+      </div>
+
+      <div class="ctaRow">
+        <button class="btn primary" type="button" id="progressBtn">Generate from Academic Progress</button>
+        <a class="btn" href="/">Back to About</a>
+      </div>
+    </form>
+  </section>
+
+  <div id="aiMeta" class="muted" style="margin: 10px 0 6px"></div>
+
+  <section class="split">
+    <div class="card">
+      <h2>Parsed / derived signals</h2>
+      <pre id="parsed" class="pre">(not generated yet)</pre>
+    </div>
+    <div class="card">
+      <h2>Recommendations</h2>
+      <div id="results" class="results">(not generated yet)</div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-top: 14px">
+    <h2>Major requirements (fetched)</h2>
+    <div class="muted" style="margin-bottom: 8px">Shown after you generate (if you provided a link).</div>
+    <pre id="majorReqs" class="pre">(no link provided)</pre>
+  </section>
+
+  <script src="/static/app.js"></script>
+{% endblock %}
