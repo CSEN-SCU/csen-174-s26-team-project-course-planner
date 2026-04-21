@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SCU Course Planner Studio</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body data-ambient="intro">
+    <main class="shell">
+      <div class="brand-ribbon">
+        <p class="eyebrow">SCU Course Planner Prototype</p>
+        <div
+          class="stage-dots"
+          role="group"
+          aria-label="Planning steps"
+          aria-describedby="stageDotsNavHint"
+        >
+          <span id="stageDotsNavHint" class="sr-only">
+            Intro, History, Input, and 4 year plan are navigation controls.
+            Results is not clickable; it only highlights when you are on the
+            recommendation screen.
+          </span>
+          <button type="button" id="dotIntro" class="dot dot--nav active">
+            Intro
+          </button>
+          <button type="button" id="dotHistory" class="dot dot--nav">
+            History
+          </button>
+          <button type="button" id="dotInput" class="dot dot--nav">Input</button>
+          <span
+            id="dotResults"
+            class="dot dot--step-indicator"
+            title="Not a button — shows you are on the recommendation step. Use Revise Inputs or another tab to leave."
+            >Results</span>
+          <button type="button" id="navPlanBtn" class="dot dot--nav">
+            4 year plan
+          </button>
+        </div>
+      </div>
+
+      <section id="screenIntro" class="screen active">
+        <div class="hero-card">
+          <p class="label">Gallery Walk Friendly</p>
+          <h1>Turn your transcript into clearer next-term choices.</h1>
+          <p class="lead">
+            <strong>SCU Course Planner</strong> is an LLM-powered web app for
+            SCU undergraduates who need help with course planning. The product
+            vision is to combine your transcript and course ratings into
+            stronger suggestions; this prototype focuses on transcript input plus
+            SCU catalog context to deliver explainable next-term options—cutting
+            through scattered information and Workday friction without replacing
+            your advisor when you need a human.
+          </p>
+          <div class="intro-grid">
+            <article>
+              <h2>Who It’s For</h2>
+              <p>
+                Especially upperclassmen with more electives, transfer and
+                international students, and anyone working long hours—anyone
+                who needs faster, more confident planning during enrollment and
+                quarter build-out.
+              </p>
+            </article>
+            <article>
+              <h2>What It Solves</h2>
+              <p>
+                The pain of suboptimal picks, stress, and extra advising cycles
+                when planning info is fragmented and “good choice” is hard to
+                see—especially when workload and fit should vary by course type.
+                Unlike relying only on Workday, spreadsheets, or advisor
+                availability, this tool automates a first pass so you get
+                clearer, explainable next-term options faster.
+              </p>
+            </article>
+            <article>
+              <h2>How To Use</h2>
+              <p>
+                Upload a JPG, PDF, or TXT of your transcript (or paste the
+                text), then generate a top-three course recommendation with
+                short reasons and a brief summary you can save for later.
+              </p>
+            </article>
+          </div>
+          <div class="intro-actions">
+            <button id="startBtn" class="cta">Start Planning</button>
+            <button id="openFourYearBtn" type="button" class="secondary intro-plan-link">
+              Four-year plan
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section id="screenInput" class="screen">
+        <div class="panel">
+          <h2>Step 1: Share Your Academic Context</h2>
+          <p class="lead compact">
+            Add transcript text and/or upload a file. The model will interpret
+            all provided context.
+          </p>
+
+          <label for="planQuarterSelect" class="field-label"
+            >Planning for quarter</label
+          >
+          <select id="planQuarterSelect" class="field-select"></select>
+          <p class="hint">
+            Defaults to the next academic quarter. You can choose through about
+            one year ahead (Fall, Winter, and Spring only).
+          </p>
+
+          <label for="transcriptFile" class="field-label"
+            >Transcript file (optional)</label
+          >
+          <input
+            id="transcriptFile"
+            type="file"
+            accept=".jpg,.jpeg,.pdf,.txt,image/jpeg,application/pdf,text/plain"
+          />
+          <p class="hint">Allowed formats: JPG, PDF, TXT (max 10MB).</p>
+
+          <label for="transcriptText" class="field-label"
+            >Transcript text (optional)</label
+          >
+          <textarea
+            id="transcriptText"
+            rows="12"
+            placeholder="Paste transcript text here..."
+          ></textarea>
+
+          <div class="button-row">
+            <button id="backToIntroBtn" class="secondary">Back</button>
+            <button id="suggestBtn" class="cta">Generate Suggestions</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="screenHistory" class="screen">
+        <div class="panel">
+          <h2>Previous Saved Plans</h2>
+          <p class="lead compact">
+            We found previous outputs organized by quarter. Open one for quick
+            reference, or create a new plan. Use the menu to filter by term or
+            view <strong>All terms</strong> together (reorder is available for a
+            single term only).
+          </p>
+          <p id="historyStatus" class="history-status" role="status"></p>
+          <div id="historyList" class="history-list"></div>
+          <div id="historyQuarterBar" class="history-quarter-bar hidden">
+            <label for="historyQuarterSelect" class="field-label"
+              >Quarter</label
+            >
+            <select id="historyQuarterSelect" class="field-select"></select>
+          </div>
+          <p id="historyEmptyHint" class="hint hidden">
+            No saved plans yet. Use Create New Plan to generate one, then save from
+            the results screen.
+          </p>
+          <p id="historyEmptyQuarter" class="hint hidden">
+            No saved plans for this quarter.
+          </p>
+          <div
+            class="history-actions"
+            role="group"
+            aria-labelledby="historyActionsNote"
+          >
+            <p class="history-actions-note" id="historyActionsNote">
+              Separate from your saved plans above — go home or start a new
+              transcript run.
+            </p>
+            <div class="button-row history-actions-buttons">
+              <button id="backFromHistoryBtn" class="secondary">Back</button>
+              <button id="continueNewBtn" class="cta">Create New Plan</button>
+            </div>
+          </div>
+          <p class="hint history-plan-link">
+            <button type="button" id="historyToPlanBtn" class="linkish">
+              Open four-year plan map
+            </button>
+            — sketch courses by year and import saved recommendations into any
+            quarter slot.
+          </p>
+        </div>
+      </section>
+
+      <section id="screenPlan" class="screen">
+        <div class="panel plan-panel">
+          <div class="plan-panel-head">
+            <h2>Four-year plan</h2>
+            <p class="lead compact">
+              Map courses across freshman–senior years (Fall, Winter, Spring,
+              Summer). Your grid is saved in this browser. Import saved
+              recommendations from history into any cell.
+            </p>
+            <div class="button-row plan-toolbar">
+              <button type="button" id="backFromPlanBtn" class="secondary">
+                Back to intro
+              </button>
+              <button type="button" id="planImportOpenBtn" class="cta">
+                Import from history
+              </button>
+            </div>
+            <div class="plan-grad-row">
+              <label for="planGraduationYear" class="field-label"
+                >Graduation year</label
+              >
+              <select id="planGraduationYear" class="field-select plan-grad-select"></select>
+            </div>
+            <div class="plan-summer-toggle-row">
+              <label class="checkbox-label plan-summer-label">
+                <input
+                  type="checkbox"
+                  id="planIncludeSummerToggle"
+                  checked
+                  aria-controls="fourYearTable"
+                />
+                <span>Include summer quarter</span>
+              </label>
+            </div>
+          </div>
+          <div
+            class="four-year-scroll"
+            role="region"
+            aria-label="Four year course grid"
+          >
+            <table id="fourYearTable" class="four-year-grid">
+              <colgroup>
+                <col class="col-corner" />
+                <col class="col-fall" />
+                <col class="col-winter" />
+                <col class="col-spring" />
+                <col class="col-summer" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th class="four-year-corner" scope="col"></th>
+                  <th class="four-year-col-h four-year-col--fall" scope="col">
+                    Fall
+                  </th>
+                  <th class="four-year-col-h four-year-col--winter" scope="col">
+                    Winter
+                  </th>
+                  <th class="four-year-col-h four-year-col--spring" scope="col">
+                    Spring
+                  </th>
+                  <th class="four-year-col-h four-year-col--summer" scope="col">
+                    Summer
+                  </th>
+                </tr>
+              </thead>
+              <tbody id="fourYearTableBody"></tbody>
+            </table>
+          </div>
+
+          <div class="plan-chat-section">
+            <h3 class="plan-chat-heading">Ask about your plan</h3>
+            <p class="hint plan-chat-lead">
+              Ask Gemini a conversational question about your sketch below. Each
+              request sends your current grid and graduation year together with an
+              excerpt of the SCU undergraduate CSE bulletin and compact major
+              requirements when available—nothing is stored on the server beyond
+              the API call.
+            </p>
+            <label for="planChatQuestion" class="field-label">Your question</label>
+            <textarea
+              id="planChatQuestion"
+              rows="4"
+              class="plan-chat-question"
+              placeholder="Example: Is my junior winter realistic if I want to add CSEN 177? Anything obvious missing before senior design?"
+            ></textarea>
+            <div class="button-row plan-chat-actions">
+              <button type="button" id="planChatSendBtn" class="cta">
+                Ask Gemini
+              </button>
+              <span id="planChatStatus" class="plan-chat-status" role="status"></span>
+            </div>
+            <p id="planChatError" class="plan-chat-error hidden" role="alert"></p>
+            <div id="planChatReplyWrap" class="plan-chat-reply-wrap hidden">
+              <p class="field-label plan-chat-reply-label">Reply</p>
+              <div id="planChatReply" class="plan-chat-reply"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="screenResults" class="screen">
+        <div class="panel">
+          <div class="status-row">
+            <h2>Step 2: Recommendation</h2>
+            <span id="statusPill">Idle</span>
+          </div>
+          <div id="resultLoading" class="result-loading hidden">
+            <div class="throbber" aria-hidden="true"></div>
+            <p>Generating response...</p>
+          </div>
+          <div id="courseGrid" class="course-grid">
+            <article class="course-card">
+              <p class="course-kicker">Course 1</p>
+              <h3 id="courseTitle1">-</h3>
+              <p id="courseReason1" class="course-reason"></p>
+            </article>
+            <article class="course-card">
+              <p class="course-kicker">Course 2</p>
+              <h3 id="courseTitle2">-</h3>
+              <p id="courseReason2" class="course-reason"></p>
+            </article>
+            <article class="course-card">
+              <p class="course-kicker">Course 3</p>
+              <h3 id="courseTitle3">-</h3>
+              <p id="courseReason3" class="course-reason"></p>
+            </article>
+          </div>
+          <article id="summaryCard" class="summary-card">
+            <p class="course-kicker">Short Description</p>
+            <p id="summaryText" class="summary-text"></p>
+          </article>
+          <article id="errorCard" class="summary-card hidden">
+            <p class="course-kicker">Request Error</p>
+            <p id="errorText" class="summary-text"></p>
+          </article>
+          <div id="savePrompt" class="save-prompt hidden">
+            <p>Save this recommendation for future reference?</p>
+            <div class="button-row">
+              <button id="saveOutputBtn" class="cta">Save Output</button>
+              <span id="saveStatus" class="save-status"></span>
+            </div>
+          </div>
+          <div id="resultsActions" class="button-row hidden">
+            <button id="reviseBtn" class="secondary">Revise Inputs</button>
+            <button id="restartBtn" class="cta">Start Over</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <div class="data-fab-stack" aria-label="Data tools">
+      <button
+        type="button"
+        id="backupDataBtn"
+        class="reset-data-fab data-fab"
+        title="Download a JSON backup (saved plans + four-year grid)"
+      >
+        Backup
+      </button>
+      <button
+        type="button"
+        id="restoreDataBtn"
+        class="reset-data-fab data-fab"
+        title="Restore from a JSON backup (saved plans + four-year grid)"
+      >
+        Restore
+      </button>
+      <button
+        type="button"
+        id="resetAllDataBtn"
+        class="reset-data-fab data-fab"
+        title="Clear saved plans and browser storage for this app"
+      >
+        Reset
+      </button>
+      <input
+        id="restoreDataFile"
+        type="file"
+        accept="application/json,.json"
+        class="hidden"
+      />
+    </div>
+
+    <div
+      id="planImportModal"
+      class="modal hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="planImportTitle"
+    >
+      <button type="button" class="modal-backdrop" id="planImportBackdrop" aria-label="Close dialog"></button>
+      <div class="modal-card panel">
+        <h3 id="planImportTitle">Import from saved history</h3>
+        <p class="hint">
+          Imports the three course titles as bullets (no summary). The
+          <strong>Place into</strong> cell is chosen from the save’s quarter and
+          your graduation year; you can change it if you need to.
+        </p>
+        <label class="field-label" for="planImportSelect">Saved plan</label>
+        <select id="planImportSelect" class="field-select"></select>
+        <label class="field-label" for="planImportTargetSelect">Place into</label>
+        <select id="planImportTargetSelect" class="field-select"></select>
+        <fieldset class="plan-import-mode">
+          <legend class="field-label">How to apply</legend>
+          <label class="radio-label">
+            <input type="radio" name="planImportMode" value="append" checked />
+            Append to cell (add below existing text)
+          </label>
+          <label class="radio-label">
+            <input type="radio" name="planImportMode" value="replace" />
+            Replace cell
+          </label>
+        </fieldset>
+        <div id="planImportPreview" class="plan-import-preview" aria-live="polite"></div>
+        <div class="button-row">
+          <button type="button" id="planImportCancelBtn" class="secondary">
+            Cancel
+          </button>
+          <button type="button" id="planImportApplyBtn" class="cta">Import</button>
+        </div>
+      </div>
+    </div>
+
+    <script
+      src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"
+      crossorigin="anonymous"
+    ></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

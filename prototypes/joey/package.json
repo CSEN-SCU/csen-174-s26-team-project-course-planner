@@ -1,0 +1,21 @@
+{
+  "name": "scu-course-planner",
+  "version": "0.1.0",
+  "description": "Prototype: upload transcript and get SCU course suggestions using Gemini 2.5 Flash",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "build:majors-db": "node scripts/build-majors-db.js"
+  },
+  "keywords": [
+    "scu",
+    "gemini",
+    "prototype"
+  ],
+  "license": "UNLICENSED",
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "express": "^4.21.2"
+  }
+}
