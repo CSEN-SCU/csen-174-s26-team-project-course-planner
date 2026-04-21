@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ title or "SCU Course Planner — Jiasheng" }}</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand__title">SCU Course Planner</div>
+        <div class="brand__sub">Jiasheng prototype (class demo)</div>
+      </div>
+      <nav class="nav">
+        <a href="/">About</a>
+        <a href="/app">App</a>
+      </nav>
+    </header>
+
+    <main class="container">
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+      <div>
+        AI: <span class="pill">
+          {%- if ai_enabled -%}
+            enabled ({{ ai_provider|default("unknown") }})
+          {%- else -%}
+            disabled (rules-only / placeholder explanations)
+          {%- endif -%}
+        </span>
+      </div>
+      <div class="muted">Demo data only. Always verify with official systems and your academic advisor.</div>
+    </footer>
+  </body>
+</html>
