@@ -18,7 +18,8 @@ An LLM-powered web app that helps SCU undergraduates plan next-quarter schedules
 
 - Jason
 - Ismael
-- *(add remaining teammates)*
+- Joey
+- Jiasheng
 
 ## Repository layout
 
