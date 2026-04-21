@@ -50,6 +50,13 @@
 
           <div class="step" data-step="2">
             <label for="transcript">Transcript / completed classes context</label>
+            <div class="upload-row">
+              <input id="transcriptPdf" type="file" accept="application/pdf" />
+              <button type="button" id="extractPdfBtn" class="ghost">Extract PDF text</button>
+            </div>
+            <p id="pdfStatus" class="upload-status" aria-live="polite">
+              Optional: upload academic progress PDF to auto-fill this box.
+            </p>
             <textarea
               id="transcript"
               required
@@ -102,6 +109,7 @@
       </section>
     </main>
 
-    <script src="./app.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.min.mjs" type="module"></script>
+    <script src="./app.js" type="module"></script>
   </body>
 </html>

@@ -8,6 +8,10 @@ const form = document.getElementById("wizardForm");
 const resultsSection = document.getElementById("results");
 const advisorTip = document.getElementById("advisorTip");
 const plansContainer = document.getElementById("plansContainer");
+const transcriptInput = document.getElementById("transcript");
+const transcriptPdfInput = document.getElementById("transcriptPdf");
+const extractPdfBtn = document.getElementById("extractPdfBtn");
+const pdfStatus = document.getElementById("pdfStatus");
 
 let currentStep = 1;
 
@@ -38,6 +42,41 @@ function validateCurrentStep() {
   return true;
 }
 
+async function extractTranscriptFromPdf() {
+  const file = transcriptPdfInput.files?.[0];
+  if (!file) {
+    pdfStatus.textContent = "Please choose a PDF file first.";
+    return;
+  }
+
+  pdfStatus.textContent = "Extracting text from PDF...";
+  extractPdfBtn.disabled = true;
+
+  try {
+    const pdfjsLib = await import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.min.mjs");
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.mjs";
+
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+
+    const chunks = [];
+    for (let i = 1; i <= pdf.numPages; i += 1) {
+      const page = await pdf.getPage(i);
+      const text = await page.getTextContent();
+      const pageText = text.items.map((item) => item.str).join(" ");
+      chunks.push(`Page ${i}\n${pageText}`);
+    }
+
+    transcriptInput.value = chunks.join("\n\n").trim();
+    pdfStatus.textContent = "PDF text extracted and inserted. Review and edit as needed.";
+  } catch (error) {
+    pdfStatus.textContent = "Could not parse that PDF. Try another file or paste text manually.";
+  } finally {
+    extractPdfBtn.disabled = false;
+  }
+}
+
 backBtn.addEventListener("click", () => {
   currentStep = Math.max(1, currentStep - 1);
   syncWizardUI();
@@ -48,6 +87,8 @@ nextBtn.addEventListener("click", () => {
   currentStep = Math.min(steps.length, currentStep + 1);
   syncWizardUI();
 });
+
+extractPdfBtn.addEventListener("click", extractTranscriptFromPdf);
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -61,7 +102,7 @@ form.addEventListener("submit", async (event) => {
 
   const payload = {
     persona: document.getElementById("persona").value.trim(),
-    transcript: document.getElementById("transcript").value.trim(),
+    transcript: transcriptInput.value.trim(),
     goals: document.getElementById("goals").value.trim(),
     constraints: document.getElementById("constraints").value.trim(),
     priorities: document.getElementById("priorities").value.trim(),

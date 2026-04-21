@@ -168,6 +168,25 @@ textarea:focus {
   border-color: var(--accent);
 }
 
+.upload-row {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  margin-bottom: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.upload-row input[type="file"] {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.upload-status {
+  margin: 0 0 0.6rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
 .step {
   display: none;
 }
