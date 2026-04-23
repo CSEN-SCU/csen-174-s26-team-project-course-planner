@@ -25,3 +25,6 @@ This prototype explores an advisor-style guided wizard for SCU course planning. 
 - After editing `.env`, restart the server so the key reloads.
 - `GET /api/health` includes `geminiConfigured: true/false` for a quick check.
 - Every generated result is saved and can be retrieved from `GET /api/plans`.
+
+## Architecture diagrams
+- C4 context + container diagrams: [`c4-architecture.md`](c4-architecture.md)
