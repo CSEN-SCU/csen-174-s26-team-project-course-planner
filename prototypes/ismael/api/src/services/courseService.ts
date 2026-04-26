@@ -31,8 +31,23 @@ interface CourseFilterInput {
 }
 
 export async function getEligibleCourseResults(input: CourseFilterInput) {
-  const completedCourses = input.completedCourses ?? ["CSE 30", "CSE 101", "MATH 11", "CTW 1", "CTW 2"];
+  const completedCourses = input.completedCourses ?? [
+    "COEN 19",
+    "CTW 1",
+    "CTW 2",
+    "MATH 11",
+    "MATH 12",
+    "MATH 13",
+    "CHEM 11",
+    "PHYS 31",
+    "PHYS 32",
+    "COEN 10",
+    "COEN 11",
+    "COEN 12",
+    "ENGR 1"
+  ];
   const mode = input.mode ?? "balanced";
+  const completedSet = new Set(completedCourses.map((code) => code.toUpperCase()));
   const courses = await prisma.course.findMany({
     include: {
       sections: { include: { professorRating: true } },
@@ -42,6 +57,7 @@ export async function getEligibleCourseResults(input: CourseFilterInput) {
 
   return courses
     .filter((course) => isEligible(completedCourses, ((course.prerequisiteCodes as string[] | null) ?? [])))
+    .filter((course) => !completedSet.has(course.code.toUpperCase()))
     .filter((course) => (input.filters?.types?.length ? input.filters.types.includes(course.type) : true))
     .filter((course) => (input.filters?.divisions?.length ? input.filters.divisions.includes(course.division) : true))
     .filter((course) => {

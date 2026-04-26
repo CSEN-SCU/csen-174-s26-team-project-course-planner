@@ -36,3 +36,4 @@ An LLM-powered web app that helps SCU undergraduates plan next-quarter schedules
 ## Secrets
 
 Do not commit `.env` files. Use `prototypes/<name>/.env.example` as a template for local API keys.
+

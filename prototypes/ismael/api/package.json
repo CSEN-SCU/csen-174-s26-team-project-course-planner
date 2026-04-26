@@ -8,7 +8,9 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "prisma:migrate": "prisma migrate dev --name init",
-    "prisma:seed": "tsx prisma/seed.ts"
+    "prisma:seed": "tsx prisma/seed.ts",
+    "prisma:push": "prisma db push",
+    "prisma:setup": "npm run prisma:push && npm run prisma:seed"
   },
   "dependencies": {
     "@prisma/client": "^6.6.0",

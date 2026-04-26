@@ -48,6 +48,8 @@ export interface ScheduledItem {
   instructor: string;
   days: string;
   time: string;
+  quality?: number;
+  difficulty?: number;
   conflictWith?: string;
 }
 
@@ -55,5 +57,12 @@ export interface AiRecommendation {
   id: string;
   title: string;
   rationale: string;
+  source?: string;
   items: ScheduledItem[];
+}
+
+export interface AiChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
 }
