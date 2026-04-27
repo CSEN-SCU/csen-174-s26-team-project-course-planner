@@ -32,6 +32,8 @@ An LLM-powered web app that helps SCU undergraduates plan next-quarter schedules
 | [`prototypes/`](prototypes/) | Each teammate’s divergent prototype |
 | [`prototypes/Jason/`](prototypes/Jason/) | Jason’s guided-wizard prototype (see its `README.md`) |
 | [`prototypes/jiasheng/`](prototypes/jiasheng/) | Jiasheng’s FastAPI prototype: Academic Progress upload + major requirements + course sections (see its `README.md`) |
+| [`prototypes/jiasheng/`](prototypes/joey/) | Joey's prototype: Long Term Advising/Four Year Planning (see its `README.md`) |
+| [`prototypes/jiasheng/`](prototypes/ismael/) | Ismael's prototype: (see its `README.md`) |
 
 ## Secrets
 

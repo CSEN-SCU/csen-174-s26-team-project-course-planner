@@ -31,13 +31,13 @@ C4Context
     System(coursePlanner, "SCU Course Planner", "Web app for next-quarter planning + four-year plan support with AI-assisted recommendations")
 
     System_Ext(gemini, "Google Gemini API", "Generates schedule recommendations and reasoning")
-    System_Ext(majorWeb, "Major Requirement Website URL", "Program requirement source referenced by backend fetch pipeline")
-    System_Ext(scuData, "SCU Course Data Sources", "Catalog/section data used in schedule generation")
+    System_Ext(majorWeb, "Major Requirement Website URL", "Program requirements found on Undergraduate Bulletin")
+    System_Ext(scuData, "SCU Course Data Sources", "Workday, SCU Course Evals used for schedule generation")
 
-    Rel(student, coursePlanner, "Uses planning wizard, calendar, and four-year plan features", "HTTPS")
+    Rel(student, coursePlanner, "Uses course planning features", "HTTPS")
     Rel(advisor, coursePlanner, "Reviews saved student planning output", "HTTPS")
     Rel(coursePlanner, gemini, "Sends planning context, receives recommendations", "HTTPS/JSON")
-    Rel(coursePlanner, majorWeb, "Fetches major requirement information by URL", "HTTP/HTTPS")
+    Rel(coursePlanner, majorWeb, "Fetches major requirements", "HTTP/HTTPS")
     Rel(coursePlanner, scuData, "Reads course and section information", "API/ingest")
 ```
 
@@ -58,8 +58,8 @@ C4Container
     }
 
     System_Ext(geminiApi, "Google Gemini API", "LLM inference")
-    System_Ext(majorReqUrl, "Major Requirement Website URL", "External requirements source")
-    System_Ext(courseFeeds, "SCU Course Data Sources", "Catalog/section feed")
+    System_Ext(majorReqUrl, "SCU Undergradaute Bulletin", "Major requirements source")
+    System_Ext(courseFeeds, "SCU Course Data Sources", "CCurse catalog/section feed")
 
     Rel(student, frontend, "Uses", "HTTPS")
     Rel(frontend, backend, "Calls REST API", "HTTPS/JSON")
@@ -69,7 +69,6 @@ C4Container
     Rel(ingest, majorReqUrl, "Fetches requirement information", "HTTP/HTTPS")
     Rel(ingest, courseFeeds, "Fetches catalog/section information", "API/ETL")
     Rel(backend, db, "Reads/writes app data", "SQL")
-    Rel(frontend, db, "No direct access", "N/A")
 ```
 
 ## Ownership Mapping to Containers
@@ -78,4 +77,6 @@ C4Container
 - **Joey (Database + Backend integration):** `Application Database` and backend-to-database integration paths
 - **Jiasheng (Backend security/accounts):** backend account/auth/session components in `Backend API`
 - **Jason (AI + remaining backend):** `AI Integration Layer` and remaining backend orchestration in `Backend API`
+
+
 
