@@ -27,7 +27,7 @@ An LLM-powered web app that helps SCU undergraduates plan next-quarter schedules
 |------|---------|
 | [`product-vision.md`](product-vision.md) | Product vision (Moore template) + HMW + canvas insights |
 | [`problem_framing_canvas.md`](problem_framing_canvas.md) | Full Problem Framing Canvas |
-| [`c4-architecture.md`](c4-architecture.md) | C4 Context + Container diagrams (Mermaid) |
+| [`architecture/architecture.md`](architecture/architecture.md) | C4 Context + Container diagrams (Mermaid) |
 | [`.cursorrules`](.cursorrules) | Cursor / AI agent project context |
 | [`prototypes/`](prototypes/) | Each teammate’s divergent prototype |
 | [`prototypes/Jason/`](prototypes/Jason/) | Jason’s guided-wizard prototype (see its `README.md`) |
