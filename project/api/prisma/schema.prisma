@@ -1,0 +1,105 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Course {
+  id                String                 @id @default(cuid())
+  code              String                 @unique
+  name              String
+  type              String
+  division          String
+  prerequisiteCodes Json
+  timeWindow        String
+  description       String?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  sections          Section[]
+  requirementLinks  CourseRequirementTag[]
+}
+
+model Section {
+  id              String           @id @default(cuid())
+  courseId        String
+  sectionCode     String
+  instructor      String
+  days            String
+  startTime       String
+  endTime         String
+  seatsAvailable  Int?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  course          Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  professorRating ProfessorRating?
+}
+
+model ProfessorRating {
+  id             String   @id @default(cuid())
+  sectionId      String   @unique
+  instructor     String
+  source         String
+  qualityScore   Float
+  difficultyScore Float
+  wouldTakeAgain Float?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  section        Section  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+}
+
+model RequirementTag {
+  id          String                 @id @default(cuid())
+  name        String                 @unique
+  category    String?
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  courseLinks CourseRequirementTag[]
+}
+
+model CourseRequirementTag {
+  courseId         String
+  requirementTagId String
+  course           Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  requirementTag   RequirementTag  @relation(fields: [requirementTagId], references: [id], onDelete: Cascade)
+
+  @@id([courseId, requirementTagId])
+}
+
+model CompletedCourse {
+  id         String   @id @default(cuid())
+  studentKey String
+  code       String
+  title      String?
+  term       String?
+  grade      String?
+  createdAt  DateTime @default(now())
+}
+
+model Plan {
+  id         String     @id @default(cuid())
+  title      String
+  mode       String
+  rationale  String
+  source     String
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  items      PlanItem[]
+}
+
+model PlanItem {
+  id          String   @id @default(cuid())
+  planId      String
+  courseCode  String
+  courseName  String
+  sectionId   String?
+  instructor  String?
+  days        String?
+  startTime   String?
+  endTime     String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  plan        Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+}
