@@ -10,7 +10,9 @@ export function TranscriptScreen({
   onToggleDivision,
   onToggleRequirement,
   onTimeWindowChange,
-  onContinue
+  onContinue,
+  onOpenAi,
+  onOpenCalendar
 }: {
   summary: TranscriptSummary;
   filters: Filters;
@@ -19,6 +21,8 @@ export function TranscriptScreen({
   onToggleRequirement: (req: string) => void;
   onTimeWindowChange: (next: string) => void;
   onContinue: () => void;
+  onOpenAi: () => void;
+  onOpenCalendar: () => void;
 }) {
   return (
     <section className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
@@ -121,6 +125,20 @@ export function TranscriptScreen({
           <button onClick={onContinue} className="w-full rounded-xl bg-sky-300 px-4 py-3 font-semibold text-slate-900 transition hover:bg-sky-200">
             Continue to eligible courses
           </button>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              onClick={onOpenAi}
+              className="rounded-xl border border-slate-500 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-sky-300"
+            >
+              Go to AI chat
+            </button>
+            <button
+              onClick={onOpenCalendar}
+              className="rounded-xl border border-slate-500 px-4 py-3 text-sm font-semibold text-slate-100 transition hover:border-sky-300"
+            >
+              Go to calendar
+            </button>
+          </div>
         </div>
       </article>
     </section>

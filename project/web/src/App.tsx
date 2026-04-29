@@ -1,12 +1,14 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  completeSchedule,
+  chatWithAi,
   exportIcs,
+  getAiStatus,
   getEligibleCourses,
   parseTranscript,
-  recommendSchedule
+  previewSchedule
 } from "./services/api";
 import type {
+  AiChatMessage,
   AiRecommendation,
   CourseResult,
   Filters,
@@ -35,6 +37,40 @@ function hasConflict(a: ScheduledItem, b: ScheduledItem) {
   return a.days === b.days && a.time === b.time;
 }
 
+function normalizeMeetingDays(days: string) {
+  return days === "MW" ? "MWF" : days;
+}
+
+function mergeScheduleItems(existing: ScheduledItem[], incoming: ScheduledItem[]) {
+  const merged = [...existing];
+  const existingCodes = new Set(existing.map((item) => item.courseCode.toUpperCase()));
+
+  for (const item of incoming) {
+    const normalizedCode = item.courseCode.toUpperCase();
+    if (existingCodes.has(normalizedCode)) continue;
+
+    const nextItem: ScheduledItem = { ...item, days: normalizeMeetingDays(item.days) };
+    const conflict = merged.find((scheduled) => hasConflict(scheduled, nextItem));
+    if (conflict) {
+      nextItem.conflictWith = `${conflict.courseCode} ${conflict.time}`;
+    }
+
+    merged.push(nextItem);
+    existingCodes.add(normalizedCode);
+  }
+
+  return merged;
+}
+
+function isScheduleGenerationRequest(message: string) {
+  const text = message.toLowerCase();
+  return (
+    (/(generate|build|create|make|plan|recommend)/.test(text) && /(schedule|quarter|classes|plan)/.test(text)) ||
+    /give me .*schedule/.test(text) ||
+    /make me .*schedule/.test(text)
+  );
+}
+
 export default function App() {
   const [stage, setStage] = useState<Stage>("intro");
   const [activeTab, setActiveTab] = useState<PlannerTab>("build");
@@ -46,11 +82,26 @@ export default function App() {
   const [priorityMode, setPriorityMode] = useState<PriorityMode>("balanced");
   const [filters, setFilters] = useState<Filters>(initialFilters);
   const [aiResults, setAiResults] = useState<AiRecommendation[]>([]);
+  const [aiChatMessages, setAiChatMessages] = useState<AiChatMessage[]>([]);
   const [uploadName, setUploadName] = useState("");
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [aiLabel, setAiLabel] = useState("OpenAI / gpt-4o-mini");
+  const [aiEnabled, setAiEnabled] = useState(false);
 
   const selectedSection = selectedCourse?.sections.find((section) => section.id === selectedSectionId);
+
+  useEffect(() => {
+    getAiStatus()
+      .then((status) => {
+        setAiLabel(`${status.aiProvider} / ${status.aiModel}`);
+        setAiEnabled(status.aiEnabled);
+      })
+      .catch(() => {
+        setAiLabel("OpenAI / gpt-4o-mini");
+        setAiEnabled(false);
+      });
+  }, []);
 
   const weeklyBlocks: WeeklyBlock[] = useMemo(() => {
     return schedule.map((item) => ({
@@ -84,14 +135,14 @@ export default function App() {
     }
   };
 
-  const loadCourses = async () => {
+  const loadCourses = async (targetTab: PlannerTab = "build") => {
     setLoading("Finding eligible courses...");
     setError(null);
     try {
       const results = await getEligibleCourses(filters, priorityMode, summary?.completedCourses ?? []);
       setCourses(results);
       setStage("planner");
-      setActiveTab("build");
+      setActiveTab(targetTab);
     } catch {
       setError("Unable to load course results.");
     } finally {
@@ -107,7 +158,7 @@ export default function App() {
       courseName: selectedCourse.name,
       sectionId: selectedSection.id,
       instructor: selectedSection.instructor,
-      days: selectedSection.days,
+      days: normalizeMeetingDays(selectedSection.days),
       time: selectedSection.time
     };
     const conflict = schedule.find((existing) => hasConflict(existing, next));
@@ -119,42 +170,53 @@ export default function App() {
     setSelectedSectionId("");
   };
 
-  const handleAiRecommend = async () => {
-    setLoading("Asking AI for recommendations...");
+  const handleAiSendMessage = async (message: string) => {
+    setLoading("Asking AI...");
     setError(null);
+    setAiChatMessages((prev) => [...prev, { id: `user-${Date.now()}`, role: "user", content: message }]);
     try {
-      const plans = await recommendSchedule({
-        selectedDesiredCourses: courses.slice(0, 3).map((course) => course.code),
+      const wantsSchedulePreview = isScheduleGenerationRequest(message);
+      let previewPlans: AiRecommendation[] = [];
+
+      if (wantsSchedulePreview) {
+        previewPlans = await previewSchedule({
+          selectedDesiredCourses: courses.slice(0, 3).map((course) => course.code),
+          completedCourses: summary?.completedCourses ?? [],
+          priorities: priorityMode,
+          remainingRequirements: summary?.remainingRequirements ?? [],
+          existingSchedule: schedule
+        });
+        setAiResults(previewPlans);
+      }
+
+      const reply = await chatWithAi({
+        message,
+        completedCourses: summary?.completedCourses ?? [],
         priorities: priorityMode,
         remainingRequirements: summary?.remainingRequirements ?? [],
         existingSchedule: schedule
       });
-      setAiResults(plans);
-      setActiveTab("ai");
+
+      const assistantText = wantsSchedulePreview
+        ? `Generated a preview schedule below. Review it and click "Accept this plan" if it looks good, or tell me what to change.`
+        : reply.answer;
+
+      setAiChatMessages((prev) => [...prev, { id: `assistant-${Date.now()}`, role: "assistant", content: assistantText }]);
     } catch {
-      setError("AI recommendation failed.");
+      setError("AI chat failed.");
     } finally {
       setLoading(null);
     }
   };
 
-  const handleAiComplete = async () => {
-    setLoading("Completing your draft with AI...");
-    setError(null);
-    try {
-      const plans = await completeSchedule({
-        selectedDesiredCourses: courses.slice(0, 3).map((course) => course.code),
-        priorities: priorityMode,
-        remainingRequirements: summary?.remainingRequirements ?? [],
-        existingSchedule: schedule
-      });
-      setAiResults(plans);
-      setActiveTab("ai");
-    } catch {
-      setError("AI completion failed.");
-    } finally {
-      setLoading(null);
+  const handleAcceptAiPlan = (planId: string) => {
+    const plan = aiResults.find((candidate) => candidate.id === planId);
+    if (!plan || plan.items.length === 0) {
+      setError("This plan has no courses to add.");
+      return;
     }
+    setSchedule((prev) => mergeScheduleItems(prev, plan.items));
+    setActiveTab("calendar");
   };
 
   const resetDemo = () => {
@@ -168,6 +230,7 @@ export default function App() {
     setPriorityMode("balanced");
     setFilters(initialFilters);
     setAiResults([]);
+    setAiChatMessages([]);
     setUploadName("");
     setLoading(null);
     setError(null);
@@ -203,7 +266,9 @@ export default function App() {
             onToggleDivision={(division) => updateFilterArray("divisions", division)}
             onToggleRequirement={(req) => updateFilterArray("requirements", req)}
             onTimeWindowChange={(next) => setFilters((prev) => ({ ...prev, timeWindow: next }))}
-            onContinue={loadCourses}
+            onContinue={() => loadCourses("build")}
+            onOpenAi={() => loadCourses("ai")}
+            onOpenCalendar={() => loadCourses("calendar")}
           />
         )}
 
@@ -211,6 +276,7 @@ export default function App() {
           <PlannerScreen
             activeTab={activeTab}
             onTabChange={setActiveTab}
+            onBackToFilters={() => setStage("upload")}
             priorityMode={priorityMode}
             onPriorityModeChange={setPriorityMode}
             courses={courses}
@@ -244,8 +310,11 @@ export default function App() {
               }
             }}
             aiResults={aiResults}
-            onAiRecommend={handleAiRecommend}
-            onAiComplete={handleAiComplete}
+            aiChatMessages={aiChatMessages}
+            aiLabel={aiLabel}
+            aiEnabled={aiEnabled}
+            onAiSendMessage={handleAiSendMessage}
+            onAiAcceptPlan={handleAcceptAiPlan}
           />
         )}
       </div>

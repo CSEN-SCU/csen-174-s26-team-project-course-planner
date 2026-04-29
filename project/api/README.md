@@ -27,6 +27,7 @@ Server defaults to `http://localhost:8080`.
 - `PORT` - API port
 - `CLIENT_ORIGIN` - frontend origin for CORS
 - `DATABASE_URL` - SQLite file path for Prisma
+- `OPENAI_ENABLED` - set `true` to allow live OpenAI calls; default demo-safe mode is `false`
 - `OPENAI_API_KEY` - optional; if omitted, schedule endpoints return fallback plans
 - `OPENAI_MODEL` - defaults to `gpt-4o-mini`
 
@@ -52,5 +53,5 @@ curl -X POST http://localhost:8080/schedule/export-ics   -H "Content-Type: appli
 
 - Transcript parsing is mock/heuristic, not OCR or PDF extraction.
 - Prerequisite checking supports simple `all-of` prerequisite code arrays only.
-- AI plans are only fully dynamic when `OPENAI_API_KEY` is set.
+- AI plans are only fully dynamic when `OPENAI_ENABLED=true` and `OPENAI_API_KEY` is set.
 - `.ics` export returns calendar content JSON for easy frontend download handling.

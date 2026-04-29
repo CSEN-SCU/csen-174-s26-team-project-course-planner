@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { generateSchedulePlans } from "../ai/scheduleAi.js";
+import { generateScheduleChatReply, generateSchedulePlans } from "../ai/scheduleAi.js";
 import { buildIcs } from "../utils/ics.js";
 import { findConflicts } from "../utils/conflicts.js";
 
@@ -8,6 +8,7 @@ const router = Router();
 
 const scheduleSchema = z.object({
   selectedDesiredCourses: z.array(z.string()).optional(),
+  completedCourses: z.array(z.string()).optional(),
   priorities: z.enum(["balanced", "quality", "easy"]).optional(),
   remainingRequirements: z.array(z.string()).optional(),
   constraints: z.object({
@@ -21,11 +22,15 @@ const scheduleSchema = z.object({
   })).optional()
 });
 
-router.post("/recommend", async (req, res, next) => {
+const chatSchema = scheduleSchema.extend({
+  message: z.string().min(1)
+});
+
+router.post("/chat", async (req, res, next) => {
   try {
-    const payload = scheduleSchema.parse(req.body ?? {});
-    const plans = await generateSchedulePlans("recommend", payload);
-    return res.json(plans);
+    const payload = chatSchema.parse(req.body ?? {});
+    const reply = await generateScheduleChatReply(payload, payload.message);
+    return res.json(reply);
   } catch (error) {
     return next(error);
   }

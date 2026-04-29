@@ -16,6 +16,12 @@ interface IcsResponse {
   conflicts: Array<{ courseCode: string; conflictsWith: string }>;
 }
 
+export interface AiStatus {
+  aiProvider: string;
+  aiModel: string;
+  aiEnabled: boolean;
+}
+
 async function requestJson<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, options);
   if (!response.ok) {
@@ -31,6 +37,10 @@ async function requestJson<T>(path: string, options?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+function normalizeMeetingDays(days: string): string {
+  return days === "MW" ? "MWF" : days;
+}
+
 function toScheduledItem(item: Record<string, unknown>, index: number): ScheduledItem {
   return {
     courseId: `ai-${index}-${String(item.courseCode ?? "course")}`,
@@ -38,8 +48,28 @@ function toScheduledItem(item: Record<string, unknown>, index: number): Schedule
     courseName: String(item.courseName ?? "Suggested Course"),
     sectionId: String(item.sectionId ?? `ai-section-${index}`),
     instructor: String(item.instructor ?? "TBD"),
-    days: String(item.days ?? "TBD"),
-    time: String(item.time ?? "TBD")
+    days: normalizeMeetingDays(String(item.days ?? "TBD")),
+    time: String(item.time ?? "TBD"),
+    quality: Number(item.quality ?? 0),
+    difficulty: Number(item.difficulty ?? 0)
+  };
+}
+
+export async function chatWithAi(payload: {
+  message: string;
+  completedCourses: string[];
+  priorities: PriorityMode;
+  remainingRequirements: string[];
+  existingSchedule: ScheduledItem[];
+}): Promise<{ answer: string; source: string }> {
+  const result = await requestJson<{ answer?: string; source?: string }>("/schedule/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  return {
+    answer: String(result.answer ?? "I could not generate a response."),
+    source: String(result.source ?? "unknown")
   };
 }
 
@@ -63,28 +93,9 @@ export async function getEligibleCourses(
   });
 }
 
-export async function recommendSchedule(payload: {
+export async function previewSchedule(payload: {
   selectedDesiredCourses: string[];
-  priorities: PriorityMode;
-  remainingRequirements: string[];
-  existingSchedule: ScheduledItem[];
-  constraints?: { maxCourses?: number; timeWindow?: string };
-}): Promise<AiRecommendation[]> {
-  const plans = await requestJson<Array<Record<string, unknown>>>("/schedule/recommend", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-  return plans.map((plan, index) => ({
-    id: String(plan.id ?? `recommend-${index}`),
-    title: String(plan.title ?? "Recommended Plan"),
-    rationale: String(plan.rationale ?? "AI-generated recommendation"),
-    items: Array.isArray(plan.items) ? plan.items.map((item, itemIndex) => toScheduledItem(item as Record<string, unknown>, itemIndex)) : []
-  }));
-}
-
-export async function completeSchedule(payload: {
-  selectedDesiredCourses: string[];
+  completedCourses: string[];
   priorities: PriorityMode;
   remainingRequirements: string[];
   existingSchedule: ScheduledItem[];
@@ -96,11 +107,21 @@ export async function completeSchedule(payload: {
     body: JSON.stringify(payload)
   });
   return plans.map((plan, index) => ({
-    id: String(plan.id ?? `complete-${index}`),
-    title: String(plan.title ?? "Completed Plan"),
-    rationale: String(plan.rationale ?? "AI-generated completion"),
+    id: String(plan.id ?? `preview-${index}`),
+    title: String(plan.title ?? "Preview Plan"),
+    rationale: String(plan.rationale ?? "AI-generated schedule preview"),
+    source: String(plan.source ?? "unknown"),
     items: Array.isArray(plan.items) ? plan.items.map((item, itemIndex) => toScheduledItem(item as Record<string, unknown>, itemIndex)) : []
   }));
+}
+
+export async function getAiStatus(): Promise<AiStatus> {
+  const health = await requestJson<{ aiProvider?: string; aiModel?: string; aiEnabled?: boolean }>("/health");
+  return {
+    aiProvider: health.aiProvider ?? "OpenAI",
+    aiModel: health.aiModel ?? "gpt-4o-mini",
+    aiEnabled: Boolean(health.aiEnabled)
+  };
 }
 
 export async function exportIcs(scheduleItems: ScheduledItem[]): Promise<void> {
