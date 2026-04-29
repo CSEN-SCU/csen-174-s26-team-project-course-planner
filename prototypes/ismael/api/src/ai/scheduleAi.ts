@@ -107,7 +107,8 @@ function enforcePlanSize(
   existingScheduleSet: Set<string>,
   existingScheduleSlots: Array<{ days: string; time: string }>,
   targetCount: number,
-  prioritizedCodes: string[]
+  prioritizedCodes: string[],
+  mode: PriorityMode
 ) {
   const parseRange = (time: string) => {
     const [start = "09:00", end = "10:00"] = time.split("-");
@@ -130,15 +131,31 @@ function enforcePlanSize(
   const conflictsWith = (candidate: { days: string; time: string }, chosen: Array<{ days: string; time: string }>) =>
     chosen.some((item) => daysOverlap(candidate.days, item.days) && timeOverlap(candidate.time, item.time));
 
-  const modeWeight = (quality: number, difficulty: number) => quality * 1.4 - difficulty;
+  const modeWeight = (quality: number, difficulty: number) => {
+    if (mode === "quality") return quality * 2 - difficulty * 0.3;
+    if (mode === "easy") return quality * 0.6 - difficulty * 2;
+    return quality * 1.4 - difficulty;
+  };
 
   const prioritizedSet = new Set(prioritizedCodes.map((code) => code.toUpperCase()));
   const prioritizedEligible = eligible.filter((course) => prioritizedSet.has(String(course.code ?? "").toUpperCase()));
   const remainingEligible = eligible.filter((course) => !prioritizedSet.has(String(course.code ?? "").toUpperCase()));
   const fillPool = [...prioritizedEligible, ...remainingEligible];
 
+  const eligibleByCode = new Map(eligible.map((course) => [String(course.code ?? "").toUpperCase(), course]));
+
   const usedCodes = new Set<string>();
-  const normalized: Array<Record<string, unknown>> = rawItems
+  const rankedRawItems: Array<Record<string, unknown>> = rawItems
+    .map((item): Record<string, unknown> => {
+      const code = String(item.courseCode ?? "").toUpperCase();
+      const course = eligibleByCode.get(code);
+      const quality = Number(item.quality ?? course?.quality ?? 0);
+      const difficulty = Number(item.difficulty ?? course?.avgDifficulty ?? 0);
+      return { ...item, quality, difficulty, __score: modeWeight(quality, difficulty) };
+    })
+    .sort((a, b) => Number((b as Record<string, unknown>).__score ?? 0) - Number((a as Record<string, unknown>).__score ?? 0));
+
+  const normalized: Array<Record<string, unknown>> = rankedRawItems
     .filter((item) => {
       const code = String(item.courseCode ?? "").toUpperCase();
       if (!code) return false;
@@ -229,7 +246,8 @@ export async function generateSchedulePlans(kind: "recommend" | "complete", requ
         existingScheduleSet,
         existingScheduleSlots,
         targetCount,
-        recommendedNextTermCodes
+        recommendedNextTermCodes,
+        request.priorities ?? "balanced"
       ),
       coursePoolSize: eligible.length
     }));
@@ -270,7 +288,8 @@ export async function generateSchedulePlans(kind: "recommend" | "complete", requ
           existingScheduleSet,
           existingScheduleSlots,
           targetCount,
-          recommendedNextTermCodes
+          recommendedNextTermCodes,
+          request.priorities ?? "balanced"
         )
       };
     });
