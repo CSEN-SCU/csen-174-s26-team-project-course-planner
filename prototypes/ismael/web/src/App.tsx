@@ -86,7 +86,7 @@ export default function App() {
   const [uploadName, setUploadName] = useState("");
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [aiLabel, setAiLabel] = useState("OpenAI / gpt-4o-mini");
+  const [aiLabel, setAiLabel] = useState("Gemini / gemini-2.5-flash-lite");
   const [aiEnabled, setAiEnabled] = useState(false);
 
   const selectedSection = selectedCourse?.sections.find((section) => section.id === selectedSectionId);
@@ -98,7 +98,7 @@ export default function App() {
         setAiEnabled(status.aiEnabled);
       })
       .catch(() => {
-        setAiLabel("OpenAI / gpt-4o-mini");
+        setAiLabel("Gemini / gemini-2.5-flash-lite");
         setAiEnabled(false);
       });
   }, []);

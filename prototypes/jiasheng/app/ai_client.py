@@ -11,30 +11,23 @@ from .config import (
     GEMINI_API_BASE_URL,
     GEMINI_API_KEY,
     GEMINI_MODEL,
-    OPENAI_API_KEY,
-    OPENAI_BASE_URL,
-    OPENAI_MODEL,
 )
 
 from .scu_workday_parse import merge_by_code, parse_scu_workday_unofficial_transcript
 
-ProviderName = Literal["openai", "gemini", "none"]
+ProviderName = Literal["gemini", "none"]
 
 
 def effective_provider() -> ProviderName:
     p = AI_PROVIDER
     if p in {"none", "off", "disabled"}:
         return "none"
-    if p == "openai":
-        return "openai" if bool(OPENAI_API_KEY) else "none"
     if p == "gemini":
         return "gemini" if bool(GEMINI_API_KEY) else "none"
 
     # auto
     if GEMINI_API_KEY:
         return "gemini"
-    if OPENAI_API_KEY:
-        return "openai"
     return "none"
 
 
@@ -44,8 +37,6 @@ def ai_enabled() -> bool:
 
 def ai_provider_label() -> str:
     p = effective_provider()
-    if p == "openai":
-        return "OpenAI"
     if p == "gemini":
         return "Gemini"
     return "未启用"
@@ -58,31 +49,6 @@ def _extract_json_object(text: str) -> dict[str, Any]:
     if fence:
         text = fence.group(1).strip()
     return json.loads(text)
-
-
-async def openai_json_chat(system: str, user: str) -> dict[str, Any]:
-    if not OPENAI_API_KEY:
-        raise RuntimeError("OPENAI_API_KEY is not set")
-
-    url = f"{OPENAI_BASE_URL}/chat/completions"
-    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
-    payload = {
-        "model": OPENAI_MODEL,
-        "temperature": 0.2,
-        "response_format": {"type": "json_object"},
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-    }
-
-    async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(url, headers=headers, json=payload)
-        resp.raise_for_status()
-        data = resp.json()
-
-    content = data["choices"][0]["message"]["content"]
-    return _extract_json_object(content)
 
 
 async def gemini_json_chat(system: str, user: str) -> dict[str, Any]:
@@ -123,9 +89,7 @@ async def json_chat(system: str, user: str) -> dict[str, Any]:
     provider = effective_provider()
     if provider == "gemini":
         return await gemini_json_chat(system, user)
-    if provider == "openai":
-        return await openai_json_chat(system, user)
-    raise RuntimeError("No AI provider configured (set GEMINI_API_KEY and/or OPENAI_API_KEY, or AI_PROVIDER=none)")
+    raise RuntimeError("No AI provider configured (set GEMINI_API_KEY, or AI_PROVIDER=none)")
 
 
 _COURSE_RE = re.compile(r"\b([A-Z]{2,6})\s+(\d{1,4}[A-Z]{0,2})\b", re.IGNORECASE)

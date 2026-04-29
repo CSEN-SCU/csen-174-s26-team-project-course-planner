@@ -118,8 +118,8 @@ export async function previewSchedule(payload: {
 export async function getAiStatus(): Promise<AiStatus> {
   const health = await requestJson<{ aiProvider?: string; aiModel?: string; aiEnabled?: boolean }>("/health");
   return {
-    aiProvider: health.aiProvider ?? "OpenAI",
-    aiModel: health.aiModel ?? "gpt-4o-mini",
+    aiProvider: health.aiProvider ?? "Gemini",
+    aiModel: health.aiModel ?? "gemini-2.5-flash-lite",
     aiEnabled: Boolean(health.aiEnabled)
   };
 }

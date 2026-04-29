@@ -1,10 +1,66 @@
-import OpenAI from "openai";
 import type { PriorityMode } from "../utils/priority.js";
 import { getEligibleCourseResults } from "../services/courseService.js";
 
-const model = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
-const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
-const isLiveAiEnabled = (process.env.OPENAI_ENABLED ?? "false").toLowerCase() === "true";
+type ProviderName = "gemini" | "fallback";
+
+const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite";
+const DEFAULT_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com";
+
+function truthyEnv(value: string | undefined, defaultValue: boolean) {
+  if (value == null) return defaultValue;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "true" || normalized === "1" || normalized === "yes") return true;
+  if (normalized === "false" || normalized === "0" || normalized === "no") return false;
+  return defaultValue;
+}
+
+export function getAiProvider(env: NodeJS.ProcessEnv = process.env): ProviderName {
+  const geminiKey = String(env.GEMINI_API_KEY ?? "").trim();
+  return geminiKey ? "gemini" : "fallback";
+}
+
+function getAiConfig(env: NodeJS.ProcessEnv = process.env) {
+  const apiKey = String(env.GEMINI_API_KEY ?? "").trim();
+  const model = String(env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL).trim() || DEFAULT_GEMINI_MODEL;
+  const baseUrl = String(env.GEMINI_BASE_URL ?? DEFAULT_GEMINI_BASE_URL).trim().replace(/\/+$/, "") || DEFAULT_GEMINI_BASE_URL;
+  const enabled = apiKey ? truthyEnv(env.GEMINI_ENABLED, true) : false;
+  return { apiKey, model, baseUrl, enabled };
+}
+
+export function getAiHealth(env: NodeJS.ProcessEnv = process.env) {
+  const provider = getAiProvider(env);
+  const { model, enabled } = getAiConfig(env);
+  return {
+    aiProvider: provider === "gemini" ? "Gemini" : "Fallback",
+    aiModel: provider === "gemini" ? model : "fallback",
+    aiEnabled: enabled
+  };
+}
+
+async function geminiGenerateText(args: { env: NodeJS.ProcessEnv; prompt: string }): Promise<string> {
+  const { apiKey, model, baseUrl } = getAiConfig(args.env);
+  const url = `${baseUrl}/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [{ text: args.prompt }] }],
+      generationConfig: { temperature: 0.2 }
+    })
+  });
+
+  if (!response.ok) {
+    const details = await response.text().catch(() => "");
+    throw new Error(`Gemini request failed (${response.status}). ${details}`.trim());
+  }
+
+  const data = (await response.json()) as {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  };
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  return String(text);
+}
 
 interface ScheduleRequest {
   selectedDesiredCourses?: string[];
@@ -93,7 +149,7 @@ function samplePlans(kind: "recommend" | "complete", eligible: Array<Record<stri
       id: `${kind}-sample`,
       title: kind === "recommend" ? "Sample Balanced Plan" : "Sample Completion Plan",
       rationale: "Demo suggestion generated from the current eligible course set.",
-      source: "sample",
+      source: "fallback",
       items
     }
   ];
@@ -235,7 +291,9 @@ export async function generateSchedulePlans(kind: "recommend" | "complete", requ
   const recommendedNextTermCodes = getRecommendedNextTermCodes(completedSet, existingScheduleSet);
   const targetCount = recommendedNextTermCodes.length > 0 ? recommendedNextTermCodes.length : request.constraints?.maxCourses ?? 3;
 
-  if (!isLiveAiEnabled || !openai) {
+  const env = process.env;
+  const { enabled } = getAiConfig(env);
+  if (!enabled) {
     return samplePlans(kind, eligible).map((plan) => ({
       ...plan,
       items: enforcePlanSize(
@@ -261,25 +319,19 @@ export async function generateSchedulePlans(kind: "recommend" | "complete", requ
     `Remaining requirements: ${(request.remainingRequirements ?? []).join(", ") || "none provided"}.`,
     `Existing schedule: ${JSON.stringify(request.existingSchedule ?? [])}.`,
     `Desired courses: ${(request.selectedDesiredCourses ?? []).join(", ") || "none provided"}.`,
-    "Return strict JSON with shape: {\\\"plans\\\":[{\\\"id\\\":string,\\\"title\\\":string,\\\"rationale\\\":string,\\\"source\\\":\\\"openai\\\",\\\"items\\\":[{\\\"courseCode\\\":string,\\\"courseName\\\":string,\\\"days\\\":string,\\\"time\\\":string,\\\"instructor\\\":string,\\\"quality\\\":number,\\\"difficulty\\\":number}]}]}",
+    "Return strict JSON with shape: {\\\"plans\\\":[{\\\"id\\\":string,\\\"title\\\":string,\\\"rationale\\\":string,\\\"source\\\":\\\"gemini\\\",\\\"items\\\":[{\\\"courseCode\\\":string,\\\"courseName\\\":string,\\\"days\\\":string,\\\"time\\\":string,\\\"instructor\\\":string,\\\"quality\\\":number,\\\"difficulty\\\":number}]}]}",
     `Eligible courses: ${JSON.stringify(eligible.slice(0, 10))}`
   ].join("\n");
 
   try {
-    const completion = await openai.chat.completions.create({
-      model,
-      response_format: { type: "json_object" },
-      messages: [{ role: "user", content: prompt }]
-    });
-
-    const raw = completion.choices[0]?.message?.content ?? '{"plans":[]}';
+    const raw = await geminiGenerateText({ env, prompt });
     const parsed = JSON.parse(raw) as { plans?: Array<Record<string, unknown>> };
     return (parsed.plans ?? []).map((plan, index) => {
       return {
         id: String(plan.id ?? `${kind}-${index}`),
         title: String(plan.title ?? "AI Plan"),
         rationale: String(plan.rationale ?? "AI-generated suggestion."),
-        source: "openai",
+        source: "gemini",
         items: enforcePlanSize(
           (Array.isArray(plan.items) ? plan.items : []) as Array<Record<string, unknown>>,
           eligible,
@@ -304,11 +356,13 @@ export async function generateScheduleChatReply(request: ScheduleRequest, messag
   const existingSchedule = request.existingSchedule ?? [];
   const existingCodes = existingSchedule.map((course) => course.courseCode);
 
-  if (!isLiveAiEnabled || !openai) {
+  const env = process.env;
+  const { enabled } = getAiConfig(env);
+  if (!enabled) {
     return {
       answer:
         "I can help with planning strategy. Tell me your target workload, preferred days/times, and whether you care more about easier classes or stronger professor quality.",
-      source: "sample"
+      source: "fallback"
     };
   }
 
@@ -326,17 +380,13 @@ export async function generateScheduleChatReply(request: ScheduleRequest, messag
   ].join("\n");
 
   try {
-    const completion = await openai.chat.completions.create({
-      model,
-      messages: [{ role: "user", content: prompt }]
-    });
-    const answer = completion.choices[0]?.message?.content?.trim() ?? "I could not generate advice right now.";
-    return { answer, source: "openai" };
+    const answer = (await geminiGenerateText({ env, prompt })).trim() || "I could not generate advice right now.";
+    return { answer, source: "gemini" };
   } catch {
     return {
       answer:
         "I can still help in sample mode. Try asking: 'Give me an easier 3-course quarter with minimal conflicts on Tue/Thu.'",
-      source: "sample"
+      source: "fallback"
     };
   }
 }

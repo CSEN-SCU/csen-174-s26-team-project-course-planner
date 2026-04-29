@@ -3,14 +3,13 @@ import express from "express";
 import transcriptRoutes from "./routes/transcript.js";
 import courseRoutes from "./routes/courses.js";
 import scheduleRoutes from "./routes/schedule.js";
+import { getAiHealth } from "./ai/scheduleAi.js";
 
 export function createApp() {
   const app = express();
   app.use(cors({ origin: process.env.CLIENT_ORIGIN ?? "http://localhost:5173" }));
   app.use(express.json({ limit: "1mb" }));
-  const aiProvider = "OpenAI";
-  const aiModel = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
-  const aiEnabled = (process.env.OPENAI_ENABLED ?? "false").toLowerCase() === "true";
+  const { aiProvider, aiModel, aiEnabled } = getAiHealth(process.env);
 
   app.get("/health", (_req, res) => {
     res.json({ ok: true, service: "bronco-plan-api", aiProvider, aiModel, aiEnabled });

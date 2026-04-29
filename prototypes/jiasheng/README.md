@@ -11,7 +11,7 @@ Path: `course-planner/prototypes/jiasheng/`
 - **Front end**: Jinja2 templates + static JS — landing (`/`) and app (`/app`)
 - **Back end**: FastAPI (`app/main.py`)
 - **Database**: SQLite + SQLAlchemy (default `data/app.db`)
-- **AI (optional)**: Gemini and/or OpenAI for structured parsing and rationale text; set keys in environment only (never commit keys)
+- **AI (optional)**: Gemini for structured parsing and rationale text; set keys in environment only (never commit keys)
 
 ### Using Gemini (optional)
 

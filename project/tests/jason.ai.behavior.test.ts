@@ -18,7 +18,6 @@ describe("Jason AI output behavior", () => {
   test("returns AI plans with required fields when Gemini responds with JSON", async () => {
     // Arrange
     vi.stubEnv("GEMINI_API_KEY", "AIzaFakeKeyForTests");
-    vi.stubEnv("OPENAI_API_KEY", "");
     const fetchMock = vi.fn(async () => ({
       ok: true,
       json: async () => ({
@@ -50,7 +49,7 @@ describe("Jason AI output behavior", () => {
     const plans = await generateSchedulePlans(
       "recommend",
       { priorities: "balanced" },
-      { env: { GEMINI_API_KEY: "AIzaFakeKeyForTests", OPENAI_API_KEY: "" } as NodeJS.ProcessEnv }
+      { env: { GEMINI_API_KEY: "AIzaFakeKeyForTests" } as NodeJS.ProcessEnv }
     );
 
     // Assert

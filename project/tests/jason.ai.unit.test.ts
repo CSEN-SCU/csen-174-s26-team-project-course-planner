@@ -10,8 +10,7 @@ describe("Jason AI provider selection", () => {
   test("prefers Gemini provider when GEMINI_API_KEY exists", () => {
     // Arrange
     const env = {
-      GEMINI_API_KEY: "AIzaFakeKeyForTests",
-      OPENAI_API_KEY: "sk-test-openai"
+      GEMINI_API_KEY: "AIzaFakeKeyForTests"
     };
 
     // Action
@@ -24,7 +23,7 @@ describe("Jason AI provider selection", () => {
   // As a student, my configured AI provider is honored by schedule generation at runtime.
   test("uses injected runtime env for provider selection", async () => {
     // Arrange
-    const env = { GEMINI_API_KEY: "", OPENAI_API_KEY: "" } as NodeJS.ProcessEnv;
+    const env = { GEMINI_API_KEY: "" } as NodeJS.ProcessEnv;
 
     // Action
     const plans = await generateSchedulePlans("recommend", { priorities: "balanced" }, { env });
