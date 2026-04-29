@@ -54,13 +54,10 @@ describe("Jason AI output behavior", () => {
     );
 
     // Assert
-    expect(Array.isArray(plans)).toBe(true);
     expect(plans.length).toBeGreaterThan(0);
-    expect(plans[0]).toMatchObject({
-      id: expect.any(String),
-      title: expect.any(String),
-      rationale: expect.any(String),
-      source: "gemini"
-    });
+    expect(typeof plans[0].id).toBe("string");
+    expect(typeof plans[0].title).toBe("string");
+    expect(typeof plans[0].rationale).toBe("string");
+    expect(plans[0].source).toBe("gemini");
   });
 });

@@ -30,6 +30,7 @@ describe("Jason AI provider selection", () => {
     const plans = await generateSchedulePlans("recommend", { priorities: "balanced" }, { env });
 
     // Assert
-    expect(plans[0]?.source).toBe("fallback");
+    expect(plans[0].source).toBe("fallback");
+    expect(Array.isArray(plans)).toBe(true);
   });
 });
