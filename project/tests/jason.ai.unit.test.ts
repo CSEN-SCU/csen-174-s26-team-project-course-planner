@@ -6,7 +6,7 @@ vi.mock("../api/src/services/courseService.js", () => ({
 }));
 
 describe("Jason AI provider selection", () => {
-  // As a student, I get Gemini-backed recommendations when Gemini is configured by the team.
+  // Returns Gemini-backed recommendations when Gemini is configured.
   test("prefers Gemini provider when GEMINI_API_KEY exists", () => {
     // Arrange
     const env = {
@@ -20,7 +20,7 @@ describe("Jason AI provider selection", () => {
     expect(provider).toBe("gemini");
   });
 
-  // As a student, my configured AI provider is honored by schedule generation at runtime.
+  // Uses the configured AI provider during schedule generation.
   test("uses injected runtime env for provider selection", async () => {
     // Arrange
     const env = { GEMINI_API_KEY: "" } as NodeJS.ProcessEnv;

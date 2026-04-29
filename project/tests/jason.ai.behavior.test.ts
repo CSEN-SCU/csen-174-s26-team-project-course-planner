@@ -14,7 +14,7 @@ describe("Jason AI output behavior", () => {
     vi.unstubAllGlobals();
   });
 
-  // As a student, I receive structured recommendation JSON so the UI can render plans reliably.
+  // Returns structured recommendation JSON so the UI can render plans reliably.
   test("returns AI plans with required fields when Gemini responds with JSON", async () => {
     // Arrange
     vi.stubEnv("GEMINI_API_KEY", "AIzaFakeKeyForTests");
