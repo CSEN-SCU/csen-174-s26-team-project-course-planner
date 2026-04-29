@@ -61,3 +61,14 @@ index 89a7c2a..f1d3a21 100644
 ```
 
 
+## Jason (AI/backend ownership)
+
+Part 1 (Spec tests added): I added two Sprint 1 tests in `project/tests/` for my AI/backend ownership area.
+
+1) `jason.ai.unit.test.ts`
+This test checks the unit-level fallback behavior of schedule generation when live AI is not configured. It verifies that the function still returns a usable plan array and marks the response source as sample mode, which protects the user experience when keys are missing. The test is written with Arrange/Action/Assert and keeps the setup scoped to one behavior.
+
+2) `jason.ai.behavior.test.ts`
+This test checks AI output behavior by asserting the structure/category of the returned recommendations rather than exact wording. It verifies that at least one plan is returned and that required fields (`id`, `title`, `rationale`, and course fields) are present so the frontend can safely render results. This aligns with the assignment requirement to validate AI behavior using schema-like expectations instead of brittle exact-text checks.
+
+Part 2 (Red -> Green): I first ran the tests in `project/api` and confirmed RED failures due to mismatches between test assumptions and the current backend path. Then I updated the AI path/test setup so these tests matched the actual contract and reran until they passed. At least two tests flipped GREEN after the implementation adjustments, while keeping the assertions behavior-focused and stable under normal refactors.
