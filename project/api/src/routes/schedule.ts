@@ -36,6 +36,16 @@ router.post("/chat", async (req, res, next) => {
   }
 });
 
+router.post("/recommend", async (req, res, next) => {
+  try {
+    const payload = scheduleSchema.parse(req.body ?? {});
+    const plans = await generateSchedulePlans("recommend", payload);
+    return res.json(plans);
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.post("/complete", async (req, res, next) => {
   try {
     const payload = scheduleSchema.parse(req.body ?? {});

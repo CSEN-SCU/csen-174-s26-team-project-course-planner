@@ -1,0 +1,66 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { generateSchedulePlans } from "../api/src/ai/scheduleAi.js";
+
+vi.mock("../api/src/services/courseService.js", () => ({
+  getEligibleCourseResults: vi.fn(async () => [{ code: "CSE 130", name: "Programming Languages" }])
+}));
+
+describe("Jason AI output behavior", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  // As a student, I receive structured recommendation JSON so the UI can render plans reliably.
+  test("returns AI plans with required fields when Gemini responds with JSON", async () => {
+    // Arrange
+    vi.stubEnv("GEMINI_API_KEY", "AIzaFakeKeyForTests");
+    vi.stubEnv("OPENAI_API_KEY", "");
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify({
+                    plans: [
+                      {
+                        id: "plan-1",
+                        title: "Balanced plan",
+                        rationale: "Balances workload and quality",
+                        items: [{ courseCode: "CSE 130", courseName: "Programming Languages" }]
+                      }
+                    ]
+                  })
+                }
+              ]
+            }
+          }
+        ]
+      })
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    // Action
+    const plans = await generateSchedulePlans(
+      "recommend",
+      { priorities: "balanced" },
+      { env: { GEMINI_API_KEY: "AIzaFakeKeyForTests", OPENAI_API_KEY: "" } as NodeJS.ProcessEnv }
+    );
+
+    // Assert
+    expect(Array.isArray(plans)).toBe(true);
+    expect(plans.length).toBeGreaterThan(0);
+    expect(plans[0]).toMatchObject({
+      id: expect.any(String),
+      title: expect.any(String),
+      rationale: expect.any(String),
+      source: "gemini"
+    });
+  });
+});
