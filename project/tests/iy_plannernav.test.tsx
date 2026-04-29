@@ -1,5 +1,6 @@
+import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { PlannerNav } from "../../project/web/src/components/PlannerNav";
+import { PlannerNav } from "../web/src/components/PlannerNav";
 
 describe("PlannerNav", () => {
   it("changes tabs and priority mode through user interactions", () => {
