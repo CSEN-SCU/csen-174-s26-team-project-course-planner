@@ -21,6 +21,8 @@ export function PlannerNav({
           {(["build", "calendar", "ai"] as PlannerTab[]).map((tab) => (
             <button
               key={tab}
+              type="button"
+              aria-current={activeTab === tab ? "page" : undefined}
               onClick={() => onTabChange(tab)}
               className={cn(
                 "rounded-lg px-4 py-2 text-sm font-semibold capitalize",
