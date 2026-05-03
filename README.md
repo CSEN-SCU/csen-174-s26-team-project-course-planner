@@ -21,6 +21,26 @@ An LLM-powered web app that helps SCU undergraduates plan next-quarter schedules
 - Joey
 - Jiasheng
 
+## Target architecture (multi-agent pipeline)
+
+Product direction: students provide **major**, **completed courses**, and **preferences**; an **Orchestrator** routes work through phased agents.
+
+1. **PHASE 1 — Information gathering (linear)**  
+   **Requirement Agent:** user-supplied **URL** → web fetch of major-requirements content → parse **PDF / images** with a **vision-capable LLM** when needed → output **missing required courses** (gap analysis).
+
+2. **PHASE 2 — Planning (chatbot)**  
+   **Planning Chatbot Agent:** merges requirement **gap** + **preferences** (time / difficulty / interests) → searches **next-term offerings** → invokes **Professor Agent** for scoring/ranking → proposes a **recommended schedule**.
+
+   In parallel (where applicable):  
+   - **Professor Agent:** RateMyProfessor / SCU evaluation signals → rank instructors.  
+   - **Schedule Agent:** **time conflicts** + **time distribution** optimization.
+
+3. **PHASE 3 — Presentation + execution**  
+   **Frontend:** left pane — **calendar-style** week grid; right pane — **recommended course list** (professor signals, difficulty, times).  
+   **Optional Email Agent:** drafts instructor email (*“Professor X, I am interested in joining COEN 146 …”*) with **human-in-the-loop** approval before send.
+
+Implementation sketch and current `course_planner` scope: see [`course_planner/README.md`](course_planner/README.md).
+
 ## Repository layout
 
 | Path | Purpose |
@@ -29,6 +49,7 @@ An LLM-powered web app that helps SCU undergraduates plan next-quarter schedules
 | [`problem_framing_canvas.md`](problem_framing_canvas.md) | Full Problem Framing Canvas |
 | [`architecture/architecture.md`](architecture/architecture.md) | C4 Context + Container diagrams (Mermaid) |
 | [`.cursorrules`](.cursorrules) | Cursor / AI agent project context |
+| [`course_planner/`](course_planner/) | Python + Streamlit app: Academic Progress `.xlsx` parsing; roadmap agents (see `course_planner/README.md`) |
 | [`prototypes/`](prototypes/) | Each teammate’s divergent prototype |
 | [`prototypes/Jason/`](prototypes/Jason/) | Jason’s guided-wizard prototype (see its `README.md`) |
 | [`prototypes/jiasheng/`](prototypes/jiasheng/) | Jiasheng’s FastAPI prototype: Academic Progress upload + major requirements + course sections (see its `README.md`) |
