@@ -16,7 +16,15 @@ prototypes/Jason/data/
 .DS_Store
 .cursor/storyboard
 
+# Python
+__pycache__/
+*.py[cod]
+
 # Prototype uploads / personal exports (do not commit)
 prototypes/jiasheng/data/uploads/
 prototypes/jiasheng/View_My_Academic_Progress.xlsx
 prototypes/jiasheng/~$*.xlsx
+
+# Course planner academic exports (personal)
+course_planner/View_My_Academic_Progress.xlsx
+course_planner/~$*.xlsx
