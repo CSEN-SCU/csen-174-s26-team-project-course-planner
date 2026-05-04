@@ -2,17 +2,14 @@
 
 # SCU Course Planner (CSEN 174)
 
-## Team name
+## Team Name
 
-Update with your official classroom team name.
+SCU Course Planner
 
-## Product name
 
-**SCU Course Planner**
+## Description
 
-## One-sentence description
-
-An LLM-powered web app that helps SCU undergraduates plan next-quarter schedules using transcript context and course quality/workload signals, with less friction than Workday-only planning.
+SCU Course Planner is a web app that helps SCU students plan their future schedules using transcript context and course quality/workload signals, with less friction than Workday-only planning.
 
 ## Team members
 
