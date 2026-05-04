@@ -1,12 +1,16 @@
 Overview
 
-This week we worked on setting up the tests that will be used for Test Driven Development throughout the course of hte project.
+This week we worked on setting up the tests that will be used for Test Driven Development throughout the course of hte project. We each wrote tests based on ownership as assigned in 'architecture/architecture.md'.
 
 Part 2 
 
 jiasheng huang: (Red → Green): We first ran `npm test` in `project/api` and confirmed the Sprint 1 tests were RED. Then we implemented the missing backend security modules `src/auth/session.ts` and `src/auth/password.ts` to satisfy the expected contract for secure sessions (HttpOnly cookie + expiry) and password storage (salted one-way hashing + verification), and re-ran the test suite to verify at least two tests turned GREEN. The remaining RED tests are kept as future-sprint work.
 
 Ismael Yepez: (Red → Green): I added a Sprint 1 UI test in project/tests/ismael/ that asserts the active planner tab sets aria-current="page" so screen-reader users know which tab is selected, written with a one-line user story and Arrange/Action/Assert. We first ran npm run test:ismael from project/web and saw RED until PlannerNav exposed that attribute; after adding aria-current (and type="button" on tab buttons), we re-ran the same command and the test went GREEN. Owner-scoped scripts live in project/web/package.json and are documented in project/tests/README.md so each teammate can run only their folder.
+
+Jason: (Red -> Green): I first ran the tests in `project/api` and confirmed RED failures due to mismatches between test assumptions and the current backend path. Then I updated the AI path/test setup so these tests matched the actual contract and reran until they passed. At least two tests flipped GREEN after the implementation adjustments, while keeping the assertions behavior-focused and stable under normal refactors.
+
+Joey ()
 
 Part 3
 
@@ -79,6 +83,7 @@ This test checks the unit-level fallback behavior of schedule generation when li
 2) `jason.ai.behavior.test.ts`
 This test checks AI output behavior by asserting the structure/category of the returned recommendations rather than exact wording. It verifies that at least one plan is returned and that required fields (`id`, `title`, `rationale`, and course fields) are present so the frontend can safely render results. This aligns with the assignment requirement to validate AI behavior using schema-like expectations instead of brittle exact-text checks.
 
-Part 2 (Red -> Green): I first ran the tests in `project/api` and confirmed RED failures due to mismatches between test assumptions and the current backend path. Then I updated the AI path/test setup so these tests matched the actual contract and reran until they passed. At least two tests flipped GREEN after the implementation adjustments, while keeping the assertions behavior-focused and stable under normal refactors.
 
-![Jolli EXTRACTION RESULTS (SCU Course Planner repo analysis)](Screenshot%202026-04-29%20at%2015-14-16%20Jolli.png)
+Part 5 Jolli Connection Screenshot
+
+![Jolli Connection](Screenshot%202026-04-29%20at%2015-14-16%20Jolli.png)
