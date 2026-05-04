@@ -14,7 +14,7 @@ describe("GET /courses/requirements/:major", () => {
     // Action
     const res = await request(app).get(`/courses/requirements/${majorId}`);
 
-    // Assert: contract — 200 with identifiable courses (seed includes COEN 174 for engineering curriculum)
+    // Assert: contract — 200 with identifiable university core + major staples (ENGR 1, CSEN 174)
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
       major: majorId,
@@ -24,7 +24,11 @@ describe("GET /courses/requirements/:major", () => {
     expect(res.body.requiredCourses).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: "COEN 174",
+          code: expect.stringMatching(/^ENGR\s*1$/i),
+          name: expect.stringMatching(/introduction to engineering/i)
+        }),
+        expect.objectContaining({
+          code: "CSEN 174",
           name: expect.stringMatching(/software engineering/i)
         })
       ])
