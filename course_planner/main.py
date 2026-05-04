@@ -1,78 +1,494 @@
+import json
+import re
 from pathlib import Path
+from typing import Optional
 
 from dotenv import load_dotenv
+from openpyxl import load_workbook
 
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
 import streamlit as st
 
 from utils.academic_progress_xlsx import parse_academic_progress_xlsx
+from utils.scu_course_schedule_xlsx import _parse_section_subject_number
+from agents.planning_agent import run_planning_agent
+from agents.professor_agent import run_professor_agent
 
 st.set_page_config(page_title="SCU Course Planner", layout="wide")
 
+
+def parse_schedule(schedule_str: str) -> Optional[dict]:
+    """
+    Input: "M W F | 11:45 AM - 12:50 PM"
+    Output: {
+        "days": ["M", "W", "F"],
+        "start": "11:45 AM",
+        "end": "12:50 PM"
+    }
+    """
+    if not schedule_str or "|" not in schedule_str:
+        return None
+    days_part, time_part = schedule_str.split("|", 1)
+    days = days_part.strip().split()
+    parts = [t.strip() for t in time_part.strip().split("-")]
+    if len(parts) < 2:
+        return None
+    start, end = parts[0], parts[-1]
+    return {"days": days, "start": start, "end": end}
+
+
+def _schedule_map_keys_for_row(subject: str, number: str) -> list[str]:
+    """Course-code keys aligned with the schedule xlsx, with COEN/CSEN and ECEN/ELEN cross-mapping."""
+    subj = subject.strip().upper()
+    num = number.strip()
+    primary = f"{subj} {num}"
+    keys = [primary]
+    if subj == "COEN":
+        keys.append(f"CSEN {num}")
+    elif subj == "CSEN":
+        keys.append(f"COEN {num}")
+    elif subj == "ECEN":
+        keys.append(f"ELEN {num}")
+    elif subj == "ELEN":
+        keys.append(f"ECEN {num}")
+    return keys
+
+
+def _load_schedule_map_base_from_xlsx() -> dict[str, str]:
+    """Build course code -> Meeting Patterns from Find Course Sections xlsx only (no enriched overrides)."""
+    base = Path(__file__).resolve().parent
+    out: dict[str, str] = {}
+    for fname in ("SCU_Find_Course_Sections.xlsx", "scu_find_course.xlsx"):
+        p = base / fname
+        if not p.is_file():
+            continue
+        wb = load_workbook(p, read_only=True, data_only=True)
+        try:
+            ws = wb.active
+            it = ws.iter_rows(values_only=True)
+            header = next(it, None)
+            if not header:
+                return out
+            h = [str(c).strip() if c is not None else "" for c in header]
+            try:
+                idx_sec = h.index("Course Section")
+                idx_mp = h.index("Meeting Patterns")
+            except ValueError:
+                return out
+            for row in it:
+                if not row or max(idx_sec, idx_mp) >= len(row):
+                    continue
+                sec = row[idx_sec]
+                mp = row[idx_mp]
+                if mp is None:
+                    continue
+                mp_s = str(mp).strip()
+                if not mp_s:
+                    continue
+                parsed = _parse_section_subject_number(
+                    str(sec).strip() if sec is not None else None
+                )
+                if not parsed:
+                    continue
+                subj_s, num_s = parsed[0], parsed[1]
+                for k in _schedule_map_keys_for_row(subj_s, num_s):
+                    if k not in out:
+                        out[k] = mp_s
+        finally:
+            wb.close()
+        break
+    return out
+
+
+def extract_course_variants(course_str: str) -> list[str]:
+    """
+    Input: "CSEN/COEN 194/L", "COEN 146", "ECEN/ELEN 153 & 153L", or "ENGL103"
+    Output: all plausible course-code variants
+    Example: ["CSEN 194", "COEN 194", "CSEN 194L", "COEN 194L"]
+    """
+    s = " ".join((course_str or "").split())
+    if not s:
+        return []
+    if " " not in s and "/" not in s and "&" not in s:
+        m = re.fullmatch(r"([A-Za-z]{2,8})(\d+[A-Za-z]?)", s, re.I)
+        if m:
+            s = f"{m.group(1).upper()} {m.group(2).upper()}"
+    parts = s.split()
+    subjects = parts[0].split("/")
+    rest = " ".join(parts[1:])
+    numbers = []
+    for token in re.split(r"[/&,]", rest):
+        token = token.strip()
+        if token:
+            if token.isalpha() and numbers:
+                numbers.append(numbers[-1] + token)
+            else:
+                numbers.append(token)
+    variants = []
+    for subj in subjects:
+        for num in numbers:
+            variants.append(f"{subj} {num}".strip())
+    return variants
+
+
+def _recommended_item_in_find_course_xlsx(item: dict, base_map: dict[str, str]) -> bool:
+    """True if the recommendation matches at least one parseable section in Find Course Sections (variant keys)."""
+    if not base_map:
+        return True
+    course_str = (item.get("course") or "").strip()
+    if not course_str:
+        return False
+    variants = extract_course_variants(course_str)
+    for v in variants:
+        if " ".join(v.split()).upper() in base_map:
+            return True
+    return False
+
+
+def load_course_schedule_map_from_xlsx() -> dict[str, str]:
+    """Load Find Course Sections xlsx and build course-code string -> raw Meeting Patterns."""
+    out = dict(_load_schedule_map_base_from_xlsx())
+
+    enriched = st.session_state.get("enriched_courses")
+    if isinstance(enriched, list):
+        for item in enriched:
+            course_str = item.get("course") or ""
+            if not course_str:
+                continue
+            variants = extract_course_variants(course_str)
+            if not variants:
+                continue
+            sched = None
+            for v in variants:
+                key = " ".join(v.split()).upper()
+                if key in out:
+                    sched = out[key]
+                    break
+            if sched is None:
+                continue
+            for v in variants:
+                key = " ".join(v.split()).upper()
+                out[key] = sched
+            out[" ".join(course_str.split())] = sched
+
+    return out
+
+
 st.title("SCU Course Planner")
 
-COL_ZH = {
-    "requirement": "要求 / 条目",
-    "status": "状态",
-    "remaining": "尚缺说明",
-    "registration": "登记课程",
-    "course_code": "解析课号",
-    "academic_period": "学期",
-    "units": "学分",
-    "grade": "成绩",
+COL_LABELS = {
+    "requirement": "Requirement / item",
+    "status": "Status",
+    "remaining": "Remaining (gap)",
+    "registration": "Registered course",
+    "course_code": "Parsed course code",
+    "academic_period": "Term",
+    "units": "Units",
+    "grade": "Grade",
 }
 
 with st.sidebar:
-    st.markdown("上传 **SCU → View My Academic Progress** 导出的 `.xlsx`（本地解析，无需调用 API）。")
-    xlsx_file = st.file_uploader("上传 Academic Progress (.xlsx)", type=["xlsx"])
-    hide_empty = st.checkbox("明细表隐藏「仅有状态、未登记课程」的空行", value=False)
-    run = st.button("解析")
+    st.markdown(
+        "Upload the `.xlsx` exported from **SCU → View My Academic Progress** "
+        "(parsed locally; no API calls)."
+    )
+    xlsx_file = st.file_uploader("Upload Academic Progress (.xlsx)", type=["xlsx"])
+    hide_empty = st.checkbox(
+        "Hide detail rows that only have status and no registered course", value=False
+    )
+    run = st.button("Parse")
 
 
 def _detail_table_rows(rows: list[dict]) -> list[dict]:
-    return [{COL_ZH.get(k, k): row.get(k) for k in COL_ZH if k in row} for row in rows]
+    return [{COL_LABELS.get(k, k): row.get(k) for k in COL_LABELS if k in row} for row in rows]
 
 
 def _not_satisfied_table(items: list[dict]) -> list[dict]:
     return [
         {
-            "要求 / 条目": i.get("requirement"),
-            "尚缺说明": i.get("remaining"),
+            "Requirement / item": i.get("requirement"),
+            "Remaining (gap)": i.get("remaining"),
         }
         for i in items
     ]
 
 
+def _recommended_fingerprint(recs: list[dict]) -> str:
+    return json.dumps(recs, ensure_ascii=False, sort_keys=True, default=str)
+
+
+def _rating_display(rating) -> tuple[str, str]:
+    """Return (star markdown, numeric text) for st.markdown."""
+    if rating is None:
+        return "", "—"
+    try:
+        r = float(rating)
+    except (TypeError, ValueError):
+        return "", str(rating)
+    filled = max(0, min(5, int(round(r))))
+    stars = "★" * filled + "☆" * (5 - filled)
+    return stars, f"{r:.1f}/5"
+
+
 if run:
     if not xlsx_file:
-        st.warning("请先上传 xlsx。")
+        st.warning("Please upload an xlsx file first.")
     else:
         data = parse_academic_progress_xlsx(xlsx_file.getvalue())
         counts = data.get("requirement_status_counts", {})
 
-        st.subheader("进度总览（按「一整条 DegreeWorks 要求」合并状态）")
+        st.subheader("Progress overview (one merged status per DegreeWorks requirement block)")
         c1, c2, c3 = st.columns(3)
-        c1.metric("已满足条目数", counts.get("Satisfied", 0))
-        c2.metric("进行中条目数", counts.get("In Progress", 0))
-        c3.metric("未满足条目数", counts.get("Not Satisfied", 0))
+        c1.metric("Satisfied blocks", counts.get("Satisfied", 0))
+        c2.metric("In progress blocks", counts.get("In Progress", 0))
+        c3.metric("Not satisfied blocks", counts.get("Not Satisfied", 0))
 
-        st.subheader("仍未满足的要求")
+        st.subheader("Requirements still not satisfied")
         ns = data.get("not_satisfied", [])
         if ns:
             st.dataframe(_not_satisfied_table(ns), use_container_width=True, hide_index=True)
         else:
-            st.success("当前没有发现状态为「Not Satisfied」的要求块（以 Excel 为准）。")
+            st.success("No requirement blocks with status Not Satisfied (per Excel).")
 
-        st.subheader("表中解析出的课程课号（去重）")
+        st.subheader("Parsed course codes from the sheet (unique)")
         codes = data.get("course_codes", [])
-        st.write(", ".join(codes) if codes else "（无可解析课号的登记行）")
+        st.write(", ".join(codes) if codes else "(No registration rows with a parseable course code)")
 
-        st.subheader("全部明细（与 Excel 行一致）")
+        st.subheader("All detail rows (aligned with Excel)")
         detail = list(data.get("detail_rows", []))
         if hide_empty:
             detail = [r for r in detail if r.get("registration")]
         if detail:
             st.dataframe(_detail_table_rows(detail), use_container_width=True, hide_index=True)
         else:
-            st.info("明细为空 — 可能是表头不匹配或档案格式有变。")
+            st.info("No detail rows — headers may not match or the workbook format changed.")
+
+        parsed_rows = data.get("detail_rows", [])
+        st.session_state["missing_details"] = [
+            {
+                "course": row["course_code"],
+                "category": row["requirement"],
+                "units": row["units"],
+            }
+            for row in parsed_rows
+            if row["status"] == "Not Satisfied"
+        ]
+
+st.divider()
+st.subheader("Step 2: Generate a recommended schedule (missing_details + your preferences)")
+
+missing_details = st.session_state.get("missing_details")
+if isinstance(missing_details, list) and missing_details:
+    user_preference = st.text_area(
+        "Describe your preferences (target units, time of day, which areas to prioritize…)",
+        placeholder="e.g. at most 12 units, finish core first, no classes before 9am",
+        key="planning_user_preference",
+    )
+
+    if st.button("Generate recommended schedule"):
+        if not (user_preference or "").strip():
+            st.warning("Please enter your preferences first.")
+        else:
+            with st.spinner("Generating recommended schedule…"):
+                try:
+                    planning_result = run_planning_agent(missing_details, user_preference)
+                    st.session_state["planning_result"] = planning_result
+                except Exception as e:
+                    st.error(f"Generation failed: {e}")
+
+    planning_result = st.session_state.get("planning_result")
+    if isinstance(planning_result, dict):
+        raw_recs = planning_result.get("recommended") or []
+        base_schedule_map = _load_schedule_map_base_from_xlsx()
+        if base_schedule_map:
+            recs = [r for r in raw_recs if _recommended_item_in_find_course_xlsx(r, base_schedule_map)]
+            dropped = [
+                (r.get("course") or "").strip()
+                for r in raw_recs
+                if not _recommended_item_in_find_course_xlsx(r, base_schedule_map)
+            ]
+            dropped = [c for c in dropped if c]
+            if dropped:
+                st.warning(
+                    "These courses are not in Find Course Sections (`SCU_Find_Course_Sections.xlsx`) "
+                    "and were removed from recommendations, professor ratings, and the calendar preview: "
+                    + ", ".join(dropped)
+                )
+        else:
+            recs = list(raw_recs)
+
+        if recs:
+            fp = _recommended_fingerprint(recs)
+            if st.session_state.get("_recommended_enrichment_fp") != fp:
+                with st.spinner("Fetching ratings from RateMyProfessor…"):
+                    st.session_state["enriched_courses"] = run_professor_agent(recs)
+                    st.session_state["_recommended_enrichment_fp"] = fp
+        else:
+            st.session_state.pop("enriched_courses", None)
+            st.session_state.pop("_recommended_enrichment_fp", None)
+
+        enriched = st.session_state.get("enriched_courses")
+
+        if recs:
+            st.subheader("Professor ratings (RateMyProfessor)")
+            st.caption(
+                "After a successful **Generate recommended schedule**, ratings load automatically; "
+                "each instructor’s rating and difficulty appear at the bottom of the **left** course cards. "
+                "If RMP has no match for the course code, you will see **No rating data**."
+            )
+
+        left, right = st.columns(2)
+
+        with left:
+            st.markdown("#### Recommended courses")
+            if not recs:
+                st.info("(Model returned no recommended list)")
+            elif not isinstance(enriched, list):
+                st.info("(No professor enrichment loaded)")
+            else:
+                for item in enriched:
+                    with st.container(border=True):
+                        course = item.get("course", "(Unknown course)")
+                        category = item.get("category", "(Unknown category)")
+                        units = item.get("units", "(Unknown units)")
+                        reason = item.get("reason", "")
+
+                        st.markdown(f"**{course}**  ·  {category}")
+                        st.metric("Units", units)
+                        sched = item.get("scheduled_instructors")
+                        if isinstance(sched, list) and sched:
+                            st.caption("Find Course instructors: " + ", ".join(sched))
+                        if reason:
+                            st.info(reason)
+
+                        profs = item.get("professors") or []
+                        err_msg = item.get("error")
+                        rmp_note = item.get("rmp_note")
+
+                        if err_msg or not profs:
+                            if rmp_note and not err_msg:
+                                st.info(rmp_note)
+                            else:
+                                st.warning(err_msg or "No rating data")
+                            continue
+
+                        best_name = item.get("best_professor")
+                        top_prof = None
+                        if isinstance(profs, list):
+                            if best_name:
+                                for p in profs:
+                                    if p.get("name") == best_name:
+                                        top_prof = p
+                                        break
+                            if top_prof is None:
+                                top_prof = profs[0]
+
+                        if not top_prof or not best_name:
+                            st.warning("No rating data")
+                            continue
+
+                        stars, numeric = _rating_display(top_prof.get("rating"))
+
+                        diff = top_prof.get("difficulty")
+                        diff_txt = f"{diff:.1f}" if isinstance(diff, (int, float)) else (str(diff) if diff is not None else "—")
+                        wta = top_prof.get("would_take_again") or "N/A"
+
+                        st.markdown(f"Top pick: **{best_name}**")
+
+                        if stars:
+                            st.markdown(f"{stars} **{numeric}**")
+                        else:
+                            st.markdown(f"**{numeric}**")
+
+                        cols_p = st.columns(2)
+                        with cols_p[0]:
+                            st.metric("Difficulty", diff_txt)
+                        with cols_p[1]:
+                            st.metric("Would take again", wta)
+
+                        if item.get("rmp_note"):
+                            st.caption(item["rmp_note"])
+
+        with right:
+            st.markdown("#### Summary")
+            _tu = planning_result.get("total_units")
+            if recs:
+                su = 0.0
+                any_u = False
+                for r in recs:
+                    try:
+                        su += float(r.get("units"))
+                        any_u = True
+                    except (TypeError, ValueError):
+                        pass
+                if any_u:
+                    st.metric("Total units (courses in schedule file only)", int(su) if su == int(su) else su)
+                else:
+                    st.metric("Total units", _tu if _tu is not None else "—")
+            else:
+                st.metric("Total units", _tu if _tu is not None else "—")
+            advice = (planning_result.get("advice") or "").strip()
+            if advice:
+                st.write(advice)
+            else:
+                st.info("(Model returned no advice)")
+
+        if recs and isinstance(enriched, list) and enriched:
+            st.session_state["course_schedule_map"] = load_course_schedule_map_from_xlsx()
+            schedule_map = st.session_state["course_schedule_map"]
+
+            st.divider()
+            st.subheader("Step 3 · Schedule preview")
+            st.caption(
+                "Times come from the Find Course Sections workbook (Meeting Patterns) in this folder; "
+                "if a course has no matching section, it is listed under **Time TBD**."
+            )
+
+            day_map = {"M": 0, "T": 1, "W": 2, "Th": 3, "F": 4}
+            day_headers = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+            buckets: list[list[tuple[dict, dict]]] = [[] for _ in range(5)]
+            pending_cal: list[dict] = []
+
+            for item in enriched:
+                code = (item.get("course") or "").strip()
+                raw = schedule_map.get(code) if code else None
+                parsed = parse_schedule(raw) if raw else None
+                if not parsed:
+                    pending_cal.append(item)
+                    continue
+                placed = False
+                for d in parsed["days"]:
+                    idx = day_map.get(d)
+                    if idx is not None:
+                        buckets[idx].append((item, parsed))
+                        placed = True
+                if not placed:
+                    pending_cal.append(item)
+
+            header_cols = st.columns(5)
+            for i, hc in enumerate(header_cols):
+                with hc:
+                    st.markdown(f"**{day_headers[i]}**")
+
+            body_cols = st.columns(5)
+            for col_i, bc in enumerate(body_cols):
+                with bc:
+                    for item, parsed in buckets[col_i]:
+                        with st.container(border=True):
+                            st.markdown(f"**{item.get('course', '(Unknown course)')}**")
+                            st.caption(f"{parsed['start']} – {parsed['end']}")
+                            st.write(item.get("best_professor") or "—")
+
+            if pending_cal:
+                st.markdown("##### Time TBD")
+                for item in pending_cal:
+                    with st.container(border=True):
+                        st.markdown(f"**{item.get('course', '(Unknown course)')}**")
+                        st.caption("No Meeting Patterns or no match in schedule xlsx")
+                        st.write(item.get("best_professor") or "—")
+else:
+    st.info(
+        "(No `missing_details` yet: run Step 1 requirement analysis and set "
+        "`st.session_state['missing_details']`.)"
+    )

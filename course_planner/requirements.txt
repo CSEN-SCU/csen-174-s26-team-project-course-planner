@@ -3,3 +3,4 @@ streamlit
 pypdf2
 python-dotenv
 openpyxl
+ratemyprofessors-client

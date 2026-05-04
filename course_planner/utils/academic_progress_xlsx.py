@@ -16,14 +16,14 @@ def _merge_requirement_statuses(status_set: set[str]) -> str:
     return next(iter(sorted(status_set))) if status_set else ""
 
 _CELL_NOISE_RE = (
-    # 标题里可能出现的括号片段，解析课号时需去掉（课号在主段第一句）
+    # Parenthetical fragments in titles to strip before parsing the course code (code is in the first clause)
     re.compile(r"\s*\([^)]*In Progress[^)]*\)\s*", re.IGNORECASE),
     re.compile(r"\s*\([^)]*Transfer Credit[^)]*\)\s*", re.IGNORECASE),
 )
 
 
 def registration_to_course_code(cell: str | None) -> str | None:
-    """从「COEN 10 - Introduction …」这一类单元格里抽出课号，如 COEN 10 / CSEN 140L。"""
+    """Extract a course code like COEN 10 / CSEN 140L from cells shaped like ``COEN 10 - Introduction …``."""
     if cell is None or not isinstance(cell, str):
         return None
     head = cell.split(" - ", 1)[0].strip()
@@ -44,11 +44,11 @@ def registration_to_course_code(cell: str | None) -> str | None:
 
 
 def parse_academic_progress_xlsx(xlsx_bytes: bytes) -> dict[str, Any]:
-    """解析 SCU「View My Academic Progress」导出表（单列 sheet）。
+    """Parse SCU View My Academic Progress export (single-column sheet layout).
 
-    返回结构中 ``detail_rows`` 适合直接喂给 ``st.dataframe``；
-    ``not_satisfied`` 为仍为 Not Satisfied 的要求块简要信息；
-    ``course_codes`` 为表中登记行解析出的全部课号（去重、排序）。
+    ``detail_rows`` is suitable for ``st.dataframe``;
+    ``not_satisfied`` summarizes blocks still Not Satisfied;
+    ``course_codes`` lists all parsed codes from registration rows (unique, sorted).
     """
     wb = load_workbook(BytesIO(xlsx_bytes), read_only=True, data_only=True)
     detail_rows: list[dict[str, Any]] = []

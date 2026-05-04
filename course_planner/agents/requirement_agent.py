@@ -35,7 +35,7 @@ RESULT_SCHEMA = {
     "required": ["completed", "missing", "missing_details"],
 }
 
-# 新账号无法再用 gemini-2.0-flash，默认改为当前 Gemini API 可用的 Flash 模型。
+# New accounts cannot use gemini-2.0-flash; default to a current Gemini API Flash model.
 DEFAULT_MODEL = "gemini-2.5-flash"
 
 
@@ -52,15 +52,15 @@ def run_requirement_agent(pdf_bytes: bytes, completed_courses: list[str]) -> dic
     model = os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
 
     prompt = f"""
-你是一个大学选课顾问。
+You are a university course-planning advisor.
 
-学生已修课程：{completed_str}
+Completed courses (student): {completed_str}
 
-请分析这份 major requirement PDF，找出：
-1. 学生已完成哪些必修课（与 PDF 中的要求对照，仅列出在要求中出现且学生已修的）
-2. 学生还缺哪些必修课
+Analyze this major-requirements PDF and determine:
+1. Which required courses the student has already completed (cross-check the PDF; list only requirements that appear in the PDF and that the student has taken)
+2. Which required courses are still missing
 
-按约定的 JSON 结构输出（已通过 response schema 约束字段）。
+Respond with the agreed JSON structure (fields are constrained by the response schema).
 """
 
     response = _get_client().models.generate_content(
@@ -78,5 +78,5 @@ def run_requirement_agent(pdf_bytes: bytes, completed_courses: list[str]) -> dic
 
     text = (response.text or "").strip()
     if not text:
-        raise ValueError("模型未返回文本内容")
+        raise ValueError("Model returned no text content")
     return _parse_json_from_response(text)

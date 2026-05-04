@@ -1,83 +1,70 @@
-# SCU Course Planner (`course_planner`)
+# SCU Course Planner — `course_planner/`
 
-Python + Streamlit prototype for parsing SCU **View My Academic Progress** exports (`.xlsx`) locally. Optional Gemini-based agents (e.g. PDF requirement sheets) live under `agents/`.
-
----
-
-## Target architecture (multi-agent pipeline)
-
-**User input:** major + completed courses + preferences
-
-↓
-
-```
-┌─────────────────────────────┐
-│     Orchestrator Agent      │  ← decomposes tasks
-└─────────────────────────────┘
-```
-
-↓
-
-### PHASE 1 — Information gathering (linear)
-
-**Requirement Agent**
-
-- Accepts a URL from the user.
-- **Web fetch** of the official major-requirements page (or linked documents).
-- Parses **PDF / images** using a **vision-capable LLM** (multimodal) when needed.
-- **Output:** which required courses are still missing (the “gap” vs. the major sheet).
-
-↓
-
-### PHASE 2 — Planning (chatbot)
-
-**Planning Chatbot Agent**
-
-- Combines the **requirement gap** with **user preferences** (time slots, difficulty, interests).
-- **Searches** next-term course offerings / sections.
-- Calls **Professor Agent** to score and rank sections.
-- **Output:** a recommended schedule plan.
-
-↓ **(parallel where applicable)**
-
-| Professor Agent | Schedule Agent |
-|-----------------|----------------|
-| RateMyProfessor / SCU course eval signals | Detect **time conflicts** |
-| Rank instructors per section | Improve **time distribution** across the week |
-
-↓
-
-### PHASE 3 — Presentation + execution
-
-**Frontend**
-
-- **Left:** calendar-style weekly grid (Google Calendar–like).
-- **Right:** ranked recommended course list (professor signals, difficulty, meeting times).
-
-After the user selects courses → *(optional)*
-
-**Email Agent**
-
-- Drafts outreach email: *“Professor X, I am interested in joining COEN 146 …”*
-- **Human-in-the-loop:** user reviews and confirms before anything is sent.
+Python + Streamlit prototype. Upload your SCU Academic Progress export and get a personalized next-quarter schedule with professor ratings and a weekly calendar view.
 
 ---
 
-## Current implementation (this folder)
+## Current implementation
 
-| Component | Status |
-|-----------|--------|
-| Streamlit UI + SCU Academic Progress `.xlsx` parser | Implemented (`main.py`, `utils/academic_progress_xlsx.py`) |
-| Gemini `requirement_agent` (PDF + completed list) | Stub / experimental (`agents/requirement_agent.py`) |
-| Orchestrator, Planning Chatbot, Professor, Schedule, Email agents | Not implemented yet |
+| Step | Module | How |
+|------|--------|-----|
+| Requirement parsing | `main.py` → `parse_academic_progress_xlsx` | Parses SCU “View My Academic Progress” `.xlsx` export locally, extracts Not Satisfied courses |
+| Schedule planning | `agents/planning_agent.py` | Gemini LLM — takes missing courses + user preference string, returns recommended schedule |
+| Professor rating | `agents/professor_agent.py` | RateMyProfessor API (parallel threads) — enriches each recommended course with instructor rating, difficulty, would-take-again % |
+| Calendar view | `main.py` | Streamlit `st.columns` grid — maps courses to Mon–Fri using SCU Find Course Sections `.xlsx` |
 
-### Run locally
+---
+
+## Roadmap (not yet in UI)
+
+| Agent | Status | Notes |
+|-------|--------|-------|
+| Requirement Agent (LLM) | Implemented, not wired | `agents/requirement_agent.py` — Gemini vision reads major requirement PDF, outputs gap analysis. Will replace/supplement Excel parsing. |
+| Orchestrator | Placeholder | `agents/orchestrator.py` — will route tasks across agents |
+| Email Agent | Planned | Draft add-permission email to professor, human-in-the-loop before send |
+
+---
+
+## Architecture
+
+```
+Academic Progress (.xlsx)
+        ↓
+Requirement Parser (local)          ← LLM version: agents/requirement_agent.py (roadmap)
+        ↓
+Planning Agent (Gemini)  ←  user preference (natural language)
+        ↓
+Professor Agent (RateMyProfessor API, parallel)
+        ↓
+Calendar UI (Streamlit)
+```
+
+---
+
+## Run locally
 
 ```bash
 cd course_planner
 pip install -r requirements.txt
-# Optional for Gemini features: set GEMINI_API_KEY or GOOGLE_API_KEY in .env (see .env.example)
+cp .env.example .env   # add your GOOGLE_API_KEY
 streamlit run main.py
 ```
 
-Secrets: copy `.env.example` to `.env`. Do **not** commit `.env`.
+Do **not** commit `.env`; keep secrets out of version control.
+
+---
+
+## Required files
+
+Place these in `course_planner/` (not committed — see `.gitignore`):
+
+| File | Where to get it |
+|------|-----------------|
+| `View_My_Academic_Progress.xlsx` | SCU Workday → View My Academic Progress → Export |
+| `SCU_Find_Course_Sections.xlsx` | SCU Workday → Find Course Sections → Export |
+
+---
+
+## Team
+
+Jason · Ismael · Joey · Jiasheng

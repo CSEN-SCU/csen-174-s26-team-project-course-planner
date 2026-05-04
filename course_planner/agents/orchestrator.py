@@ -1,1 +1,1 @@
-"""主控 agent（占位，后续实现）。"""
+"""Orchestrator agent (placeholder; to be implemented)."""
