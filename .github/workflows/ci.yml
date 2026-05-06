@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: |
+            project/api/package-lock.json
+            project/web/package-lock.json
+
+      - name: Install API dependencies
+        working-directory: project/api
+        run: npm ci
+
+      - name: Install Web test dependencies
+        working-directory: project/web
+        run: npm ci
+
+      - name: Run API tests (Vitest)
+        working-directory: project/api
+        env:
+          # Optional: if set in GitHub Secrets, enables live AI calls.
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm test
+
+      - name: Run W5 test suite (project/tests via web Vitest config)
+        working-directory: project/web
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+        run: npm test
+

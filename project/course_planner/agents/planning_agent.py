@@ -92,6 +92,7 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
             system_instruction=(
                 "You are an SCU course planning advisor.\n"
                 "Given remaining requirements and student preferences, recommend a next-term schedule.\n"
+                "Use exact subject codes as in DegreeWorks / the catalog (e.g. CSEN, not CSEE).\n"
                 "Output only JSON that matches the schema—no other text.\n"
                 "Keep each reason and the advice short enough to avoid truncated, invalid JSON.\n"
                 "For engineering Senior Design (often COEN/CSEN 194, 195, 196 as a sequence): "

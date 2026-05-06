@@ -1,4 +1,4 @@
-# SCU Course Planner — `course_planner/`
+# SCU Course Planner — `project/course_planner/`
 
 Python + Streamlit prototype. Upload your SCU Academic Progress export and get a personalized next-quarter schedule with professor ratings and a weekly calendar view.
 
@@ -44,7 +44,7 @@ Calendar UI (Streamlit)
 ## Run locally
 
 ```bash
-cd course_planner
+cd project/course_planner
 pip install -r requirements.txt
 cp .env.example .env   # add your GOOGLE_API_KEY
 streamlit run main.py
@@ -56,7 +56,7 @@ Do **not** commit `.env`; keep secrets out of version control.
 
 ## Required files
 
-Place these in `course_planner/` (not committed — see `.gitignore`):
+Place these in `project/course_planner/` (not committed — see `.gitignore`):
 
 | File | Where to get it |
 |------|-----------------|
