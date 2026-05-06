@@ -19,6 +19,24 @@ _DEFAULT_SCHEDULE_FILES = (
     _COURSE_PLANNER_DIR / "scu_find_course.xlsx",
 )
 
+# LLM / OCR typos vs official ``Course Section`` subject codes (SCU workbook)
+_SCHEDULE_SUBJECT_TYPOS: dict[str, str] = {"CSEE": "CSEN"}
+
+
+def expand_subjects_for_schedule_lookup(subject_tokens: list[str]) -> list[str]:
+    """Uppercase subjects plus canonical alternates for known typos (for xlsx key matching)."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in subject_tokens:
+        u = raw.strip().upper()
+        if not u:
+            continue
+        for cand in (u, _SCHEDULE_SUBJECT_TYPOS.get(u, "")):
+            if cand and cand not in seen:
+                out.append(cand)
+                seen.add(cand)
+    return out
+
 
 def _find_schedule_path(explicit: Path | None) -> Path | None:
     if explicit is not None and explicit.is_file():
@@ -69,6 +87,10 @@ def planned_section_keys(course_code: str) -> set[tuple[str, str]]:
         ):
             subj, num = t, tokens[i + 1]
             keys.add((subj, num))
+            typo = _SCHEDULE_SUBJECT_TYPOS.get(subj)
+            if typo:
+                keys.add((typo, num))
+                subj = typo  # COEN/CSEN cross-map applies to canonical subject
             if subj == "COEN":
                 keys.add(("CSEN", num))
             elif subj == "CSEN":

@@ -11,7 +11,10 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 import streamlit as st
 
 from utils.academic_progress_xlsx import parse_academic_progress_xlsx
-from utils.scu_course_schedule_xlsx import _parse_section_subject_number
+from utils.scu_course_schedule_xlsx import (
+    _parse_section_subject_number,
+    expand_subjects_for_schedule_lookup,
+)
 from agents.planning_agent import run_planning_agent
 from agents.professor_agent import run_professor_agent
 
@@ -115,7 +118,7 @@ def extract_course_variants(course_str: str) -> list[str]:
         if m:
             s = f"{m.group(1).upper()} {m.group(2).upper()}"
     parts = s.split()
-    subjects = parts[0].split("/")
+    subjects = expand_subjects_for_schedule_lookup(parts[0].split("/"))
     rest = " ".join(parts[1:])
     numbers = []
     for token in re.split(r"[/&,]", rest):
@@ -303,18 +306,6 @@ if isinstance(missing_details, list) and missing_details:
         base_schedule_map = _load_schedule_map_base_from_xlsx()
         if base_schedule_map:
             recs = [r for r in raw_recs if _recommended_item_in_find_course_xlsx(r, base_schedule_map)]
-            dropped = [
-                (r.get("course") or "").strip()
-                for r in raw_recs
-                if not _recommended_item_in_find_course_xlsx(r, base_schedule_map)
-            ]
-            dropped = [c for c in dropped if c]
-            if dropped:
-                st.warning(
-                    "These courses are not in Find Course Sections (`SCU_Find_Course_Sections.xlsx`) "
-                    "and were removed from recommendations, professor ratings, and the calendar preview: "
-                    + ", ".join(dropped)
-                )
         else:
             recs = list(raw_recs)
 
