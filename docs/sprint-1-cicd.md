@@ -39,7 +39,7 @@ Successful deploys (Render dashboard):
 
 ### Platform choice paragraph (3–5 sentences)
 
-When deciding which platform to use, we asked Cursor which option fit how our project works. It recommended Render among the platforms listed in the assignment because it supports full-stack setups, gives us a public URL, and exposes a clear Deployments view for screenshots. One source of confusion at first was that we set up the static site first but did not initially add a Web Service for the backend. That left only the frontend running, so there was no server to handle transcript parsing. Once we added the API service and configured environment variables (including API keys), the app worked end-to-end.
+When deciding which platform to use, we asked cursor what platform it would recommend considering how our project functioned. From there it told us that Render was the best recommendation out of the ones mentioned in the assignment details because it handled full stack apps, it could give us a public URL, and it had a clear deployments dashboard for screenshots. One source of confusion at first was that Cursor helped us set up the static site at first but it didn't mention that we had to also host a web service for the backend. This caused our app to not function since only the frontend was running and there was nothing to parse. Once we created the service for the backend and setup the environment variables (including API keys), the app functioned properly.
 
 ---
 
