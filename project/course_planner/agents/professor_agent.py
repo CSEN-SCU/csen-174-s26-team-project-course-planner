@@ -16,7 +16,10 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from typing import Any
 
-from rmp_client import RMPClient
+try:
+    from rmp_client import RMPClient
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    RMPClient = None
 
 from utils.scu_course_schedule_xlsx import (
     load_schedule_section_index,
@@ -403,6 +406,19 @@ def run_professor_agent(recommended_courses: list[dict]) -> list[dict]:
     """
     if not recommended_courses:
         return []
+    if RMPClient is None:
+        return [
+            {
+                **course,
+                "professors": [],
+                "best_professor": None,
+                "rmp_note": (
+                    "Professor ratings are unavailable because the optional "
+                    "'rmp_client' dependency is not installed."
+                ),
+            }
+            for course in recommended_courses
+        ]
 
     schedule_index = load_schedule_section_index()
     workers = max(1, min(_MAX_PARALLEL_COURSES, len(recommended_courses)))
