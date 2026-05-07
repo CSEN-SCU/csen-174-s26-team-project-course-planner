@@ -31,3 +31,6 @@ course_planner/~$*.xlsx
 project/course_planner/View_My_Academic_Progress.xlsx
 project/course_planner/SCU_Find_Course_Sections.xlsx
 project/course_planner/~$*.xlsx
+
+# Local Python virtual environment (installed packages + interpreter links)
+.venv/

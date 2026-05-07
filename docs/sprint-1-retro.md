@@ -19,7 +19,7 @@ Use this table during/after class for **Jiasheng, Jason, Ismael, and Joey** to f
 | Member | Specific contributions (what you built, where it lives, and why it mattered) |
 |---|---|
 | **Jiasheng** | add rate my professor api to llm recommand system, add feature that pattern match user's transcript to fetch.  |
-| **Jason** | Added AI-provider fallback behavior so schedule generation returns a safe fallback response when the upstream model is unavailable/rate-limited instead of timing out with a user-facing error; also added/maintained Jason-owned AI tests to validate provider selection and fallback behavior (`project/course_planner/tests/jason/test_planning_agent_provider_fallback.py`) and authored red tests for next API features (`project/course_planner/tests/jason/test_planning_agent_future_features_red.py`). |
+| **Jason** | Added AI-provider fallback behavior so schedule generation returns a safe fallback response when the upstream model is unavailable/rate-limited instead of timing out with a user-facing error; also added/maintained AI tests to validate provider selection and fallback behavior (`project/course_planner/tests/jason/test_planning_agent_provider_fallback.py`) and authored red tests for next API features (`project/course_planner/tests/jason/test_planning_agent_future_features_red.py`). |
 | **Ismael** | (to fill in) |
 | **Joey** | (to fill in) |
 
