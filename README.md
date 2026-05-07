@@ -11,6 +11,11 @@ SCU Course Planner
 
 SCU Course Planner is a web app that helps SCU students plan their future schedules using transcript context and course quality/workload signals, with less friction than Workday-only planning.
 
+This repo contains:
+
+- **`project/course_planner/`** — Python + Streamlit prototype: Academic Progress parsing, Gemini-backed schedule recommendations, RateMyProfessor enrichment, **local accounts**, **per-user RAG memory** (SQLite + sqlite-vec), and chat-style follow-up replies. See [`project/course_planner/README.md`](project/course_planner/README.md).
+- **`project/web/`** + **`project/api/`** — React + Express + Prisma prototype (`bronco-plan-api`) for eligible courses and schedule APIs.
+
 ## Team members
 
 - Jason
@@ -36,7 +41,7 @@ Product direction: students provide **major**, **completed courses**, and **pref
    **Frontend:** left pane — **calendar-style** week grid; right pane — **recommended course list** (professor signals, difficulty, times).  
    **Optional Email Agent:** drafts instructor email (*“Professor X, I am interested in joining COEN 146 …”*) with **human-in-the-loop** approval before send.
 
-Implementation sketch and current `course_planner` scope: see [`project/course_planner/README.md`](project/course_planner/README.md).
+Implementation sketch and **current Streamlit prototype** scope: [`project/course_planner/README.md`](project/course_planner/README.md).
 
 ## Repository layout
 
@@ -46,14 +51,17 @@ Implementation sketch and current `course_planner` scope: see [`project/course_p
 | [`problem_framing_canvas.md`](problem_framing_canvas.md) | Full Problem Framing Canvas |
 | [`architecture/architecture.md`](architecture/architecture.md) | C4 Context + Container diagrams (Mermaid) |
 | [`.cursorrules`](.cursorrules) | Cursor / AI agent project context |
-| [`project/course_planner/`](project/course_planner/) | Python + Streamlit app: Academic Progress `.xlsx` parsing; roadmap agents (see `project/course_planner/README.md`) |
+| [`project/course_planner/`](project/course_planner/) | Python + Streamlit: accounts, RAG memory, planning orchestrator, agents (see its [`README.md`](project/course_planner/README.md)) |
+| [`project/api/`](project/api/) | TypeScript Express API + Prisma (courses, transcript parse, schedule endpoints) |
+| [`project/web/`](project/web/) | React + Vite frontend |
 | [`prototypes/`](prototypes/) | Each teammate’s divergent prototype |
 | [`prototypes/Jason/`](prototypes/Jason/) | Jason’s guided-wizard prototype (see its `README.md`) |
-| [`prototypes/jiasheng/`](prototypes/jiasheng/) | Jiasheng’s FastAPI prototype: Academic Progress upload + major requirements + course sections (see its `README.md`) |
+| [`prototypes/jiasheng/`](prototypes/jiasheng/) | Jiasheng’s FastAPI prototype (see its `README.md`) |
 | [`prototypes/joey/`](prototypes/joey/) | Joey's prototype: Long Term Advising/Four Year Planning (see its `README.md`) |
-| [`prototypes/ismael/`](prototypes/ismael/) | Ismael's prototype: (see its `README.md`) |
+| [`prototypes/ismael/`](prototypes/ismael/) | Ismael's prototype (see its `README.md`) |
 
 ## Secrets
 
-Do not commit `.env` files. Use `prototypes/<name>/.env.example` as a template for local API keys.
+Do not commit `.env` files. Use `project/course_planner/.env.example` or `prototypes/<name>/.env.example` as templates for local API keys.
 
+Do not commit `project/course_planner/data/` — it holds the local SQLite database for accounts and memory (see `.gitignore`).

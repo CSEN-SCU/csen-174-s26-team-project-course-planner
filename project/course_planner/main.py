@@ -15,10 +15,17 @@ from utils.scu_course_schedule_xlsx import (
     _parse_section_subject_number,
     expand_subjects_for_schedule_lookup,
 )
-from agents.planning_agent import run_planning_agent
 from agents.professor_agent import run_professor_agent
+from agents.orchestrator import plan_for_user
+from agents import memory_agent
+from auth import streamlit_auth
 
 st.set_page_config(page_title="SCU Course Planner", layout="wide")
+
+current_user = streamlit_auth.require_login()
+if current_user is None:
+    st.stop()
+USER_ID = int(current_user["id"])
 
 
 def parse_schedule(schedule_str: str) -> Optional[dict]:
@@ -192,6 +199,9 @@ COL_LABELS = {
 }
 
 with st.sidebar:
+    st.markdown(f"Signed in as **{current_user['username']}**")
+    streamlit_auth.logout_button()
+    st.divider()
     st.markdown(
         "Upload the `.xlsx` exported from **SCU → View My Academic Progress** "
         "(parsed locally; no API calls)."
@@ -201,6 +211,27 @@ with st.sidebar:
         "Hide detail rows that only have status and no registered course", value=False
     )
     run = st.button("Parse")
+
+    st.divider()
+    with st.expander("My memory", expanded=False):
+        st.caption(
+            "Past preferences and plans the assistant remembers for *you*. "
+            "Delete anything you don't want re-used."
+        )
+        my_items = memory_agent.list_for_user(USER_ID)
+        if not my_items:
+            st.info("No memory yet. Generate a recommended schedule to start building one.")
+        else:
+            for item in my_items:
+                with st.container(border=True):
+                    st.caption(f"{item['kind']} · {item['created_at']}")
+                    st.write(item["content"])
+                    if st.button("Delete", key=f"mem_del_{item['id']}"):
+                        memory_agent.delete(USER_ID, item["id"])
+                        st.rerun()
+            if st.button("Delete all my memory", key="mem_del_all"):
+                memory_agent.delete_all_for_user(USER_ID)
+                st.rerun()
 
 
 def _detail_table_rows(rows: list[dict]) -> list[dict]:
@@ -295,8 +326,18 @@ if isinstance(missing_details, list) and missing_details:
         else:
             with st.spinner("Generating recommended schedule…"):
                 try:
-                    planning_result = run_planning_agent(missing_details, user_preference)
+                    previous_plan = st.session_state.get("planning_result")
+                    planning_result = plan_for_user(
+                        USER_ID,
+                        missing_details,
+                        user_preference,
+                        previous_plan=previous_plan if isinstance(previous_plan, dict) else None,
+                    )
                     st.session_state["planning_result"] = planning_result
+                    # Remember the preference text so the chat bubble can
+                    # render the user side of the conversation alongside
+                    # the AI's assistant_reply.
+                    st.session_state["last_planning_message"] = (user_preference or "").strip()
                 except Exception as e:
                     st.error(f"Generation failed: {e}")
 
@@ -320,6 +361,21 @@ if isinstance(missing_details, list) and missing_details:
             st.session_state.pop("_recommended_enrichment_fp", None)
 
         enriched = st.session_state.get("enriched_courses")
+
+        assistant_reply = (planning_result.get("assistant_reply") or "").strip()
+        last_user_msg = st.session_state.get("last_planning_message") or ""
+        if assistant_reply or last_user_msg:
+            if last_user_msg:
+                with st.chat_message("user"):
+                    st.write(last_user_msg)
+            with st.chat_message("assistant"):
+                if assistant_reply:
+                    st.write(assistant_reply)
+                else:
+                    # Fallback when the model only filled `advice` (older
+                    # mocks / response paths). Still better than silence.
+                    fallback = (planning_result.get("advice") or "").strip()
+                    st.write(fallback or "Updated the plan based on your preferences.")
 
         if recs:
             st.subheader("Professor ratings (RateMyProfessor)")

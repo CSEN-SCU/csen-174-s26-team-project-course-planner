@@ -4,3 +4,7 @@ pypdf2
 python-dotenv
 openpyxl
 ratemyprofessors-client
+streamlit-authenticator
+sqlite-vec
+bcrypt
+pytest
