@@ -19,7 +19,7 @@ Use this table during/after class for **Jiasheng, Jason, Ismael, and Joey** to f
 | Member | Specific contributions (what you built, where it lives, and why it mattered) |
 |---|---|
 | **Jiasheng** | add rate my professor api to llm recommand system, add feature that pattern match user's transcript to fetch.  |
-| **Jason** | (to fill in) |
+| **Jason** | Added AI-provider fallback behavior so schedule generation returns a safe fallback response when the upstream model is unavailable/rate-limited instead of timing out with a user-facing error; also added/maintained Jason-owned AI tests to validate provider selection and fallback behavior (`project/course_planner/tests/jason/test_planning_agent_provider_fallback.py`) and authored red tests for next API features (`project/course_planner/tests/jason/test_planning_agent_future_features_red.py`). |
 | **Ismael** | (to fill in) |
 | **Joey** | (to fill in) |
 
@@ -44,4 +44,12 @@ In Sprint 2, we commit to extending our Sprint 1 testing foundation into “mult
 3) **Add a per-user RAG/memory database (LLM personalization over time)**  
    - Kanban card: [Issue #9 — add RAG database for user](https://github.com/CSEN-SCU/csen-174-s26-team-project-course-planner/issues/9)  
    - What we will do: bind memory storage/retrieval to a userId; implement a minimal retrieval chain (write → retrieve → inject into prompts/context); add tests and basic guardrails to prevent cross-user leakage (retrieve only current user memory, controllable top-k and context length limits).
+
+4) **Add AI recommendation explainability fields and confidence rationale**  
+   - Kanban card: *(https://github.com/CSEN-SCU/csen-174-s26-team-project-course-planner/issues/12)*  
+   - What we will do: extend schedule API responses with short, user-readable explanation fields per recommended course (why it was selected, tradeoffs, and confidence rationale) so students can trust recommendations; add contract tests to ensure explanation fields are always present and non-empty.
+
+5) **Add user feedback loop endpoint for recommendation quality tuning**  
+   - Kanban card: *(https://github.com/CSEN-SCU/csen-174-s26-team-project-course-planner/issues/13)*  
+   - What we will do: implement an endpoint for thumbs-up/down and swap reasons on recommended courses, store feedback by user/session, and expose aggregate signals the backend can use to tune ranking in later iterations; add validation and integration tests for feedback submission and retrieval.
 
