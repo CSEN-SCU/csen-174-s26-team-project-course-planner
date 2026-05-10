@@ -15,24 +15,8 @@ Comparison of `project/course_planner/specs/` against the current `project/cours
 - [x] Host pipeline for upload, parse, plan, enrich, split-panel presentation, chat-style reply fallbacks, and optional filtering of recommendations against the base sections workbook.
 - [x] Curriculum PDF gap analysis in the signed-in sidebar (`run_requirement_agent`), populating `missing_details` for Step 2 and showing last-run summary tables.
 - [x] Shared lazy `agents/gemini_client.get_genai_client` so PDF gap analysis and schedule generation both require `GEMINI_API_KEY` or `GOOGLE_API_KEY` (and honor `GEMINI_MODEL`).
+- [x] Planning warnings UI, meeting-pattern parsing refinements, memory retrieval strip, voice prefs, per-user Markdown memory + compaction, SCU theme, full professor tables, interactive calendar remove/replace, and post-replace **Find Course Sections** slot verification table (`replacement_slot_verify`, `course_variants`).
 
 ## Todo
-- [x] Show planning-result heuristic warnings (high unit load, dense schedule) in the main plan area, Summary column, and above Step 3 when a schedule preview exists (`main.py` reads `planning_result["warnings"]`).
-- [x] Thursday in meeting patterns: ``Th`` or single-letter ``R`` maps to the Thursday column; day run ``MTTh`` tokenizes with ``Th`` before bare ``T`` (`utils/meeting_pattern_parse.py`, `main.py` `day_map`).
-- [x] Time tail after ``|``: first and last ``H:MM AM/PM`` tokens define start/end so extra hyphens or filler segments do not break parsing (`utils/meeting_pattern_parse.py`; tests in `tests/test_meeting_pattern_parse.py`).
-- [x] Memory retrieval query uses stripped preference text so surrounding whitespace does not change embedding retrieval (`orchestrator.plan_for_user`; test `test_preference_leading_trailing_whitespace_does_not_change_retrieve_query`).
-- [x] Removed unused `utils/pdf_reader.py` (no spec consumer; PDF bytes go straight to Gemini).
-- [x] Session-flow spec step 7 now states explicitly that `missing_details` comes from **per-detail-row** `status == "Not Satisfied"` (gap-rows spec); clarified it is not the merged overview “Not Satisfied” bucket (`specs/10-interactive-session-and-layout-flow.md`).
-- [x] Optional voice input for Step 2 preferences: ``st.audio_input`` + **Transcribe** appends text to the preference text area via ``SpeechRecognition`` / Google web STT (network); typing remains primary (`main.py`, `utils/voice_pref.py`, ``SpeechRecognition`` in ``requirements.txt``).
 
-- [x] Per-user Markdown memory files under ``COURSE_PLANNER_MEMORY_DIR`` (default ``data/memory/<user_id>.md``): delimited blocks with JSON headers + body text; ``write``/``list``/``delete``/``retrieve`` (cosine distance over on-the-fly embeddings) replace SQLite+sqlite-vec for memory (`agents/memory_agent.py`; tests use isolated temp dir via ``conftest``).
-
-- [x] HIGH: Rolling memory compaction after each ``write`` merges oldest non-protected rows (auto-compaction ``note`` rows are never protected; newest user-authored rows are) when UTF-8 body totals exceed ``MEMORY_COMPACTION_TRIGGER_BYTES``; Gemini summary when a key is set, else excerpt join; UTF-8-safe shrink if a single row still exceeds the budget (`agents/memory_agent.py`, ``tests/test_memory_compaction.py``).
-
-- [x] SCU brand colors: `.streamlit/config.toml` sets `primaryColor` / surfaces; `inject_scu_brand()` tints sidebar, styles headings and links (`#C8102E`, `#8B0000`); primary buttons follow Streamlit theme (`main.py`, `utils/scu_theme.py`).
-
-- [x] Under each recommended course card, a dataframe lists **all** `professors` returned for that course (department path now keeps the full scored set, not only five), sorted by **rating descending** with difficulty and would-take-again; `best_professor` appears in a **Note** column (`main.py`, `utils/rmp_display.py`, `agents/professor_agent.py`).
-
-- [x] MED: Weekly preview cards include **Remove & replace from gaps**, which calls ``plan_for_user`` with ``previous_plan`` and a follow-up preference built by ``utils/calendar_plan_followup.py`` (vacated weekday + parsed times, or Time TBD branch); enrichment cache clears so RMP refetches (`main.py`, tests ``test_calendar_plan_followup.py``).
-
-- [ ] LOW: Programmatically verify each replacement against Find Course Sections rows in the same time window (today the model is only *asked* in natural language to cite the requirement label and honor the window).
+*(No open gaps vs the current spec snapshot—add new unchecked bullets here when new work is identified.)*

@@ -15,10 +15,9 @@ from utils.calendar_plan_followup import build_remove_and_replace_preference
 from utils.rmp_display import professors_sorted_by_rating
 from utils.scu_theme import inject_scu_brand
 from utils.voice_pref import transcribe_wav_bytes
-from utils.scu_course_schedule_xlsx import (
-    _parse_section_subject_number,
-    expand_subjects_for_schedule_lookup,
-)
+from utils.scu_course_schedule_xlsx import _parse_section_subject_number
+from utils.course_variants import extract_course_variants
+from utils.replacement_slot_verify import verify_calendar_replacements
 from agents.professor_agent import run_professor_agent
 from agents.orchestrator import plan_for_user
 from agents.requirement_agent import run_requirement_agent
@@ -95,37 +94,6 @@ def _load_schedule_map_base_from_xlsx() -> dict[str, str]:
             wb.close()
         break
     return out
-
-
-def extract_course_variants(course_str: str) -> list[str]:
-    """
-    Input: "CSEN/COEN 194/L", "COEN 146", "ECEN/ELEN 153 & 153L", or "ENGL103"
-    Output: all plausible course-code variants
-    Example: ["CSEN 194", "COEN 194", "CSEN 194L", "COEN 194L"]
-    """
-    s = " ".join((course_str or "").split())
-    if not s:
-        return []
-    if " " not in s and "/" not in s and "&" not in s:
-        m = re.fullmatch(r"([A-Za-z]{2,8})(\d+[A-Za-z]?)", s, re.I)
-        if m:
-            s = f"{m.group(1).upper()} {m.group(2).upper()}"
-    parts = s.split()
-    subjects = expand_subjects_for_schedule_lookup(parts[0].split("/"))
-    rest = " ".join(parts[1:])
-    numbers = []
-    for token in re.split(r"[/&,]", rest):
-        token = token.strip()
-        if token:
-            if token.isalpha() and numbers:
-                numbers.append(numbers[-1] + token)
-            else:
-                numbers.append(token)
-    variants = []
-    for subj in subjects:
-        for num in numbers:
-            variants.append(f"{subj} {num}".strip())
-    return variants
 
 
 def _recommended_item_in_find_course_xlsx(item: dict, base_map: dict[str, str]) -> bool:
@@ -353,7 +321,13 @@ def _planning_warning_messages(planning_result: dict) -> list[str]:
     return out
 
 
-def _apply_calendar_plan_followup(user_id: int, gaps: list, pref: str) -> None:
+def _apply_calendar_plan_followup(
+    user_id: int,
+    gaps: list,
+    pref: str,
+    *,
+    verify_ctx: dict | None = None,
+) -> None:
     """Re-run planning after a calendar-card removal request; refreshes enrichment cache."""
     prev = st.session_state.get("planning_result")
     if not isinstance(prev, dict):
@@ -370,6 +344,19 @@ def _apply_calendar_plan_followup(user_id: int, gaps: list, pref: str) -> None:
         except Exception as e:
             st.error(f"Replace failed: {e}")
             return
+    if verify_ctx:
+        rows = verify_calendar_replacements(
+            old_plan=prev,
+            new_plan=new_plan,
+            gaps=gaps,
+            removed_course=str(verify_ctx.get("removed") or ""),
+            vacated_col_i=verify_ctx.get("col_i"),
+            vacated_parsed=verify_ctx.get("parsed"),
+            base_schedule_map=verify_ctx.get("base_map") or {},
+        )
+        st.session_state["calendar_replace_verify"] = rows
+    else:
+        st.session_state.pop("calendar_replace_verify", None)
     st.session_state["planning_result"] = new_plan
     st.session_state["last_planning_message"] = pref
     st.session_state.pop("enriched_courses", None)
@@ -507,6 +494,16 @@ if isinstance(missing_details, list) and missing_details:
 
     planning_result = st.session_state.get("planning_result")
     if isinstance(planning_result, dict):
+        cal_verify = st.session_state.get("calendar_replace_verify")
+        if cal_verify:
+            with st.expander("Replacement vs Find Course Sections (last calendar action)", expanded=True):
+                st.caption(
+                    "New course codes compared to the Find Course Sections workbook; when the "
+                    "removed card had a known pattern, **Slot fits vacated window** requires same "
+                    "weekday column + overlapping clock times on that day."
+                )
+                st.dataframe(cal_verify, use_container_width=True, hide_index=True)
+
         plan_warning_msgs = _planning_warning_messages(planning_result)
         raw_recs = planning_result.get("recommended") or []
         base_schedule_map = _load_schedule_map_base_from_xlsx()
@@ -717,7 +714,17 @@ if isinstance(missing_details, list) and missing_details:
                                     day_headers[col_i],
                                     parsed,
                                 )
-                                _apply_calendar_plan_followup(USER_ID, missing_details, pref)
+                                _apply_calendar_plan_followup(
+                                    USER_ID,
+                                    missing_details,
+                                    pref,
+                                    verify_ctx={
+                                        "removed": str(item.get("course") or ""),
+                                        "col_i": col_i,
+                                        "parsed": parsed,
+                                        "base_map": _load_schedule_map_base_from_xlsx(),
+                                    },
+                                )
 
             if pending_cal:
                 st.markdown("##### Time TBD")
@@ -741,7 +748,17 @@ if isinstance(missing_details, list) and missing_details:
                                 None,
                                 None,
                             )
-                            _apply_calendar_plan_followup(USER_ID, missing_details, pref)
+                            _apply_calendar_plan_followup(
+                                USER_ID,
+                                missing_details,
+                                pref,
+                                verify_ctx={
+                                    "removed": str(item.get("course") or ""),
+                                    "col_i": None,
+                                    "parsed": None,
+                                    "base_map": _load_schedule_map_base_from_xlsx(),
+                                },
+                            )
 else:
     st.info(
         "(No `missing_details` yet: run Step 1 requirement analysis and set "

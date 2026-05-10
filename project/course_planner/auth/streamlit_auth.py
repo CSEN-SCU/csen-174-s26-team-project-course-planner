@@ -37,6 +37,7 @@ _USER_SCOPED_SESSION_KEYS = (
     "enriched_courses",
     "_recommended_enrichment_fp",
     "course_schedule_map",
+    "calendar_replace_verify",
     "user_id",
     "username",
     "planning_user_preference",
