@@ -43,4 +43,4 @@ pip install -r requirements.txt
 - Memory is periodically summarized to prevent unbounded growth
 - Gemini embeddings are used for retrieval; no SQLite vector store
 - RateMyProfessor client is required — all course recommendations must include professor ratings
-- Thursday meeting pattern: only "Th" token maps to Thursday column
+- Thursday meeting pattern: ``Th`` or ``R`` maps to the Thursday column (``T`` is Tuesday; contiguous strings like ``MTTh`` are tokenized greedily for ``Th``).

@@ -1,8 +1,6 @@
 import json
 import re
 from pathlib import Path
-from typing import Optional
-
 from dotenv import load_dotenv
 from openpyxl import load_workbook
 
@@ -11,6 +9,7 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 import streamlit as st
 
 from utils.academic_progress_xlsx import parse_academic_progress_xlsx
+from utils.meeting_pattern_parse import parse_schedule
 from utils.scu_course_schedule_xlsx import (
     _parse_section_subject_number,
     expand_subjects_for_schedule_lookup,
@@ -27,26 +26,6 @@ current_user = streamlit_auth.require_login()
 if current_user is None:
     st.stop()
 USER_ID = int(current_user["id"])
-
-
-def parse_schedule(schedule_str: str) -> Optional[dict]:
-    """
-    Input: "M W F | 11:45 AM - 12:50 PM"
-    Output: {
-        "days": ["M", "W", "F"],
-        "start": "11:45 AM",
-        "end": "12:50 PM"
-    }
-    """
-    if not schedule_str or "|" not in schedule_str:
-        return None
-    days_part, time_part = schedule_str.split("|", 1)
-    days = days_part.strip().split()
-    parts = [t.strip() for t in time_part.strip().split("-")]
-    if len(parts) < 2:
-        return None
-    start, end = parts[0], parts[-1]
-    return {"days": days, "start": start, "end": end}
 
 
 def _schedule_map_keys_for_row(subject: str, number: str) -> list[str]:
@@ -639,7 +618,7 @@ if isinstance(missing_details, list) and missing_details:
                 "if a course has no matching section, it is listed under **Time TBD**."
             )
 
-            day_map = {"M": 0, "T": 1, "W": 2, "Th": 3, "F": 4}
+            day_map = {"M": 0, "T": 1, "W": 2, "Th": 3, "R": 3, "F": 4}
             day_headers = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
             buckets: list[list[tuple[dict, dict]]] = [[] for _ in range(5)]
             pending_cal: list[dict] = []

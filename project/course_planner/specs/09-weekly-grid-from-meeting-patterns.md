@@ -9,9 +9,9 @@ Recommended courses with enriched metadata are grouped into weekday columns usin
 
 # Data contracts
 
-- **Meeting pattern string:** free text expected to contain a day token list, a vertical bar, then a start time, hyphen, end time (single hyphen split may treat multiple internal hyphens incorrectly when more than two time parts exist).
-- **Parsed schedule fragment:** list of single-letter or two-letter day keys as split tokens, start time string, end time string.
-- **Day index map:** Monday through Friday mapped to integer column positions; Thursday is represented only by the two-character `Th` token, not the single letter `R`.
+- **Meeting pattern string:** free text expected to contain a day token list, a vertical bar, then a start and end clock time; extra hyphen characters in the time tail are allowed—the implementation takes the first and last time-like tokens (e.g. `10:00 AM - 11:00 AM - lab - 12:30 PM`).
+- **Parsed schedule fragment:** list of day keys after tokenization (`Th` is consumed before a bare `T` so `TTh` yields Tuesday then Thursday), start time string, end time string.
+- **Day index map:** Monday through Friday mapped to integer column positions; Thursday is represented by `Th` or by the single letter `R` (common alongside `T` for Tuesday).
 - **Course schedule map:** uppercased subject-number keys to raw meeting pattern text, seeded from workbook rows, then augmented so every variant key for a recommended course shares the same pattern string, including a key that preserves the planner’s original spacing when variants differ.
 
 # Behaviors (execution order)
@@ -30,4 +30,4 @@ Recommended courses with enriched metadata are grouped into weekday columns usin
 
 - Absent workbook leaves the map empty; filtering step elsewhere may keep all recommendations; lookup always misses so every course lands pending.
 - Unparseable pattern strings or missing bar symbol force pending placement.
-- Thursday meetings expressed only as `R` in the source string do not match the Thursday index and produce pending placement even when a pattern exists.
+- Day strings that contain no recognizable weekday letters after tokenization force pending placement even when a bar and times exist.

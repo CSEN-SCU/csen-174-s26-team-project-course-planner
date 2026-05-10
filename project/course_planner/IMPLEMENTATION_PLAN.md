@@ -18,8 +18,8 @@ Comparison of `project/course_planner/specs/` against the current `project/cours
 
 ## Todo
 - [x] Show planning-result heuristic warnings (high unit load, dense schedule) in the main plan area, Summary column, and above Step 3 when a schedule preview exists (`main.py` reads `planning_result["warnings"]`).
-- [ ] MED: Place courses whose meeting patterns use a single-letter Thursday token into the Thursday column instead of only treating the two-letter Thursday token as Thursday.
-- [ ] MED: Parse meeting time ranges reliably when the time portion contains extra hyphen characters beyond the start–end delimiter.
+- [x] Thursday in meeting patterns: ``Th`` or single-letter ``R`` maps to the Thursday column; day run ``MTTh`` tokenizes with ``Th`` before bare ``T`` (`utils/meeting_pattern_parse.py`, `main.py` `day_map`).
+- [x] Time tail after ``|``: first and last ``H:MM AM/PM`` tokens define start/end so extra hyphens or filler segments do not break parsing (`utils/meeting_pattern_parse.py`; tests in `tests/test_meeting_pattern_parse.py`).
 - [ ] LOW: Ensure leading and trailing whitespace on the current preference text does not change which prior notes are retrieved for context.
 - [x] Removed unused `utils/pdf_reader.py` (no spec consumer; PDF bytes go straight to Gemini).
 - [ ] LOW: Reconcile the session-flow specification wording for how the gap list is built so it matches the gap-rows specification (per-row status filter versus ambiguous “not satisfied” wording).
