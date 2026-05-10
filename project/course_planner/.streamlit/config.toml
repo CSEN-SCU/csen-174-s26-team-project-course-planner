@@ -1,0 +1,9 @@
+# SCU-inspired Streamlit theme (primary #C8102E, dark accent #8B0000 in CSS — see utils/scu_theme.py).
+# Docs: https://docs.streamlit.io/develop/concepts/configuration/theming
+
+[theme]
+primaryColor = "#C8102E"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#FFF5F5"
+textColor = "#1F1F1F"
+font = "sans serif"

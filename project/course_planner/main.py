@@ -11,6 +11,7 @@ import streamlit as st
 from utils.academic_progress_xlsx import parse_academic_progress_xlsx
 from utils.meeting_pattern_parse import parse_schedule
 from utils.rmp_display import professors_sorted_by_rating
+from utils.scu_theme import inject_scu_brand
 from utils.scu_course_schedule_xlsx import (
     _parse_section_subject_number,
     expand_subjects_for_schedule_lookup,
@@ -22,6 +23,7 @@ from agents import memory_agent
 from auth import streamlit_auth
 
 st.set_page_config(page_title="SCU Course Planner", layout="wide")
+inject_scu_brand()
 
 current_user = streamlit_auth.require_login()
 if current_user is None:

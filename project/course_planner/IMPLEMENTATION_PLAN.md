@@ -29,7 +29,7 @@ Comparison of `project/course_planner/specs/` against the current `project/cours
 
 - [ ] HIGH: Add memory summarization step that condenses older memory entries into a compact summary before they exceed a size threshold, preventing unbounded memory growth across sessions.
 
-- [ ] HIGH: Change UI color scheme to SCU brand colors (primary red #8B0000 / #C8102E) across all components including sidebar, buttons, headers, and accents.
+- [x] SCU brand colors: `.streamlit/config.toml` sets `primaryColor` / surfaces; `inject_scu_brand()` tints sidebar, styles headings and links (`#C8102E`, `#8B0000`); primary buttons follow Streamlit theme (`main.py`, `utils/scu_theme.py`).
 
 - [x] Under each recommended course card, a dataframe lists **all** `professors` returned for that course (department path now keeps the full scored set, not only five), sorted by **rating descending** with difficulty and would-take-again; `best_professor` appears in a **Note** column (`main.py`, `utils/rmp_display.py`, `agents/professor_agent.py`).
 
