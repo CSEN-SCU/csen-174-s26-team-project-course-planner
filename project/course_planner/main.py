@@ -353,6 +353,21 @@ def _rating_display(rating) -> tuple[str, str]:
     return stars, f"{r:.1f}/5"
 
 
+def _planning_warning_messages(planning_result: dict) -> list[str]:
+    """Human-readable lines from ``planning_agent`` heuristic ``warnings`` (code + message)."""
+    raw = planning_result.get("warnings")
+    if not isinstance(raw, list):
+        return []
+    out: list[str] = []
+    for w in raw:
+        if not isinstance(w, dict):
+            continue
+        m = (w.get("message") or "").strip()
+        if m:
+            out.append(m)
+    return out
+
+
 if run:
     if not xlsx_file:
         st.warning("Please upload an xlsx file first.")
@@ -462,6 +477,7 @@ if isinstance(missing_details, list) and missing_details:
 
     planning_result = st.session_state.get("planning_result")
     if isinstance(planning_result, dict):
+        plan_warning_msgs = _planning_warning_messages(planning_result)
         raw_recs = planning_result.get("recommended") or []
         base_schedule_map = _load_schedule_map_base_from_xlsx()
         if base_schedule_map:
@@ -495,6 +511,11 @@ if isinstance(missing_details, list) and missing_details:
                     # mocks / response paths). Still better than silence.
                     fallback = (planning_result.get("advice") or "").strip()
                     st.write(fallback or "Updated the plan based on your preferences.")
+
+        if plan_warning_msgs:
+            st.markdown("##### Plan notices")
+            for m in plan_warning_msgs:
+                st.warning(m)
 
         if recs:
             st.subheader("Professor ratings (RateMyProfessor)")
@@ -599,6 +620,10 @@ if isinstance(missing_details, list) and missing_details:
                 st.write(advice)
             else:
                 st.info("(Model returned no advice)")
+            if plan_warning_msgs:
+                st.markdown("**Plan notices**")
+                for m in plan_warning_msgs:
+                    st.warning(m)
 
         if recs and isinstance(enriched, list) and enriched:
             st.session_state["course_schedule_map"] = load_course_schedule_map_from_xlsx()
@@ -606,6 +631,9 @@ if isinstance(missing_details, list) and missing_details:
 
             st.divider()
             st.subheader("Step 3 · Schedule preview")
+            if plan_warning_msgs:
+                for m in plan_warning_msgs:
+                    st.warning(m)
             st.caption(
                 "Times come from the Find Course Sections workbook (Meeting Patterns) in this folder; "
                 "if a course has no matching section, it is listed under **Time TBD**."

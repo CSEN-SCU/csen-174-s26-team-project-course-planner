@@ -17,7 +17,7 @@ Comparison of `project/course_planner/specs/` against the current `project/cours
 - [x] Shared lazy `agents/gemini_client.get_genai_client` so PDF gap analysis and schedule generation both require `GEMINI_API_KEY` or `GOOGLE_API_KEY` (and honor `GEMINI_MODEL`).
 
 ## Todo
-- [ ] MED: Show the planning result warning messages (high unit load, dense schedule) wherever the generated plan is presented so users see guidance the generator already attaches.
+- [x] Show planning-result heuristic warnings (high unit load, dense schedule) in the main plan area, Summary column, and above Step 3 when a schedule preview exists (`main.py` reads `planning_result["warnings"]`).
 - [ ] MED: Place courses whose meeting patterns use a single-letter Thursday token into the Thursday column instead of only treating the two-letter Thursday token as Thursday.
 - [ ] MED: Parse meeting time ranges reliably when the time portion contains extra hyphen characters beyond the start–end delimiter.
 - [ ] LOW: Ensure leading and trailing whitespace on the current preference text does not change which prior notes are retrieved for context.
