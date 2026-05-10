@@ -291,7 +291,17 @@ def _professors_strictly_from_schedule(
             )
 
     scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
-    return [t[2] for t in scored]
+    out = [t[2] for t in scored]
+
+    def _rating_sort_key(d: dict[str, Any]) -> float:
+        x = d.get("rating")
+        try:
+            return float(x)
+        except (TypeError, ValueError):
+            return float("-inf")
+
+    out.sort(key=_rating_sort_key, reverse=True)
+    return out
 
 
 def _enrich_one_course(course: dict, *, schedule_index: dict[tuple[str, str], list[str]]) -> dict:
@@ -375,14 +385,20 @@ def _enrich_one_course(course: dict, *, schedule_index: dict[tuple[str, str], li
                     prelim,
                     key=lambda p: (p.overall_rating is not None, p.overall_rating or 0.0),
                     reverse=True,
-                )[:5]
+                )[: min(40, len(prelim))]
                 top_ev = 0
             else:
                 scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
-                ranked = [t[2] for t in scored[:5]]
+                ranked = [t[2] for t in scored]
                 top_ev = scored[0][0]
 
             prof_list = [_prof_to_dict(p) for p in ranked]
+            prof_list.sort(
+                key=lambda d: float(d["rating"])
+                if d.get("rating") is not None
+                else float("-inf"),
+                reverse=True,
+            )
             enriched["professors"] = prof_list
             if prof_list:
                 enriched["best_professor"] = prof_list[0]["name"]

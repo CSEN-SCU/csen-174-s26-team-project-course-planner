@@ -10,6 +10,7 @@ import streamlit as st
 
 from utils.academic_progress_xlsx import parse_academic_progress_xlsx
 from utils.meeting_pattern_parse import parse_schedule
+from utils.rmp_display import professors_sorted_by_rating
 from utils.scu_course_schedule_xlsx import (
     _parse_section_subject_number,
     expand_subjects_for_schedule_lookup,
@@ -499,9 +500,9 @@ if isinstance(missing_details, list) and missing_details:
         if recs:
             st.subheader("Professor ratings (RateMyProfessor)")
             st.caption(
-                "After a successful **Generate recommended schedule**, ratings load automatically; "
-                "each instructor’s rating and difficulty appear at the bottom of the **left** course cards. "
-                "If RMP has no match for the course code, you will see **No rating data**."
+                "After a successful **Generate recommended schedule**, ratings load automatically. "
+                "Each **left** card lists **all instructors returned for that course**, sorted by **rating high → low** "
+                "(rating, difficulty, would-take-again). The row aligned to **Top pick** is the schedule/heuristic choice when present."
             )
 
         left, right = st.columns(2)
@@ -532,49 +533,45 @@ if isinstance(missing_details, list) and missing_details:
                         err_msg = item.get("error")
                         rmp_note = item.get("rmp_note")
 
-                        if err_msg or not profs:
-                            if rmp_note and not err_msg:
-                                st.info(rmp_note)
-                            else:
-                                st.warning(err_msg or "No rating data")
+                        if err_msg:
+                            st.warning(err_msg)
+                        if rmp_note:
+                            st.caption(rmp_note)
+
+                        if not profs:
+                            if not err_msg:
+                                st.warning("No rating data")
                             continue
 
-                        best_name = item.get("best_professor")
-                        top_prof = None
-                        if isinstance(profs, list):
-                            if best_name:
-                                for p in profs:
-                                    if p.get("name") == best_name:
-                                        top_prof = p
-                                        break
-                            if top_prof is None:
-                                top_prof = profs[0]
-
-                        if not top_prof or not best_name:
-                            st.warning("No rating data")
-                            continue
-
-                        stars, numeric = _rating_display(top_prof.get("rating"))
-
-                        diff = top_prof.get("difficulty")
-                        diff_txt = f"{diff:.1f}" if isinstance(diff, (int, float)) else (str(diff) if diff is not None else "—")
-                        wta = top_prof.get("would_take_again") or "N/A"
-
-                        st.markdown(f"Top pick: **{best_name}**")
-
-                        if stars:
-                            st.markdown(f"{stars} **{numeric}**")
-                        else:
-                            st.markdown(f"**{numeric}**")
-
-                        cols_p = st.columns(2)
-                        with cols_p[0]:
-                            st.metric("Difficulty", diff_txt)
-                        with cols_p[1]:
-                            st.metric("Would take again", wta)
-
-                        if item.get("rmp_note"):
-                            st.caption(item["rmp_note"])
+                        best_name = (item.get("best_professor") or "").strip()
+                        ranked = professors_sorted_by_rating(profs)
+                        st.markdown("**Instructors (rating high → low)**")
+                        table_rows = []
+                        for i, p in enumerate(ranked, start=1):
+                            nm = (p.get("name") or "").strip() or "—"
+                            note = ""
+                            if best_name and nm == best_name:
+                                note = "Top pick"
+                            stars, numeric = _rating_display(p.get("rating"))
+                            rating_cell = f"{stars} {numeric}".strip() if stars else numeric
+                            diff = p.get("difficulty")
+                            diff_txt = (
+                                f"{diff:.1f}"
+                                if isinstance(diff, (int, float))
+                                else (str(diff) if diff is not None else "—")
+                            )
+                            wta = p.get("would_take_again") or "N/A"
+                            table_rows.append(
+                                {
+                                    "#": i,
+                                    "Instructor": nm,
+                                    "Rating": rating_cell,
+                                    "Difficulty": diff_txt,
+                                    "Would take again": wta,
+                                    "Note": note,
+                                }
+                            )
+                        st.dataframe(table_rows, use_container_width=True, hide_index=True)
 
         with right:
             st.markdown("#### Summary")

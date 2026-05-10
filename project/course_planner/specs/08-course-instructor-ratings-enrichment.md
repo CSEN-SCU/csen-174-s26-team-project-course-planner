@@ -11,6 +11,7 @@ Each recommended course row is expanded with instructor names plus aggregate tea
 
 - **Input row:** planner-shaped object with at least a course string and optional category string.
 - **Output row:** copies all input keys plus `professors` list of objects with name, overall quality score, difficulty score, would-take-again percent string; `best_professor` name string or null; optional `scheduled_instructors` string list when the section index matched; optional `rmp_note` human explanation; optional `error` string on hard failures.
+- **Host presentation:** the signed-in planner renders every professor in `professors` in a per-course table sorted by overall rating descending (missing ratings last), with difficulty and would-take-again columns; `best_professor` is labeled when it matches a row.
 - **Section index:** mapping from subject-number pairs to ordered unique instructor display names, with lab-row names merged onto base catalog numbers and mirrored electrical-subject aliases.
 
 # Behaviors (execution order)

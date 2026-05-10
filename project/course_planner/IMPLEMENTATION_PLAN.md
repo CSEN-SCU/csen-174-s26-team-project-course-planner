@@ -31,7 +31,7 @@ Comparison of `project/course_planner/specs/` against the current `project/cours
 
 - [ ] HIGH: Change UI color scheme to SCU brand colors (primary red #8B0000 / #C8102E) across all components including sidebar, buttons, headers, and accents.
 
-- [ ] MED: Under each recommended course card, display a ranked list of all available instructors for that course with their RateMyProfessor rating, difficulty score, and would-take-again percentage sorted by rating descending.
+- [x] Under each recommended course card, a dataframe lists **all** `professors` returned for that course (department path now keeps the full scored set, not only five), sorted by **rating descending** with difficulty and would-take-again; `best_professor` appears in a **Note** column (`main.py`, `utils/rmp_display.py`, `agents/professor_agent.py`).
 
 - [ ] MED: Make the weekly calendar interactive — clicking a course block removes it from the schedule and triggers a replacement recommendation that satisfies remaining degree requirements and fits the vacated time slot.
 
