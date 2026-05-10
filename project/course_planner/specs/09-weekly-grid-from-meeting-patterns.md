@@ -25,6 +25,7 @@ Recommended courses with enriched metadata are grouped into weekday columns usin
 7. When at least one token maps, append the same item once per matching weekday index into the corresponding bucket so multi-day classes appear in multiple columns.
 8. Render five header labels then five body columns listing bordered cards showing course title, parsed start–end caption, and the best professor display name when present.
 9. Render the pending section with a static caption explaining missing pattern or missing workbook match.
+10. On each weekday card and each **Time TBD** card, offer **Remove & replace from gaps**: when activated, the host re-invokes the memory-augmented planning entrypoint with the current plan as ``previous_plan`` and a follow-up preference that names the course to drop, the vacated weekday/time caption when parsed times exist (otherwise a Time-TBD instruction), and asks for a replacement drawn from ``missing_details``; on success the stored planning result and enrichment fingerprint refresh so ratings reload.
 
 # Error paths
 

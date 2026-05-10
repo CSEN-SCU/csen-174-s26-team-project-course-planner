@@ -28,7 +28,7 @@ Voice transcription uses the `SpeechRecognition` package and **Google’s speech
 ## Project layout
 - `.streamlit/config.toml` — Streamlit theme (SCU primary red `#C8102E`, light surfaces)
 - `utils/scu_theme.py` — extra CSS for headings, sidebar strip, link accents (`#8B0000` dark red)
-- `main.py` — Streamlit entry point, all UI logic
+- `main.py` — Streamlit entry point, all UI logic (Step 3 calendar **Remove & replace from gaps** → `plan_for_user` + `utils/calendar_plan_followup.py`)
 - `agents/` — planning, professor, memory, orchestrator agents
 - `auth/` — login/register via streamlit-authenticator
 - `db/` — SQLite connection, schema, migrations

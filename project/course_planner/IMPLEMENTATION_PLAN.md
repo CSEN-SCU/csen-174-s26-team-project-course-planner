@@ -33,6 +33,6 @@ Comparison of `project/course_planner/specs/` against the current `project/cours
 
 - [x] Under each recommended course card, a dataframe lists **all** `professors` returned for that course (department path now keeps the full scored set, not only five), sorted by **rating descending** with difficulty and would-take-again; `best_professor` appears in a **Note** column (`main.py`, `utils/rmp_display.py`, `agents/professor_agent.py`).
 
-- [ ] MED: Make the weekly calendar interactive — clicking a course block removes it from the schedule and triggers a replacement recommendation that satisfies remaining degree requirements and fits the vacated time slot.
+- [x] MED: Weekly preview cards include **Remove & replace from gaps**, which calls ``plan_for_user`` with ``previous_plan`` and a follow-up preference built by ``utils/calendar_plan_followup.py`` (vacated weekday + parsed times, or Time TBD branch); enrichment cache clears so RMP refetches (`main.py`, tests ``test_calendar_plan_followup.py``).
 
-- [ ] LOW: When suggesting replacement courses after a removal, show which specific degree requirement each suggestion fulfills and confirm it has an available section in the same time window.
+- [ ] LOW: Programmatically verify each replacement against Find Course Sections rows in the same time window (today the model is only *asked* in natural language to cite the requirement label and honor the window).

@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -10,6 +11,7 @@ import streamlit as st
 
 from utils.academic_progress_xlsx import parse_academic_progress_xlsx
 from utils.meeting_pattern_parse import parse_schedule
+from utils.calendar_plan_followup import build_remove_and_replace_preference
 from utils.rmp_display import professors_sorted_by_rating
 from utils.scu_theme import inject_scu_brand
 from utils.voice_pref import transcribe_wav_bytes
@@ -351,6 +353,30 @@ def _planning_warning_messages(planning_result: dict) -> list[str]:
     return out
 
 
+def _apply_calendar_plan_followup(user_id: int, gaps: list, pref: str) -> None:
+    """Re-run planning after a calendar-card removal request; refreshes enrichment cache."""
+    prev = st.session_state.get("planning_result")
+    if not isinstance(prev, dict):
+        st.warning("No current plan to edit.")
+        return
+    with st.spinner("Updating schedule…"):
+        try:
+            new_plan = plan_for_user(
+                user_id,
+                gaps,
+                pref,
+                previous_plan=prev,
+            )
+        except Exception as e:
+            st.error(f"Replace failed: {e}")
+            return
+    st.session_state["planning_result"] = new_plan
+    st.session_state["last_planning_message"] = pref
+    st.session_state.pop("enriched_courses", None)
+    st.session_state.pop("_recommended_enrichment_fp", None)
+    st.rerun()
+
+
 if run:
     if not xlsx_file:
         st.warning("Please upload an xlsx file first.")
@@ -636,7 +662,9 @@ if isinstance(missing_details, list) and missing_details:
                     st.warning(m)
             st.caption(
                 "Times come from the Find Course Sections workbook (Meeting Patterns) in this folder; "
-                "if a course has no matching section, it is listed under **Time TBD**."
+                "if a course has no matching section, it is listed under **Time TBD**. "
+                "**Remove & replace from gaps** calls the planner again with your Step 1 gap list, "
+                "asking for a replacement that prefers the same weekday and time window when known."
             )
 
             day_map = {"M": 0, "T": 1, "W": 2, "Th": 3, "R": 3, "F": 4}
@@ -668,19 +696,52 @@ if isinstance(missing_details, list) and missing_details:
             body_cols = st.columns(5)
             for col_i, bc in enumerate(body_cols):
                 with bc:
-                    for item, parsed in buckets[col_i]:
+                    for bi, (item, parsed) in enumerate(buckets[col_i]):
                         with st.container(border=True):
                             st.markdown(f"**{item.get('course', '(Unknown course)')}**")
                             st.caption(f"{parsed['start']} – {parsed['end']}")
                             st.write(item.get("best_professor") or "—")
+                            fk = hashlib.sha256(
+                                f"{col_i}|{bi}|{item.get('course', '')}|{parsed.get('start')}|{parsed.get('end')}".encode()
+                            ).hexdigest()[:24]
+                            if st.button(
+                                "Remove & replace from gaps",
+                                key=f"cal_rr_{fk}",
+                                help=(
+                                    "Drop this course and ask the planner for a replacement from your "
+                                    "Step 1 gap list, preferring the same weekday/time window."
+                                ),
+                            ):
+                                pref = build_remove_and_replace_preference(
+                                    str(item.get("course") or ""),
+                                    day_headers[col_i],
+                                    parsed,
+                                )
+                                _apply_calendar_plan_followup(USER_ID, missing_details, pref)
 
             if pending_cal:
                 st.markdown("##### Time TBD")
-                for item in pending_cal:
+                for pi, item in enumerate(pending_cal):
                     with st.container(border=True):
                         st.markdown(f"**{item.get('course', '(Unknown course)')}**")
                         st.caption("No Meeting Patterns or no match in schedule xlsx")
                         st.write(item.get("best_professor") or "—")
+                        fk = hashlib.sha256(
+                            f"pend|{pi}|{item.get('course', '')}".encode()
+                        ).hexdigest()[:24]
+                        if st.button(
+                            "Remove & replace from gaps",
+                            key=f"cal_rr_{fk}",
+                            help=(
+                                "Drop this course and ask for a gap-based replacement (time window unknown)."
+                            ),
+                        ):
+                            pref = build_remove_and_replace_preference(
+                                str(item.get("course") or ""),
+                                None,
+                                None,
+                            )
+                            _apply_calendar_plan_followup(USER_ID, missing_details, pref)
 else:
     st.info(
         "(No `missing_details` yet: run Step 1 requirement analysis and set "
