@@ -22,7 +22,7 @@ Comparison of `project/course_planner/specs/` against the current `project/cours
 - [x] Time tail after ``|``: first and last ``H:MM AM/PM`` tokens define start/end so extra hyphens or filler segments do not break parsing (`utils/meeting_pattern_parse.py`; tests in `tests/test_meeting_pattern_parse.py`).
 - [x] Memory retrieval query uses stripped preference text so surrounding whitespace does not change embedding retrieval (`orchestrator.plan_for_user`; test `test_preference_leading_trailing_whitespace_does_not_change_retrieve_query`).
 - [x] Removed unused `utils/pdf_reader.py` (no spec consumer; PDF bytes go straight to Gemini).
-- [ ] LOW: Reconcile the session-flow specification wording for how the gap list is built so it matches the gap-rows specification (per-row status filter versus ambiguous “not satisfied” wording).
+- [x] Session-flow spec step 7 now states explicitly that `missing_details` comes from **per–detail-row** `status == "Not Satisfied"` (gap-rows spec); clarified it is not the merged overview “Not Satisfied” bucket (`specs/10-interactive-session-and-layout-flow.md`).
 - [ ] HIGH: Replace text input in chatbot with speech-to-text voice input so users can speak preferences and follow-up questions instead of typing.
 
 - [ ] HIGH: Replace SQLite memory storage with per-user structured Markdown files (one file per user) containing sections for preferences, past plans, and conversation history; each file is human-readable and editable.
