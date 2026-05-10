@@ -13,14 +13,26 @@ Comparison of `project/course_planner/specs/` against the current `project/cours
 - [x] Instructor rating enrichment with schedule-first alignment, department fallback search, bounded parallelism, and graceful behavior when the optional ratings client is missing.
 - [x] Weekly schedule preview from workbook meeting patterns with multi-day placement, a time-unknown bucket, and merged course-code keys after enrichment.
 - [x] Host pipeline for upload, parse, plan, enrich, split-panel presentation, chat-style reply fallbacks, and optional filtering of recommendations against the base sections workbook.
+- [x] Curriculum PDF gap analysis in the signed-in sidebar (`run_requirement_agent`), populating `missing_details` for Step 2 and showing last-run summary tables.
+- [x] Shared lazy `agents/gemini_client.get_genai_client` so PDF gap analysis and schedule generation both require `GEMINI_API_KEY` or `GOOGLE_API_KEY` (and honor `GEMINI_MODEL`).
 
 ## Todo
-
-- [ ] HIGH: Offer curriculum PDF gap analysis inside the same signed-in planner flow so the callable described in the PDF gap specification is reachable without separate tooling.
-- [ ] HIGH: Make the PDF gap analysis path use the same explicit hosted-model key configuration expectation as schedule generation so both flows behave consistently in typical deployments.
 - [ ] MED: Show the planning result warning messages (high unit load, dense schedule) wherever the generated plan is presented so users see guidance the generator already attaches.
 - [ ] MED: Place courses whose meeting patterns use a single-letter Thursday token into the Thursday column instead of only treating the two-letter Thursday token as Thursday.
 - [ ] MED: Parse meeting time ranges reliably when the time portion contains extra hyphen characters beyond the start–end delimiter.
 - [ ] LOW: Ensure leading and trailing whitespace on the current preference text does not change which prior notes are retrieved for context.
-- [ ] LOW: Resolve undocumented PDF helper code so every file under the package either has a specification topic or is removed from the shipped tree.
+- [x] Removed unused `utils/pdf_reader.py` (no spec consumer; PDF bytes go straight to Gemini).
 - [ ] LOW: Reconcile the session-flow specification wording for how the gap list is built so it matches the gap-rows specification (per-row status filter versus ambiguous “not satisfied” wording).
+- [ ] HIGH: Replace text input in chatbot with speech-to-text voice input so users can speak preferences and follow-up questions instead of typing.
+
+- [ ] HIGH: Replace SQLite memory storage with per-user structured Markdown files (one file per user) containing sections for preferences, past plans, and conversation history; each file is human-readable and editable.
+
+- [ ] HIGH: Add memory summarization step that condenses older memory entries into a compact summary before they exceed a size threshold, preventing unbounded memory growth across sessions.
+
+- [ ] HIGH: Change UI color scheme to SCU brand colors (primary red #8B0000 / #C8102E) across all components including sidebar, buttons, headers, and accents.
+
+- [ ] MED: Under each recommended course card, display a ranked list of all available instructors for that course with their RateMyProfessor rating, difficulty score, and would-take-again percentage sorted by rating descending.
+
+- [ ] MED: Make the weekly calendar interactive — clicking a course block removes it from the schedule and triggers a replacement recommendation that satisfies remaining degree requirements and fits the vacated time slot.
+
+- [ ] LOW: When suggesting replacement courses after a removal, show which specific degree requirement each suggestion fulfills and confirm it has an available section in the same time window.

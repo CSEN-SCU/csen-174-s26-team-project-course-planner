@@ -57,7 +57,7 @@ def reply():
 
 def _patch_client(monkeypatch, captured_prompts, reply):
     stub = _stub_client(captured_prompts, reply)
-    monkeypatch.setattr(planning_agent, "_get_client", lambda: stub)
+    monkeypatch.setattr(planning_agent, "get_genai_client", lambda **_kw: stub)
 
 
 def test_inject_retrieved_snippets_into_prompt_prefix(monkeypatch, alice, reply):

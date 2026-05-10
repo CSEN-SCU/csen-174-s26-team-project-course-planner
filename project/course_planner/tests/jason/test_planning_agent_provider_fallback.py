@@ -2,16 +2,15 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from agents import planning_agent
+from agents import gemini_client, planning_agent
 
 
 class JasonPlanningAgentProviderFallbackTests(unittest.TestCase):
     def setUp(self) -> None:
-        # Reset module-level client cache between tests.
-        planning_agent._client = None
+        gemini_client.reset_client_for_tests()
 
     def tearDown(self) -> None:
-        planning_agent._client = None
+        gemini_client.reset_client_for_tests()
 
     def test_prefers_gemini_api_key_over_google_api_key(self) -> None:
         with patch.dict(
@@ -19,8 +18,8 @@ class JasonPlanningAgentProviderFallbackTests(unittest.TestCase):
             {"GEMINI_API_KEY": "gemini-key", "GOOGLE_API_KEY": "google-key"},
             clear=True,
         ):
-            with patch.object(planning_agent.genai, "Client") as client_cls:
-                planning_agent._get_client()
+            with patch.object(gemini_client.genai, "Client") as client_cls:
+                gemini_client.get_genai_client(purpose="test")
                 client_cls.assert_called_once_with(api_key="gemini-key")
 
     def test_falls_back_to_secondary_model_after_transient_primary_failures(self) -> None:
@@ -43,7 +42,7 @@ class JasonPlanningAgentProviderFallbackTests(unittest.TestCase):
         fake_client = SimpleNamespace(models=SimpleNamespace(generate_content=fake_generate_content))
 
         with patch.dict("os.environ", {"GEMINI_API_KEY": "test-key", "GEMINI_MODEL": "primary"}, clear=True):
-            with patch.object(planning_agent, "_get_client", return_value=fake_client):
+            with patch.object(planning_agent, "get_genai_client", return_value=fake_client):
                 with patch.object(planning_agent, "FALLBACK_MODELS", ("fallback",)):
                     with patch.object(planning_agent.time, "sleep", return_value=None):
                         result = planning_agent.run_planning_agent(

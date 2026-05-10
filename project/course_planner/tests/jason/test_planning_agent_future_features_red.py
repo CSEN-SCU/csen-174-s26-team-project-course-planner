@@ -2,15 +2,15 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from agents import planning_agent
+from agents import gemini_client, planning_agent
 
 
 class JasonPlanningAgentFutureFeaturesRedTests(unittest.TestCase):
     def setUp(self) -> None:
-        planning_agent._client = None
+        gemini_client.reset_client_for_tests()
 
     def tearDown(self) -> None:
-        planning_agent._client = None
+        gemini_client.reset_client_for_tests()
 
     def _fake_client_with_text(self, text: str):
         response = SimpleNamespace(text=text)
@@ -27,7 +27,7 @@ class JasonPlanningAgentFutureFeaturesRedTests(unittest.TestCase):
         )
 
         with patch.dict("os.environ", {"GEMINI_API_KEY": "test-key", "GEMINI_MODEL": "gemini-2.5-flash"}, clear=True):
-            with patch.object(planning_agent, "_get_client", return_value=fake_client):
+            with patch.object(planning_agent, "get_genai_client", return_value=fake_client):
                 result = planning_agent.run_planning_agent(
                     [{"course": "CSE 130", "category": "Core", "units": 4}],
                     "balanced workload",
@@ -46,7 +46,7 @@ class JasonPlanningAgentFutureFeaturesRedTests(unittest.TestCase):
         )
 
         with patch.dict("os.environ", {"GEMINI_API_KEY": "test-key"}, clear=True):
-            with patch.object(planning_agent, "_get_client", return_value=fake_client):
+            with patch.object(planning_agent, "get_genai_client", return_value=fake_client):
                 result = planning_agent.run_planning_agent(
                     [{"course": "CSE 130", "category": "Core", "units": 4}],
                     "balanced workload",
@@ -62,7 +62,7 @@ class JasonPlanningAgentFutureFeaturesRedTests(unittest.TestCase):
         )
 
         with patch.dict("os.environ", {"GEMINI_API_KEY": "test-key"}, clear=True):
-            with patch.object(planning_agent, "_get_client", return_value=fake_client):
+            with patch.object(planning_agent, "get_genai_client", return_value=fake_client):
                 result = planning_agent.run_planning_agent(
                     [{"course": "CSE 130", "category": "Core", "units": 5}],
                     "finish as quickly as possible",

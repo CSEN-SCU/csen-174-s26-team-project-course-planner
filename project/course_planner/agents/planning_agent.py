@@ -7,10 +7,9 @@ import time
 import uuid
 from typing import Any
 
-from google import genai
 from google.genai import types
 
-_client: genai.Client | None = None
+from agents.gemini_client import get_genai_client
 
 DEFAULT_MODEL = "gemini-2.5-flash"
 FALLBACK_MODELS = ("gemini-2.5-flash-lite", "gemini-1.5-flash")
@@ -37,18 +36,6 @@ PLANNING_SCHEMA = {
     },
     "required": ["recommended", "total_units", "advice"],
 }
-
-
-def _get_client() -> genai.Client:
-    global _client
-    if _client is None:
-        key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
-        if not key:
-            raise ValueError(
-                "GEMINI_API_KEY (or GOOGLE_API_KEY) is not set; cannot generate a recommended schedule."
-            )
-        _client = genai.Client(api_key=key)
-    return _client
 
 
 def _parse_json_from_response(text: str) -> dict[str, Any]:
@@ -316,7 +303,7 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
     )
 
     response = None
-    client = _get_client()
+    client = get_genai_client(purpose="schedule generation")
     errors: list[str] = []
     resolved_model: str | None = None
     for candidate in _candidate_models(model):

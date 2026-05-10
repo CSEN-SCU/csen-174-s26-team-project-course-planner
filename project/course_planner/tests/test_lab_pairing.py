@@ -137,7 +137,7 @@ def test_run_planning_agent_auto_pairs_and_recomputes_total(monkeypatch):
         "advice": "ok",
         "assistant_reply": "Here is a balanced first cut.",
     }
-    monkeypatch.setattr(planning_agent, "_get_client", lambda: _stub_client(reply))
+    monkeypatch.setattr(planning_agent, "get_genai_client", lambda **_kw: _stub_client(reply))
 
     out = planning_agent.run_planning_agent(
         missing_details=[
@@ -169,7 +169,7 @@ def test_run_planning_agent_does_not_pair_when_lab_not_in_gap(monkeypatch):
         "advice": "ok",
         "assistant_reply": "Senior Design start.",
     }
-    monkeypatch.setattr(planning_agent, "_get_client", lambda: _stub_client(reply))
+    monkeypatch.setattr(planning_agent, "get_genai_client", lambda **_kw: _stub_client(reply))
 
     out = planning_agent.run_planning_agent(
         missing_details=[
@@ -194,7 +194,7 @@ def test_run_planning_agent_pairs_phys_lecture_with_phys_lab(monkeypatch):
         "advice": "ok",
         "assistant_reply": "Solid science quarter.",
     }
-    monkeypatch.setattr(planning_agent, "_get_client", lambda: _stub_client(reply))
+    monkeypatch.setattr(planning_agent, "get_genai_client", lambda **_kw: _stub_client(reply))
 
     out = planning_agent.run_planning_agent(
         missing_details=[

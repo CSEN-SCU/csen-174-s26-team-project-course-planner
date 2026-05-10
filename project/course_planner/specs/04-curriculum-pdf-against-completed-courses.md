@@ -4,7 +4,7 @@ A standalone callable sends a major-requirements document as binary content toge
 
 # Scope
 
-- Covers only the module that accepts PDF bytes plus completed course strings; it is not invoked by the main interactive application entrypoint in this repository state.
+- Covers the callable that accepts PDF bytes plus completed course strings, and the Streamlit sidebar action that invokes it after sign-in (same planner session as workbook parsing).
 - Excludes workbook-based gap extraction and schedule generation.
 
 # Data contracts

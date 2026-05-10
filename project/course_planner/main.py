@@ -17,6 +17,7 @@ from utils.scu_course_schedule_xlsx import (
 )
 from agents.professor_agent import run_professor_agent
 from agents.orchestrator import plan_for_user
+from agents.requirement_agent import run_requirement_agent
 from agents import memory_agent
 from auth import streamlit_auth
 
@@ -213,6 +214,49 @@ with st.sidebar:
     run = st.button("Parse")
 
     st.divider()
+    st.markdown("**Curriculum PDF gap analysis** (optional)")
+    st.caption(
+        "Uses the same **GEMINI_API_KEY** / **GOOGLE_API_KEY** and **GEMINI_MODEL** "
+        "as schedule generation. Upload your major-requirements PDF; completed courses "
+        "default to codes from your last **Parse** above, plus any you list here."
+    )
+    pdf_file = st.file_uploader("Major requirements PDF (.pdf)", type=["pdf"])
+    pdf_completed_extra = st.text_area(
+        "Extra completed course codes (one per line or comma-separated)",
+        placeholder="CSEN 174\nCOEN 145",
+        key="pdf_completed_extra",
+        height=80,
+    )
+    if st.button("Analyze PDF gaps", type="secondary"):
+        if not pdf_file:
+            st.warning("Upload a PDF first.")
+        else:
+            completed = _merge_completed_courses_for_pdf(
+                st.session_state.get("parsed_course_codes"), pdf_completed_extra
+            )
+            if not completed:
+                st.warning(
+                    "No completed courses to send. Parse Academic Progress above, "
+                    "or enter course codes in the extra box."
+                )
+            else:
+                with st.spinner("Analyzing PDF with Gemini…"):
+                    try:
+                        result = run_requirement_agent(pdf_file.getvalue(), completed)
+                    except Exception as e:
+                        st.error(f"PDF gap analysis failed: {e}")
+                    else:
+                        st.session_state["pdf_gap_result"] = result
+                        md = _normalize_pdf_missing_details(
+                            result.get("missing_details") or []
+                        )
+                        st.session_state["missing_details"] = md
+                        st.success(
+                            f"PDF analysis done — {len(md)} gap row(s) ready for Step 2."
+                        )
+                        st.rerun()
+
+    st.divider()
     with st.expander("My memory", expanded=False):
         st.caption(
             "Past preferences and plans the assistant remembers for *you*. "
@@ -252,6 +296,50 @@ def _recommended_fingerprint(recs: list[dict]) -> str:
     return json.dumps(recs, ensure_ascii=False, sort_keys=True, default=str)
 
 
+def _merge_completed_courses_for_pdf(
+    parsed_codes: list[str] | None, extra_text: str
+) -> list[str]:
+    """Union of codes from the last Academic Progress parse plus optional sidebar lines."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for c in parsed_codes or []:
+        s = str(c).strip()
+        if not s:
+            continue
+        key = s.upper()
+        if key not in seen:
+            seen.add(key)
+            out.append(s)
+    for raw in (extra_text or "").replace(",", "\n").split("\n"):
+        s = raw.strip()
+        if not s:
+            continue
+        key = s.upper()
+        if key not in seen:
+            seen.add(key)
+            out.append(s)
+    return out
+
+
+def _normalize_pdf_missing_details(raw: list) -> list[dict]:
+    """Keep only rows usable as planner gap items (non-empty course code)."""
+    rows: list[dict] = []
+    for item in raw or []:
+        if not isinstance(item, dict):
+            continue
+        course = (item.get("course") or "").strip()
+        if not course:
+            continue
+        u = item.get("units", 0)
+        try:
+            ui = int(u) if u is not None else 0
+        except (TypeError, ValueError):
+            ui = 0
+        cat = (item.get("category") or "").strip() or "(from PDF)"
+        rows.append({"course": course, "category": cat, "units": ui})
+    return rows
+
+
 def _rating_display(rating) -> tuple[str, str]:
     """Return (star markdown, numeric text) for st.markdown."""
     if rating is None:
@@ -287,6 +375,7 @@ if run:
 
         st.subheader("Parsed course codes from the sheet (unique)")
         codes = data.get("course_codes", [])
+        st.session_state["parsed_course_codes"] = list(codes)
         st.write(", ".join(codes) if codes else "(No registration rows with a parseable course code)")
 
         st.subheader("All detail rows (aligned with Excel)")
@@ -308,6 +397,36 @@ if run:
             for row in parsed_rows
             if row["status"] == "Not Satisfied"
         ]
+        st.session_state.pop("pdf_gap_result", None)
+
+st.divider()
+
+pdf_gap = st.session_state.get("pdf_gap_result")
+if isinstance(pdf_gap, dict):
+    st.subheader("Curriculum PDF gap summary (last run)")
+    comp = pdf_gap.get("completed") or []
+    miss = pdf_gap.get("missing") or []
+    if comp:
+        st.markdown("**Satisfied (per PDF + your completed list)**")
+        st.write(", ".join(str(x) for x in comp) if comp else "—")
+    if miss:
+        st.markdown("**Still required (per PDF)**")
+        st.write(", ".join(str(x) for x in miss))
+    md_show = pdf_gap.get("missing_details") or []
+    if md_show:
+        st.dataframe(
+            [
+                {
+                    "Course": (i or {}).get("course"),
+                    "Category": (i or {}).get("category"),
+                    "Units": (i or {}).get("units"),
+                }
+                for i in md_show
+                if isinstance(i, dict)
+            ],
+            use_container_width=True,
+            hide_index=True,
+        )
 
 st.divider()
 st.subheader("Step 2: Generate a recommended schedule (missing_details + your preferences)")

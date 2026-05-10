@@ -30,7 +30,7 @@ def _stub_planning(monkeypatch, captured: list[str]):
     class _Client:
         models = _Models()
 
-    monkeypatch.setattr(planning_agent, "_get_client", lambda: _Client())
+    monkeypatch.setattr(planning_agent, "get_genai_client", lambda **_kw: _Client())
 
 
 @pytest.fixture()

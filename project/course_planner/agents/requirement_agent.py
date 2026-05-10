@@ -4,17 +4,9 @@ import json
 import os
 import re
 
-from google import genai
 from google.genai import types
 
-_client: genai.Client | None = None
-
-
-def _get_client() -> genai.Client:
-    global _client
-    if _client is None:
-        _client = genai.Client()
-    return _client
+from agents.gemini_client import get_genai_client
 
 RESULT_SCHEMA = {
     "type": "OBJECT",
@@ -65,7 +57,9 @@ Analyze this major-requirements PDF and determine:
 Respond with the agreed JSON structure (fields are constrained by the response schema).
 """
 
-    response = _get_client().models.generate_content(
+    response = get_genai_client(
+        purpose="curriculum PDF gap analysis"
+    ).models.generate_content(
         model=model,
         contents=[
             types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),

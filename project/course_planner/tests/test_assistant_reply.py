@@ -50,7 +50,7 @@ def test_previous_plan_is_summarized_into_prompt(monkeypatch):
         "advice": "ok",
         "assistant_reply": "Yes, I added CSEN 161 because it stayed under your unit cap.",
     }
-    monkeypatch.setattr(planning_agent, "_get_client", lambda: _stub_client(captured, reply))
+    monkeypatch.setattr(planning_agent, "get_genai_client", lambda **_kw: _stub_client(captured, reply))
 
     previous_plan = {
         "recommended": [
@@ -85,7 +85,7 @@ def test_no_previous_plan_uses_initial_summary_instruction(monkeypatch):
         "advice": "ok",
         "assistant_reply": "Here is a balanced first cut for next quarter.",
     }
-    monkeypatch.setattr(planning_agent, "_get_client", lambda: _stub_client(captured, reply))
+    monkeypatch.setattr(planning_agent, "get_genai_client", lambda **_kw: _stub_client(captured, reply))
 
     planning_agent.run_planning_agent(
         missing_details=[{"course": "CSEN 161", "category": "Core", "units": 4}],
@@ -163,7 +163,7 @@ def test_reduce_units_followup_prompt_isolates_current_ask(monkeypatch, alice):
         "advice": "ok",
         "assistant_reply": "Yes, removed: CSEN 122. Plan now has CSEN 194, ECEN 153, PHIL 11, ENGL 181 — total_units=16, under your 20-unit cap.",
     }
-    monkeypatch.setattr(planning_agent, "_get_client", lambda: _stub_client(captured, reply))
+    monkeypatch.setattr(planning_agent, "get_genai_client", lambda **_kw: _stub_client(captured, reply))
 
     previous_plan = {
         "recommended": [
