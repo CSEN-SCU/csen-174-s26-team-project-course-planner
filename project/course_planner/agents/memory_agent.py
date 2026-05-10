@@ -1,53 +1,131 @@
-"""Per-user RAG memory store backed by SQLite + sqlite-vec.
+"""Per-user memory stored as one human-readable Markdown file per user.
 
-Public surface (every function is scoped to a single ``user_id`` to make
-cross-user leakage impossible by construction):
+Public surface (every function is scoped to a single ``user_id``):
 
 - ``write(user_id, kind, content, meta=None)`` -> int
 - ``retrieve(user_id, query, k=4)`` -> list[dict]
 - ``list_for_user(user_id)`` -> list[dict]
 - ``delete(user_id, item_id)`` -> bool
 - ``delete_all_for_user(user_id)`` -> int
-- ``embed(text)`` -> list[float]                   (Gemini text-embedding-004)
+- ``embed(text)`` -> list[float]
 
-Embedding contract:
-- Vector dim is ``EMBEDDING_DIM`` (default 768).
-- If the Gemini API is unavailable, the module falls back to a
-  deterministic hash-based pseudo-embedding so writes never block the
-  user-facing flow. This is *only* a graceful fallback for development;
-  production use should keep ``GEMINI_API_KEY`` set so retrieval quality
-  is meaningful.
+Each user file lives under ``COURSE_PLANNER_MEMORY_DIR`` (default
+``<app>/data/memory``). Entries are delimited blocks so the file stays
+editable in a text editor; retrieval embeds each entry and ranks by
+cosine distance to the query embedding (same ``embed()`` rules as before).
 
-Isolation invariants (locked by ``tests/test_memory_isolation.py``):
-- Every retrieval/list/delete query carries ``WHERE user_id = ?``.
-- Calls with ``user_id=None`` (or non-positive int) raise ``ValueError``
-  *before* touching the database.
+Isolation invariants (``tests/test_memory_isolation.py``):
+- Only the file for ``user_id`` is read or written; other users' paths are never opened.
+- Invalid ``user_id`` raises ``ValueError`` before any filesystem access.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
-import struct
-from typing import Iterable, Optional
+import re
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Optional
 
-from db.connection import close_conn, get_conn
 from db.migrate import EMBEDDING_DIM
-
-# -- public knobs ------------------------------------------------------------
 
 DEFAULT_TOP_K = int(os.environ.get("MEMORY_TOP_K", "4"))
 GEMINI_EMBED_MODEL = os.environ.get("MEMORY_EMBED_MODEL", "text-embedding-004")
 
 ALLOWED_KINDS = ("preference", "plan_outcome", "note")
 
+_BLOCK_RE = re.compile(
+    r"^<<<MEMORY (.+?)>>>\n(.*?)<<<END_MEMORY>>>\s*",
+    re.MULTILINE | re.DOTALL,
+)
 
-# -- helpers -----------------------------------------------------------------
+_FILE_PREAMBLE = """# SCU Course Planner — saved memory
+
+One entry per machine block below (delimiter lines are auto-generated).
+You may edit the paragraph text inside a block; keep the JSON on the opening delimiter line valid.
+
+"""
+
+
+def _memory_root() -> Path:
+    default = Path(__file__).resolve().parent.parent / "data" / "memory"
+    p = Path(os.environ.get("COURSE_PLANNER_MEMORY_DIR", str(default)))
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def _user_file(uid: int) -> Path:
+    return _memory_root() / f"{uid}.md"
+
+
+def _read_raw(path: Path) -> str:
+    if not path.is_file():
+        return ""
+    return path.read_text(encoding="utf-8")
+
+
+def _write_atomic(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    tmp.replace(path)
+
+
+def _parse_blocks(text: str) -> list[dict[str, Any]]:
+    """Return list of {id, user_id, kind, created, meta, content} from file body."""
+    out: list[dict[str, Any]] = []
+    for m in _BLOCK_RE.finditer(text):
+        try:
+            header = json.loads(m.group(1))
+        except json.JSONDecodeError:
+            continue
+        body = m.group(2).strip("\n")
+        if not isinstance(header, dict):
+            continue
+        out.append(
+            {
+                "id": int(header["id"]),
+                "user_id": int(header["user_id"]),
+                "kind": str(header["kind"]),
+                "created": str(header.get("created") or ""),
+                "meta": header.get("meta"),
+                "content": body,
+            }
+        )
+    return out
+
+
+def _strip_preamble(text: str) -> str:
+    """Keep only delimiter blocks (everything from first <<<MEMORY)."""
+    idx = text.find("<<<MEMORY")
+    if idx == -1:
+        return ""
+    return text[idx:].lstrip("\n")
+
+
+def _serialize_block(
+    item_id: int,
+    uid: int,
+    kind: str,
+    created: str,
+    meta: Optional[dict],
+    content: str,
+) -> str:
+    header = {
+        "id": item_id,
+        "user_id": uid,
+        "kind": kind,
+        "created": created,
+        "meta": meta,
+    }
+    line = json.dumps(header, ensure_ascii=False, separators=(",", ":"))
+    return f"<<<MEMORY {line}>>>\n{content.rstrip()}\n<<<END_MEMORY>>>\n\n"
 
 
 def _validate_user_id(user_id) -> int:
-    """Reject missing or non-positive user ids before any DB call."""
     if user_id is None:
         raise ValueError("memory_agent: user_id is required (got None)")
     try:
@@ -59,23 +137,7 @@ def _validate_user_id(user_id) -> int:
     return uid
 
 
-def _serialize_vec(vec: Iterable[float]) -> bytes:
-    """sqlite-vec accepts bytes of packed little-endian float32."""
-    floats = [float(x) for x in vec]
-    if len(floats) != EMBEDDING_DIM:
-        raise ValueError(
-            f"memory_agent: expected {EMBEDDING_DIM} dims, got {len(floats)}"
-        )
-    return struct.pack(f"{EMBEDDING_DIM}f", *floats)
-
-
 def _hash_fallback_embed(text: str) -> list[float]:
-    """Deterministic pseudo-embedding so writes never fail when Gemini is down.
-
-    Uses repeated SHA-256 to stretch to the required dim, mapping each byte
-    to ``[-1, 1]``. Quality is poor on purpose; it preserves the *interface*
-    so the rest of the pipeline keeps working.
-    """
     out: list[float] = []
     counter = 0
     seed = (text or "").encode("utf-8")
@@ -90,11 +152,6 @@ def _hash_fallback_embed(text: str) -> list[float]:
 
 
 def embed(text: str) -> list[float]:
-    """Embed ``text`` via Gemini, falling back to a deterministic hash vector.
-
-    The fallback path lets the prototype run without ``GEMINI_API_KEY`` and
-    keeps the unit tests fast/offline.
-    """
     text = (text or "").strip()
     if not text:
         return [0.0] * EMBEDDING_DIM
@@ -104,12 +161,10 @@ def embed(text: str) -> list[float]:
         return _hash_fallback_embed(text)
 
     try:
-        from google import genai  # local import keeps tests offline-safe
+        from google import genai
 
         client = genai.Client(api_key=api_key)
         result = client.models.embed_content(model=GEMINI_EMBED_MODEL, contents=text)
-        # google-genai shapes: result.embeddings is a list[ContentEmbedding]
-        # or a single ContentEmbedding with `.values: list[float]`.
         embeddings = getattr(result, "embeddings", None)
         if embeddings:
             first = embeddings[0]
@@ -120,14 +175,20 @@ def embed(text: str) -> list[float]:
             return _hash_fallback_embed(text)
         values = [float(v) for v in values]
         if len(values) != EMBEDDING_DIM:
-            # Pad or truncate to the configured dim so we never break the schema.
             values = (values + [0.0] * EMBEDDING_DIM)[:EMBEDDING_DIM]
         return values
     except Exception:
         return _hash_fallback_embed(text)
 
 
-# -- write -------------------------------------------------------------------
+def _cosine_distance(a: list[float], b: list[float]) -> float:
+    dot = sum(x * y for x, y in zip(a, b))
+    na = math.sqrt(sum(x * x for x in a))
+    nb = math.sqrt(sum(y * y for y in b))
+    if na == 0.0 or nb == 0.0:
+        return 1.0
+    sim = dot / (na * nb)
+    return max(0.0, min(2.0, 1.0 - sim))
 
 
 def write(
@@ -138,34 +199,23 @@ def write(
     *,
     db_path: Optional[str] = None,
 ) -> int:
-    """Persist a memory item + its embedding. Returns the new item id."""
+    del db_path  # legacy kwarg from SQLite era; ignored.
     uid = _validate_user_id(user_id)
     if kind not in ALLOWED_KINDS:
         raise ValueError(f"memory_agent: kind must be one of {ALLOWED_KINDS}")
     if not content or not content.strip():
         raise ValueError("memory_agent: content cannot be empty")
 
-    meta_json = json.dumps(meta, ensure_ascii=False) if meta else None
-    vec = _serialize_vec(embed(content))
-
-    conn = get_conn(db_path)
-    try:
-        cur = conn.execute(
-            "INSERT INTO memory_items (user_id, kind, content, meta_json) VALUES (?, ?, ?, ?)",
-            (uid, kind, content, meta_json),
-        )
-        item_id = int(cur.lastrowid)
-        conn.execute(
-            "INSERT INTO memory_vec (rowid, embedding) VALUES (?, ?)",
-            (item_id, vec),
-        )
-        conn.commit()
-        return item_id
-    finally:
-        close_conn(conn)
-
-
-# -- retrieve ----------------------------------------------------------------
+    path = _user_file(uid)
+    raw = _read_raw(path)
+    body = _strip_preamble(raw)
+    items = _parse_blocks(body)
+    next_id = max((it["id"] for it in items), default=0) + 1
+    created = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    block = _serialize_block(next_id, uid, kind, created, meta, content.strip())
+    new_text = _FILE_PREAMBLE + body + block
+    _write_atomic(path, new_text)
+    return next_id
 
 
 def retrieve(
@@ -175,49 +225,45 @@ def retrieve(
     *,
     db_path: Optional[str] = None,
 ) -> list[dict]:
-    """Return up to ``k`` memory rows for ``user_id`` ranked by vector closeness.
-
-    The retrieval SQL always carries ``WHERE m.user_id = :uid``; there is
-    no public path that bypasses this filter.
-    """
+    del db_path
     uid = _validate_user_id(user_id)
     if k <= 0:
         return []
     if not (query or "").strip():
         return []
 
-    vec = _serialize_vec(embed(query))
+    path = _user_file(uid)
+    raw = _read_raw(path)
+    items = _parse_blocks(_strip_preamble(raw))
+    if not items:
+        return []
 
-    conn = get_conn(db_path)
-    try:
-        # We over-fetch from vec0 (which is per-row global, not per-user) and
-        # then inner-join + filter by user_id. The user_id filter is the red
-        # line; do not remove it.
-        rows = conn.execute(
-            """
-            SELECT m.id        AS id,
-                   m.user_id   AS user_id,
-                   m.kind      AS kind,
-                   m.content   AS content,
-                   m.meta_json AS meta_json,
-                   m.created_at AS created_at,
-                   v.distance  AS distance
-            FROM memory_vec v
-            JOIN memory_items m ON m.id = v.rowid
-            WHERE v.embedding MATCH :vec
-              AND k = :over_k
-              AND m.user_id = :uid
-            ORDER BY v.distance ASC
-            LIMIT :k
-            """,
-            {"vec": vec, "uid": uid, "k": int(k), "over_k": int(k) * 8 + 32},
-        ).fetchall()
-        return [dict(row) for row in rows]
-    finally:
-        close_conn(conn)
+    qv = embed(query)
+    scored: list[tuple[float, dict[str, Any]]] = []
+    for it in items:
+        if int(it["user_id"]) != uid:
+            continue
+        cv = embed(it["content"])
+        dist = _cosine_distance(qv, cv)
+        scored.append((dist, it))
+    scored.sort(key=lambda x: x[0])
 
-
-# -- list / delete -----------------------------------------------------------
+    rows: list[dict] = []
+    for dist, it in scored[: int(k)]:
+        rows.append(
+            {
+                "id": it["id"],
+                "user_id": it["user_id"],
+                "kind": it["kind"],
+                "content": it["content"],
+                "meta_json": json.dumps(it["meta"], ensure_ascii=False)
+                if it.get("meta") is not None
+                else None,
+                "created_at": it["created"],
+                "distance": dist,
+            }
+        )
+    return rows
 
 
 def list_for_user(
@@ -225,18 +271,29 @@ def list_for_user(
     *,
     db_path: Optional[str] = None,
 ) -> list[dict]:
-    """Return all memory rows for the user, newest first (sidebar UI uses this)."""
+    del db_path
     uid = _validate_user_id(user_id)
-    conn = get_conn(db_path)
-    try:
-        rows = conn.execute(
-            "SELECT id, user_id, kind, content, meta_json, created_at "
-            "FROM memory_items WHERE user_id = ? ORDER BY id DESC",
-            (uid,),
-        ).fetchall()
-        return [dict(row) for row in rows]
-    finally:
-        close_conn(conn)
+    path = _user_file(uid)
+    raw = _read_raw(path)
+    items = _parse_blocks(_strip_preamble(raw))
+    items.sort(key=lambda x: x["id"], reverse=True)
+    out: list[dict] = []
+    for it in items:
+        if int(it["user_id"]) != uid:
+            continue
+        out.append(
+            {
+                "id": it["id"],
+                "user_id": uid,
+                "kind": it["kind"],
+                "content": it["content"],
+                "meta_json": json.dumps(it["meta"], ensure_ascii=False)
+                if it.get("meta") is not None
+                else None,
+                "created_at": it["created"],
+            }
+        )
+    return out
 
 
 def delete(
@@ -245,27 +302,29 @@ def delete(
     *,
     db_path: Optional[str] = None,
 ) -> bool:
-    """Delete one memory item *only* if it belongs to ``user_id``.
-
-    Returns True if a row was deleted, False otherwise.
-    """
+    del db_path
     uid = _validate_user_id(user_id)
     iid = int(item_id)
-    conn = get_conn(db_path)
-    try:
-        cur = conn.execute(
-            "DELETE FROM memory_items WHERE id = ? AND user_id = ?",
-            (iid, uid),
+    path = _user_file(uid)
+    raw = _read_raw(path)
+    body = _strip_preamble(raw)
+    items = _parse_blocks(body)
+    kept = [it for it in items if int(it["id"]) != iid]
+    if len(kept) == len(items):
+        return False
+    new_body = "".join(
+        _serialize_block(
+            it["id"],
+            int(it["user_id"]),
+            it["kind"],
+            it["created"],
+            it.get("meta"),
+            it["content"],
         )
-        deleted = cur.rowcount > 0
-        # FK cascade does not propagate into the vec0 virtual table, so we
-        # delete the vec row explicitly to keep the two stores in sync.
-        if deleted:
-            conn.execute("DELETE FROM memory_vec WHERE rowid = ?", (iid,))
-        conn.commit()
-        return deleted
-    finally:
-        close_conn(conn)
+        for it in kept
+    )
+    _write_atomic(path, _FILE_PREAMBLE + new_body)
+    return True
 
 
 def delete_all_for_user(
@@ -273,28 +332,12 @@ def delete_all_for_user(
     *,
     db_path: Optional[str] = None,
 ) -> int:
-    """Delete every memory row for the user. Returns count deleted."""
+    del db_path
     uid = _validate_user_id(user_id)
-    conn = get_conn(db_path)
-    try:
-        ids = [
-            row["id"]
-            for row in conn.execute(
-                "SELECT id FROM memory_items WHERE user_id = ?", (uid,)
-            ).fetchall()
-        ]
-        if not ids:
-            return 0
-        placeholders = ",".join("?" * len(ids))
-        conn.execute(
-            f"DELETE FROM memory_items WHERE user_id = ? AND id IN ({placeholders})",
-            (uid, *ids),
-        )
-        conn.execute(
-            f"DELETE FROM memory_vec WHERE rowid IN ({placeholders})",
-            tuple(ids),
-        )
-        conn.commit()
-        return len(ids)
-    finally:
-        close_conn(conn)
+    path = _user_file(uid)
+    raw = _read_raw(path)
+    n = len(_parse_blocks(_strip_preamble(raw)))
+    if n == 0:
+        return 0
+    _write_atomic(path, _FILE_PREAMBLE)
+    return n

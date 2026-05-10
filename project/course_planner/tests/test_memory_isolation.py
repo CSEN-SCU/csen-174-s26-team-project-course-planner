@@ -1,11 +1,12 @@
 """Memory cross-user isolation red line.
 
-Locks down spec §6 invariant: every memory operation is scoped by
+Locks down spec invariant: every memory operation is scoped by
 ``user_id``; there is no public path that lets user B's query surface
 user A's rows.
 
-These tests use the deterministic hash-based fallback embedder (no
-GEMINI_API_KEY in the test env) so they run offline and deterministically.
+Uses per-test ``COURSE_PLANNER_MEMORY_DIR`` (see ``conftest``) and the
+deterministic hash-based fallback embedder (no GEMINI_API_KEY) so tests
+run offline and deterministically.
 """
 
 from __future__ import annotations
@@ -103,41 +104,15 @@ def test_delete_all_for_user_does_not_touch_other_users(two_users):
     assert len(memory_agent.list_for_user(a)) == 2
 
 
-def test_delete_clears_vec_row_too(two_users, db_path):
-    """Spec §5: deleting from memory_items must also drop the vec0 row.
-
-    SQLite foreign-key cascade does not propagate into virtual tables,
-    so memory_agent.delete is responsible for keeping both stores in sync.
-    """
+def test_delete_removes_block_from_markdown_file(two_users, db_path):
+    """Deleting a row removes its delimited block from the per-user markdown file."""
+    del db_path  # memory uses COURSE_PLANNER_MEMORY_DIR from conftest
     a = two_users["alice"]
     item_id = memory_agent.write(a, "preference", "Alice item to be deleted")
 
-    from db.connection import get_conn, close_conn
-
-    conn = get_conn(db_path)
-    try:
-        before = conn.execute(
-            "SELECT COUNT(*) FROM memory_vec WHERE rowid = ?", (item_id,)
-        ).fetchone()[0]
-        assert before == 1
-    finally:
-        close_conn(conn)
-
+    assert len(memory_agent.list_for_user(a)) == 1
     assert memory_agent.delete(a, item_id) is True
-
-    conn = get_conn(db_path)
-    try:
-        after_items = conn.execute(
-            "SELECT COUNT(*) FROM memory_items WHERE id = ?", (item_id,)
-        ).fetchone()[0]
-        after_vec = conn.execute(
-            "SELECT COUNT(*) FROM memory_vec WHERE rowid = ?", (item_id,)
-        ).fetchone()[0]
-    finally:
-        close_conn(conn)
-
-    assert after_items == 0
-    assert after_vec == 0
+    assert memory_agent.list_for_user(a) == []
 
 
 def test_disallowed_kind_rejected(two_users):

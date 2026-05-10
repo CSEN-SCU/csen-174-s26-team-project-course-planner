@@ -3,7 +3,7 @@
 These tests pin down two behaviors that protect the prototype when
 things go off the happy path:
 
-1. Memory snippets retrieved from the DB are scrubbed for emails / SSNs /
+1. Memory snippets retrieved from the store are scrubbed for emails / SSNs /
    phone numbers *before* they are injected into a Gemini prompt.
 2. ``memory_agent.embed`` falls back to a deterministic hash-based vector
    when ``GEMINI_API_KEY`` is missing, so writes never block users.

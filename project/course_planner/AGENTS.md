@@ -41,9 +41,9 @@ Voice transcription uses the `SpeechRecognition` package and **Google’s speech
 - `project/course_planner/SCU_Find_Course_Sections.xlsx`
 
 ## Important notes
-- Memory is scoped per user — stored as structured Markdown files in `data/memory/<user_id>.md`
-- Each user Markdown file contains sections: preferences, past plans, conversation history
-- Memory is periodically summarized to prevent unbounded growth
+- Memory is scoped per user — one Markdown file per user (default ``data/memory/<user_id>.md``; override with ``COURSE_PLANNER_MEMORY_DIR``)
+- Each file lists machine-delimited blocks (JSON header + body); safe to edit body text in an editor
+- Memory summarization (rolling compaction) is not implemented yet — see IMPLEMENTATION_PLAN
 - Gemini embeddings are used for retrieval; no SQLite vector store
 - RateMyProfessor client is required — all course recommendations must include professor ratings
 - Thursday meeting pattern: ``Th`` or ``R`` maps to the Thursday column (``T`` is Tuesday; contiguous strings like ``MTTh`` are tokenized greedily for ``Th``).

@@ -7,7 +7,7 @@ Comparison of `project/course_planner/specs/` against the current `project/cours
 - [x] Cookie-backed sign-in and registration backed by a local user store, with a single reused login component instance and planner-scoped session keys cleared on logout.
 - [x] Academic progress export parsing into detail rows, merged requirement status, not-satisfied summaries, and unique parsed course codes.
 - [x] Planner gap list populated from detail rows whose status matches the unsatisfied literal, including rows without a parseable course code.
-- [x] Per-user embedding memory with deterministic fallback vectors, strict user scoping on read/write/delete, and vector row cleanup on delete.
+- [x] Per-user memory with deterministic embedding fallback, strict user scoping on read/write/delete, and Markdown file persistence (one ``.md`` per user; ranking embeds entries on demand).
 - [x] Memory-augmented planning entrypoint that retrieves snippets with PII scrubbing, invokes schedule generation, and best-effort writes a plan summary back to memory.
 - [x] Remote JSON-schema schedule generation with retry and fallback models, lab co-requisite pairing, heuristic warnings, and response metadata.
 - [x] Instructor rating enrichment with schedule-first alignment, department fallback search, bounded parallelism, and graceful behavior when the optional ratings client is missing.
@@ -25,7 +25,7 @@ Comparison of `project/course_planner/specs/` against the current `project/cours
 - [x] Session-flow spec step 7 now states explicitly that `missing_details` comes from **per-detail-row** `status == "Not Satisfied"` (gap-rows spec); clarified it is not the merged overview “Not Satisfied” bucket (`specs/10-interactive-session-and-layout-flow.md`).
 - [x] Optional voice input for Step 2 preferences: ``st.audio_input`` + **Transcribe** appends text to the preference text area via ``SpeechRecognition`` / Google web STT (network); typing remains primary (`main.py`, `utils/voice_pref.py`, ``SpeechRecognition`` in ``requirements.txt``).
 
-- [ ] HIGH: Replace SQLite memory storage with per-user structured Markdown files (one file per user) containing sections for preferences, past plans, and conversation history; each file is human-readable and editable.
+- [x] Per-user Markdown memory files under ``COURSE_PLANNER_MEMORY_DIR`` (default ``data/memory/<user_id>.md``): delimited blocks with JSON headers + body text; ``write``/``list``/``delete``/``retrieve`` (cosine distance over on-the-fly embeddings) replace SQLite+sqlite-vec for memory (`agents/memory_agent.py`; tests use isolated temp dir via ``conftest``).
 
 - [ ] HIGH: Add memory summarization step that condenses older memory entries into a compact summary before they exceed a size threshold, preventing unbounded memory growth across sessions.
 

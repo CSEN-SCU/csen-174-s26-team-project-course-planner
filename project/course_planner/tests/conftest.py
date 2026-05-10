@@ -27,7 +27,10 @@ if str(_APP_ROOT) not in sys.path:
 def db_path(tmp_path, monkeypatch):
     """Provide a fresh SQLite path and migrate it once."""
     path = tmp_path / "test_app.db"
+    mem = tmp_path / "memory"
+    mem.mkdir()
     monkeypatch.setenv("COURSE_PLANNER_DB", str(path))
+    monkeypatch.setenv("COURSE_PLANNER_MEMORY_DIR", str(mem))
     from db.migrate import migrate
 
     migrate(str(path))

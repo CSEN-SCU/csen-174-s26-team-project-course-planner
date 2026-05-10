@@ -1,6 +1,6 @@
 # Topic statement
 
-Each user’s textual notes are persisted with a fixed-length vector so later queries can rank the closest prior notes for that same user only.
+Each user’s textual notes are persisted in a dedicated human-readable Markdown file; embeddings are computed from each entry’s text so later queries can rank the closest prior notes for that same user only.
 
 # Scope
 
@@ -9,26 +9,27 @@ Each user’s textual notes are persisted with a fixed-length vector so later qu
 
 # Data contracts
 
-- **Memory row:** numeric id, owning user id foreign key, kind enum drawn from a fixed three-string allow-list, non-empty body text, optional JSON metadata blob, creation timestamp.
-- **Vector:** sequence of floats whose length matches the global embedding dimension constant; stored packed as binary for the similarity engine.
-- **Retrieve result row:** id, user id, kind, content, meta JSON string or null, created time, numeric distance score ascending with relevance.
+- **Storage:** one UTF-8 Markdown file per user under ``COURSE_PLANNER_MEMORY_DIR`` (default ``<app>/data/memory/<user_id>.md``), containing a short preamble plus delimited blocks; each block opens with a single-line JSON header after an opening marker and closes with an end marker.
+- **Memory row:** numeric id, owning user id, kind enum drawn from a fixed three-string allow-list, non-empty body text, optional JSON metadata object, creation timestamp (ISO string in the JSON header).
+- **Vector:** sequence of floats whose length matches the global embedding dimension constant; computed on demand for ranking (not stored in the file).
+- **Retrieve result row:** id, user id, kind, content, meta JSON string or null, created time, numeric distance score ascending with relevance (cosine-style distance derived from query vs entry embeddings).
 - **Kinds allowed:** preference, plan outcome, note (any other kind rejected at write time).
 
 # Behaviors (execution order)
 
-1. Validate user id is a positive integer before any database touch; null, non-numeric, or non-positive values raise immediately.
+1. Validate user id is a positive integer before any filesystem touch; null, non-numeric, or non-positive values raise immediately.
 2. On write, reject empty trimmed content and reject disallowed kind strings.
 3. Embed the trimmed content: if no API key environment variable is set, produce a deterministic pseudo-vector derived from repeated hashing so length always matches the schema.
 4. When an API key is set, call the vendor embedding endpoint; on empty response, dimension mismatch after pad/truncate logic, or any exception, fall back to the same deterministic pseudo-vector.
-5. Insert the textual row then insert a parallel vector row keyed by the same numeric id; commit as one transaction.
+5. Append a new delimited block to the user’s Markdown file with a monotonic numeric id, the user id, kind, created timestamp, optional meta JSON, and body text; write atomically (temp file then replace).
 6. On retrieve, reject empty trimmed query with an empty result list; zero or negative requested count returns an empty list.
-7. Embed the query string with the same rules as writes, pack to binary, then run a similarity query joining vector storage to textual rows filtered strictly by the requesting user id, ordered by ascending distance, limited to the requested count after over-fetching a bounded multiple for filtering.
-8. On list, return every row for the user ordered newest id first with no vector fields.
-9. On single delete, remove the textual row only when id and user match; if removed, delete the paired vector row explicitly because cascade rules do not cover the virtual vector table, then commit.
-10. On bulk delete, collect all ids for the user, delete textual rows and vector rows in one batch, return how many ids were deleted.
+7. Embed the query string with the same rules as writes; embed each stored entry’s body; rank entries for that user only by ascending distance (lower is closer), return up to the requested count.
+8. On list, parse every block belonging to the user, return each as a dict ordered newest numeric id first, with no distance field.
+9. On single delete, rewrite the file without the block whose id matches only when the owning user id matches; return whether a block was removed.
+10. On bulk delete, remove all blocks for the user in one atomic rewrite; return how many blocks were deleted.
 
 # Error paths
 
 - Invalid user id, kind, or empty content on write raises a value error before persistence.
-- Vector packing raises if the float sequence length does not match the configured dimension (should not occur when using the module’s own embed path).
-- Database errors propagate to the caller on write, retrieve, list, and delete paths except where callers intentionally swallow them.
+- Malformed delimiters in a hand-edited file may cause blocks to be skipped by the parser until repaired.
+- Filesystem errors propagate to the caller on write, retrieve, list, and delete paths except where callers intentionally swallow them.
