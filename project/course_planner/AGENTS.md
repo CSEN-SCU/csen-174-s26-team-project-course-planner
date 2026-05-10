@@ -43,7 +43,7 @@ Voice transcription uses the `SpeechRecognition` package and **Google’s speech
 ## Important notes
 - Memory is scoped per user — one Markdown file per user (default ``data/memory/<user_id>.md``; override with ``COURSE_PLANNER_MEMORY_DIR``)
 - Each file lists machine-delimited blocks (JSON header + body); safe to edit body text in an editor
-- Memory summarization (rolling compaction) is not implemented yet — see IMPLEMENTATION_PLAN
+- Memory rolling compaction runs after each successful ``write`` when total body bytes exceed ``MEMORY_COMPACTION_TRIGGER_BYTES`` (see ``agents/memory_agent.py`` and spec ``05-per-user-embedding-memory.md``)
 - Gemini embeddings are used for retrieval; no SQLite vector store
 - RateMyProfessor client is required — all course recommendations must include professor ratings
 - Thursday meeting pattern: ``Th`` or ``R`` maps to the Thursday column (``T`` is Tuesday; contiguous strings like ``MTTh`` are tokenized greedily for ``Th``).

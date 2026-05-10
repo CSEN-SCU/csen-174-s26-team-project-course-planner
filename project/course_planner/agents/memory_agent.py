@@ -17,6 +17,11 @@ cosine distance to the query embedding (same ``embed()`` rules as before).
 Isolation invariants (``tests/test_memory_isolation.py``):
 - Only the file for ``user_id`` is read or written; other users' paths are never opened.
 - Invalid ``user_id`` raises ``ValueError`` before any filesystem access.
+
+When total stored body bytes exceed ``MEMORY_COMPACTION_TRIGGER_BYTES``,
+``write`` rewrites the file so the oldest eligible rows merge into one
+``note`` (Gemini summary when a key is set, else excerpt join); the newest
+``MEMORY_COMPACTION_PROTECT_RECENT`` rows are never merged away.
 """
 
 from __future__ import annotations
@@ -34,6 +39,23 @@ from db.migrate import EMBEDDING_DIM
 
 DEFAULT_TOP_K = int(os.environ.get("MEMORY_TOP_K", "4"))
 GEMINI_EMBED_MODEL = os.environ.get("MEMORY_EMBED_MODEL", "text-embedding-004")
+def _compaction_trigger_bytes() -> int:
+    return int(os.environ.get("MEMORY_COMPACTION_TRIGGER_BYTES", "65536"))
+
+
+def _compaction_batch() -> int:
+    return max(2, int(os.environ.get("MEMORY_COMPACTION_BATCH", "8")))
+
+
+def _compaction_protect_recent() -> int:
+    return max(0, int(os.environ.get("MEMORY_COMPACTION_PROTECT_RECENT", "5")))
+
+
+def _compaction_summary_max_chars() -> int:
+    return int(os.environ.get("MEMORY_COMPACTION_SUMMARY_MAX_CHARS", "12000"))
+
+
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
 ALLOWED_KINDS = ("preference", "plan_outcome", "note")
 
@@ -181,6 +203,187 @@ def embed(text: str) -> list[float]:
         return _hash_fallback_embed(text)
 
 
+def _total_body_bytes(items: list[dict[str, Any]]) -> int:
+    return sum(len((it.get("content") or "").encode("utf-8")) for it in items)
+
+
+def _fallback_compaction_summary(batch: list[dict[str, Any]]) -> str:
+    parts: list[str] = []
+    for it in batch:
+        prefix = f"[{it['kind']}] "
+        c = (it.get("content") or "").strip()
+        if len(c) > 1200:
+            c = c[:1200] + "…"
+        parts.append(prefix + c)
+    text = "\n\n".join(parts)
+    cap = _compaction_summary_max_chars()
+    if len(text) > cap:
+        text = text[: cap - 1] + "…"
+    return "Auto-merged older memory (excerpts):\n\n" + text
+
+
+def _llm_compaction_summary(batch: list[dict[str, Any]]) -> Optional[str]:
+    """Return a short merged paragraph when Gemini is available; else None."""
+    try:
+        from agents.gemini_client import get_genai_client
+
+        client = get_genai_client(purpose="memory compaction")
+    except Exception:
+        return None
+    lines = []
+    for it in batch:
+        body = (it.get("content") or "").strip()
+        if len(body) > 2000:
+            body = body[:2000] + "…"
+        lines.append(f"- ({it.get('kind')}) {body}")
+    bullet = "\n".join(lines)
+    prompt = (
+        "Condense the following personal course-planner memory notes into one "
+        "concise paragraph (under 800 words). Preserve course codes, time/day "
+        "preferences, and degree constraints. Do not invent facts.\n\nNotes:\n"
+        f"{bullet}"
+    )
+    try:
+        response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
+        text = (getattr(response, "text", None) or "").strip()
+        if not text:
+            return None
+        cap = _compaction_summary_max_chars()
+        return text[:cap] if len(text) > cap else text
+    except Exception:
+        return None
+
+
+def _is_auto_compaction_row(it: dict[str, Any]) -> bool:
+    m = it.get("meta")
+    return isinstance(m, dict) and m.get("auto_compaction") is True
+
+
+def _compact_items(uid: int, items: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], bool]:
+    """Merge oldest eligible entries into one ``note`` until under byte threshold."""
+    trigger = _compaction_trigger_bytes()
+    batch = _compaction_batch()
+    protect_cfg = _compaction_protect_recent()
+    changed = False
+    owned = [it for it in items if int(it["user_id"]) == uid]
+
+    while _total_body_bytes(owned) > trigger:
+        n = len(owned)
+        if n < 2:
+            break
+        # Keep recent user-authored rows (exclude auto-compaction summaries) intact.
+        authored = [it for it in owned if not _is_auto_compaction_row(it)]
+        if len(authored) <= protect_cfg:
+            protected_ids = {int(it["id"]) for it in authored}
+        else:
+            protect_n = min(protect_cfg, max(0, len(authored) - 1))
+            by_id_desc = sorted(authored, key=lambda x: int(x["id"]), reverse=True)
+            protected_ids = {int(it["id"]) for it in by_id_desc[:protect_n]}
+        eligible = [it for it in owned if int(it["id"]) not in protected_ids]
+        eligible.sort(key=lambda x: int(x["id"]))
+        if len(eligible) < 2:
+            break
+        take = eligible[: min(batch, len(eligible))]
+        take_ids = {int(it["id"]) for it in take}
+        rest = [it for it in owned if int(it["id"]) not in take_ids]
+        summary_body = _llm_compaction_summary(take) or _fallback_compaction_summary(take)
+        new_id = max(int(it["id"]) for it in owned) + 1
+        created = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        new_item: dict[str, Any] = {
+            "id": new_id,
+            "user_id": uid,
+            "kind": "note",
+            "created": created,
+            "meta": {"compacted_from_ids": sorted(take_ids), "auto_compaction": True},
+            "content": summary_body,
+        }
+        owned = rest + [new_item]
+        changed = True
+
+    # Merging can leave a single large ``note`` still above the threshold; trim in place.
+    owned, shrunk = _shrink_until_under_budget(owned, trigger)
+    return owned, changed or shrunk
+
+
+def _utf8_safe_prefix(enc: bytes, max_bytes: int) -> bytes:
+    if max_bytes <= 0 or not enc:
+        return b""
+    if len(enc) <= max_bytes:
+        return enc
+    s = enc[:max_bytes]
+    while s and (s[-1] & 0b1100_0000) == 0b1000_0000:
+        s = s[:-1]
+    return s
+
+
+def _shrink_until_under_budget(
+    items: list[dict[str, Any]], trigger: int
+) -> tuple[list[dict[str, Any]], bool]:
+    """Trim the longest UTF-8 bodies until total is at or below ``trigger``."""
+    if _total_body_bytes(items) <= trigger:
+        return items, False
+    out = []
+    for it in items:
+        row = dict(it)
+        if isinstance(row.get("meta"), dict):
+            row["meta"] = dict(row["meta"])
+        out.append(row)
+    changed = False
+    ellipsis = "…"
+    ell_b = len(ellipsis.encode("utf-8"))
+    for _ in range(5000):
+        total = _total_body_bytes(out)
+        if total <= trigger:
+            break
+        if not out:
+            break
+        idx = max(range(len(out)), key=lambda i: len((out[i].get("content") or "").encode("utf-8")))
+        enc = (out[idx].get("content") or "").encode("utf-8")
+        if len(enc) <= 1:
+            break
+        others = total - len(enc)
+        room = max(1, trigger - others)
+        prefix_b = max(0, room - ell_b)
+        clipped = _utf8_safe_prefix(enc, prefix_b).decode("utf-8", "ignore").rstrip()
+        out[idx]["content"] = (clipped + ellipsis) if clipped else ellipsis
+        meta = out[idx].get("meta") if isinstance(out[idx].get("meta"), dict) else {}
+        out[idx]["meta"] = {**meta, "truncated_to_budget": True}
+        changed = True
+    return out, changed
+
+
+def _rewrite_blocks(uid: int, items: list[dict[str, Any]]) -> None:
+    path = _user_file(uid)
+    ordered = sorted(items, key=lambda x: int(x["id"]))
+    body = "".join(
+        _serialize_block(
+            int(it["id"]),
+            int(it["user_id"]),
+            str(it["kind"]),
+            str(it.get("created") or ""),
+            it.get("meta") if isinstance(it.get("meta"), dict) else None,
+            str(it.get("content") or ""),
+        )
+        for it in ordered
+    )
+    _write_atomic(path, _FILE_PREAMBLE + body)
+
+
+def _maybe_compact_after_write(uid: int) -> None:
+    path = _user_file(uid)
+    raw = _read_raw(path)
+    owned = [
+        it
+        for it in _parse_blocks(_strip_preamble(raw))
+        if int(it["user_id"]) == uid
+    ]
+    if not owned:
+        return
+    compacted, changed = _compact_items(uid, owned)
+    if changed:
+        _rewrite_blocks(uid, compacted)
+
+
 def _cosine_distance(a: list[float], b: list[float]) -> float:
     dot = sum(x * y for x, y in zip(a, b))
     na = math.sqrt(sum(x * x for x in a))
@@ -215,6 +418,7 @@ def write(
     block = _serialize_block(next_id, uid, kind, created, meta, content.strip())
     new_text = _FILE_PREAMBLE + body + block
     _write_atomic(path, new_text)
+    _maybe_compact_after_write(uid)
     return next_id
 
 

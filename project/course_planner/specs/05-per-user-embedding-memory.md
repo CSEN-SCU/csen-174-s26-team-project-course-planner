@@ -27,6 +27,8 @@ Each user’s textual notes are persisted in a dedicated human-readable Markdown
 8. On list, parse every block belonging to the user, return each as a dict ordered newest numeric id first, with no distance field.
 9. On single delete, rewrite the file without the block whose id matches only when the owning user id matches; return whether a block was removed.
 10. On bulk delete, remove all blocks for the user in one atomic rewrite; return how many blocks were deleted.
+11. After a successful append in ``write``, if the sum of UTF-8 byte lengths of every stored body for that user exceeds ``MEMORY_COMPACTION_TRIGGER_BYTES`` (default 65536), repeatedly merge the oldest blocks that are **not** protected into a single new ``note`` with ``auto_compaction`` and ``compacted_from_ids`` in metadata. Rows from automatic compaction are never protected; among remaining user-authored rows, the ``MEMORY_COMPACTION_PROTECT_RECENT`` highest numeric ids stay merge-exempt (if there are at most that many authored rows, every authored row is protected and only compaction summaries merge). UTF-8-safe truncation applies when totals still exceed the threshold.
+12. Compaction summaries use the Gemini text model when ``GEMINI_API_KEY`` or ``GOOGLE_API_KEY`` is set; otherwise a deterministic excerpt join is used so tests and offline runs stay stable.
 
 # Error paths
 

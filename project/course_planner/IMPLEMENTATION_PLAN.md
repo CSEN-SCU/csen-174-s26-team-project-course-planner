@@ -27,7 +27,7 @@ Comparison of `project/course_planner/specs/` against the current `project/cours
 
 - [x] Per-user Markdown memory files under ``COURSE_PLANNER_MEMORY_DIR`` (default ``data/memory/<user_id>.md``): delimited blocks with JSON headers + body text; ``write``/``list``/``delete``/``retrieve`` (cosine distance over on-the-fly embeddings) replace SQLite+sqlite-vec for memory (`agents/memory_agent.py`; tests use isolated temp dir via ``conftest``).
 
-- [ ] HIGH: Add memory summarization step that condenses older memory entries into a compact summary before they exceed a size threshold, preventing unbounded memory growth across sessions.
+- [x] HIGH: Rolling memory compaction after each ``write`` merges oldest non-protected rows (auto-compaction ``note`` rows are never protected; newest user-authored rows are) when UTF-8 body totals exceed ``MEMORY_COMPACTION_TRIGGER_BYTES``; Gemini summary when a key is set, else excerpt join; UTF-8-safe shrink if a single row still exceeds the budget (`agents/memory_agent.py`, ``tests/test_memory_compaction.py``).
 
 - [x] SCU brand colors: `.streamlit/config.toml` sets `primaryColor` / surfaces; `inject_scu_brand()` tints sidebar, styles headings and links (`#C8102E`, `#8B0000`); primary buttons follow Streamlit theme (`main.py`, `utils/scu_theme.py`).
 
