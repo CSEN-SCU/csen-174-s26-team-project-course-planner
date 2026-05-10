@@ -20,7 +20,7 @@ Comparison of `project/course_planner/specs/` against the current `project/cours
 - [x] Show planning-result heuristic warnings (high unit load, dense schedule) in the main plan area, Summary column, and above Step 3 when a schedule preview exists (`main.py` reads `planning_result["warnings"]`).
 - [x] Thursday in meeting patterns: ``Th`` or single-letter ``R`` maps to the Thursday column; day run ``MTTh`` tokenizes with ``Th`` before bare ``T`` (`utils/meeting_pattern_parse.py`, `main.py` `day_map`).
 - [x] Time tail after ``|``: first and last ``H:MM AM/PM`` tokens define start/end so extra hyphens or filler segments do not break parsing (`utils/meeting_pattern_parse.py`; tests in `tests/test_meeting_pattern_parse.py`).
-- [ ] LOW: Ensure leading and trailing whitespace on the current preference text does not change which prior notes are retrieved for context.
+- [x] Memory retrieval query uses stripped preference text so surrounding whitespace does not change embedding retrieval (`orchestrator.plan_for_user`; test `test_preference_leading_trailing_whitespace_does_not_change_retrieve_query`).
 - [x] Removed unused `utils/pdf_reader.py` (no spec consumer; PDF bytes go straight to Gemini).
 - [ ] LOW: Reconcile the session-flow specification wording for how the gap list is built so it matches the gap-rows specification (per-row status filter versus ambiguous “not satisfied” wording).
 - [ ] HIGH: Replace text input in chatbot with speech-to-text voice input so users can speak preferences and follow-up questions instead of typing.

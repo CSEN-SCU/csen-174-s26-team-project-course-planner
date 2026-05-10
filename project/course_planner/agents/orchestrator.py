@@ -127,7 +127,10 @@ def plan_for_user(
     gap_codes = ", ".join(
         str((item or {}).get("course") or "") for item in (missing_details or [])[:5]
     )
-    query = f"{user_preference} | gap: {gap_codes}".strip()
+    # Strip preference for retrieval only so leading/trailing spaces do not change
+    # embedding distance to stored notes; the planning prompt still uses the raw text.
+    pref_for_retrieve = (user_preference or "").strip()
+    query = f"{pref_for_retrieve} | gap: {gap_codes}".strip()
 
     memory_snippets = _retrieve_snippets(int(user_id), query)
 

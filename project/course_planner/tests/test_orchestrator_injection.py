@@ -174,6 +174,28 @@ def test_plan_for_user_requires_user_id(monkeypatch, reply):
         orchestrator.plan_for_user(None, [{"course": "COEN 174"}], "anything")
 
 
+def test_preference_leading_trailing_whitespace_does_not_change_retrieve_query(
+    monkeypatch, alice, reply
+):
+    """Embedding retrieval uses stripped preference; padded vs unpadded string must match."""
+    captured: list[str] = []
+    real_retrieve = memory_agent.retrieve
+
+    def spy_retrieve(user_id, query, k=4, **kwargs):
+        captured.append(query)
+        return real_retrieve(user_id, query, k=k, **kwargs)
+
+    monkeypatch.setattr(memory_agent, "retrieve", spy_retrieve)
+    _patch_client(monkeypatch, [], reply)
+    md = [{"course": "COEN 174", "category": "Core", "units": 4}]
+
+    orchestrator.plan_for_user(alice, md, "  light load  ")
+    orchestrator.plan_for_user(alice, md, "light load")
+
+    assert len(captured) == 2
+    assert captured[0] == captured[1]
+
+
 def test_retrieved_snippets_only_from_caller(monkeypatch, db_path, alice, reply):
     """Even when both users have memory, A's plan never injects B's snippets."""
     bob = users_db.create_user("bob", "bob@example.com", "another solid password")
