@@ -7,3 +7,4 @@ streamlit-authenticator
 sqlite-vec
 bcrypt
 pytest
+SpeechRecognition

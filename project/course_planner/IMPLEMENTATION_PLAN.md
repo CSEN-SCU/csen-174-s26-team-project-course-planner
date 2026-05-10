@@ -23,7 +23,7 @@ Comparison of `project/course_planner/specs/` against the current `project/cours
 - [x] Memory retrieval query uses stripped preference text so surrounding whitespace does not change embedding retrieval (`orchestrator.plan_for_user`; test `test_preference_leading_trailing_whitespace_does_not_change_retrieve_query`).
 - [x] Removed unused `utils/pdf_reader.py` (no spec consumer; PDF bytes go straight to Gemini).
 - [x] Session-flow spec step 7 now states explicitly that `missing_details` comes from **per-detail-row** `status == "Not Satisfied"` (gap-rows spec); clarified it is not the merged overview “Not Satisfied” bucket (`specs/10-interactive-session-and-layout-flow.md`).
-- [ ] HIGH: Replace text input in chatbot with speech-to-text voice input so users can speak preferences and follow-up questions instead of typing.
+- [x] Optional voice input for Step 2 preferences: ``st.audio_input`` + **Transcribe** appends text to the preference text area via ``SpeechRecognition`` / Google web STT (network); typing remains primary (`main.py`, `utils/voice_pref.py`, ``SpeechRecognition`` in ``requirements.txt``).
 
 - [ ] HIGH: Replace SQLite memory storage with per-user structured Markdown files (one file per user) containing sections for preferences, past plans, and conversation history; each file is human-readable and editable.
 

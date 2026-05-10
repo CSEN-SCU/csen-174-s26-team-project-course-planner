@@ -12,6 +12,7 @@ from utils.academic_progress_xlsx import parse_academic_progress_xlsx
 from utils.meeting_pattern_parse import parse_schedule
 from utils.rmp_display import professors_sorted_by_rating
 from utils.scu_theme import inject_scu_brand
+from utils.voice_pref import transcribe_wav_bytes
 from utils.scu_course_schedule_xlsx import (
     _parse_section_subject_number,
     expand_subjects_for_schedule_lookup,
@@ -435,6 +436,27 @@ if isinstance(missing_details, list) and missing_details:
         placeholder="e.g. at most 12 units, finish core first, no classes before 9am",
         key="planning_user_preference",
     )
+
+    st.caption(
+        "**Voice (optional):** record a short clip, then transcribe—it appends to the box above "
+        "(English; uses Google speech recognition over the **network**)."
+    )
+    rec = st.audio_input("Record preference (optional)", key="planning_pref_audio")
+    if st.button("Transcribe recording → preferences", key="planning_pref_transcribe"):
+        if rec is None:
+            st.warning("Record audio first, then click transcribe.")
+        else:
+            raw = rec.getvalue()
+            text, err = transcribe_wav_bytes(raw)
+            if err:
+                st.warning(err)
+            elif text:
+                prev = (st.session_state.get("planning_user_preference") or "").strip()
+                st.session_state["planning_user_preference"] = (
+                    f"{prev} {text}".strip() if prev else text
+                )
+                st.success("Transcription added to your preferences.")
+                st.rerun()
 
     if st.button("Generate recommended schedule"):
         if not (user_preference or "").strip():

@@ -17,6 +17,7 @@ python -m pytest tests/
 cd project/course_planner
 pip install -r requirements.txt
 ```
+Voice transcription uses the `SpeechRecognition` package and **Google’s speech API over the network** when you click **Transcribe recording → preferences**.
 
 ## Key environment variables
 - `GEMINI_API_KEY` or `GOOGLE_API_KEY` — required for planning agent, curriculum PDF gap analysis, and embeddings
