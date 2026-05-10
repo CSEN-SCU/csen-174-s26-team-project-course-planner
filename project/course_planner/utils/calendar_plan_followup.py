@@ -10,35 +10,34 @@ from typing import Any, Optional
 
 
 def build_remove_and_replace_preference(
-    course: str,
+    courses: list[str],
     day_column_label: Optional[str],
     parsed: Optional[dict[str, Any]],
 ) -> str:
-    """Ask the model to drop ``course`` and add a gap-based replacement for the vacated slot."""
-    code = " ".join(str(course or "").split()).strip() or "(unknown course)"
+    """Ask the model to drop ``courses`` and suggest gap-based replacement(s) for the vacated slot."""
+    cleaned = [" ".join(str(c).split()).strip() for c in (courses or []) if str(c).strip()]
+    codes = cleaned or ["(unknown course)"]
+    codes_fmt = ", ".join(f"**{c}**" for c in codes)
+    codes_plain = ", ".join(codes)
     if parsed and day_column_label:
-        slot = (
-            f"The vacated weekly slot is **{day_column_label}** "
-            f"{parsed['start']} – {parsed['end']} (same wall-clock window as the removed course)."
-        )
+        slot_desc = f"{day_column_label} {parsed['start']} – {parsed['end']}"
     elif parsed:
         days = ", ".join(str(d) for d in (parsed.get("days") or []) if d)
-        slot = (
-            f"Target meeting window from the removed course: **{days}** "
-            f"{parsed['start']} – {parsed['end']}."
-        )
+        slot_desc = f"{days} {parsed['start']} – {parsed['end']}"
     else:
-        slot = (
-            "Meeting time for this course was unknown (**Time TBD**); choose a replacement from "
-            "remaining gaps that fits the student's overall preferences and avoids obvious conflicts."
-        )
+        slot_desc = "Time TBD (no meeting pattern matched in Find Course Sections)"
 
+    primary_removed = codes[0]
     return (
-        f"Remove **{code}** from the plan. Your `recommended` array must NOT include **{code}**. "
-        f"Add one replacement course taken from the student's unfinished requirements in "
-        f"STUDENT REQUIREMENTS (missing_details). "
-        f"{slot} "
-        f"In `assistant_reply`, state `removed: {code}`, the replacement course code, and which "
-        f"**category / requirement label** from missing_details the replacement satisfies. "
-        f"If no gap course can honor that time window, say so briefly and still propose the best alternative."
+        f"Remove {codes_fmt} from the plan. Your `recommended` array must NOT include any of these codes: "
+        f"{codes_plain}. "
+        f"The removed course(s) are included again in STUDENT REQUIREMENTS (missing_details) as unfinished gap(s). "
+        f"suggest ONE replacement course for the freed time slot: {slot_desc}. "
+        f"The replacement must be from missing_details and must have a section available in that time slot "
+        f"in SCU_Find_Course_Sections.xlsx. "
+        f"If the replacement lecture has a lab co-requisite in missing_details (same quarter, catalog number + "
+        f"trailing L), recommend the lecture and lab together as a pair in `recommended`. "
+        f"In `assistant_reply`, state `removed: {primary_removed}` (and partner code if applicable), the "
+        f"replacement course code(s), and which requirement category from missing_details they satisfy. "
+        f"If no gap course can fit that slot in the workbook, say so briefly."
     )

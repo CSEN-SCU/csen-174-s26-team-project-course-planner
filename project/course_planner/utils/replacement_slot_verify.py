@@ -87,6 +87,49 @@ def gap_category_for_course(gaps: list[dict], course_str: str) -> str:
     return "—"
 
 
+def gap_courses_matching_slot(
+    gaps: list[dict],
+    base_map: dict[str, str],
+    vacated_col_i: Optional[int],
+    vacated_parsed: Optional[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Gap rows (course/units/category) that have at least one workbook pattern fitting the vacated column/time."""
+    if vacated_parsed is None or vacated_col_i is None:
+        return []
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for g in gaps or []:
+        if not isinstance(g, dict):
+            continue
+        course = (g.get("course") or "").strip()
+        if not course:
+            continue
+        cn = _norm_course_key(course)
+        if cn in seen:
+            continue
+        pats = _patterns_for_course(base_map, course)
+        if not pats:
+            continue
+        if not any(
+            slot_matches_vacated_window(vacated_col_i, vacated_parsed, raw) for raw in pats
+        ):
+            continue
+        seen.add(cn)
+        u = g.get("units", 0)
+        try:
+            ui = int(u) if u is not None else 0
+        except (TypeError, ValueError):
+            ui = 0
+        out.append(
+            {
+                "course": course,
+                "units": ui,
+                "category": str(g.get("category") or "").strip() or "—",
+            }
+        )
+    return out
+
+
 def slot_matches_vacated_window(
     vacated_col_i: int,
     vacated_parsed: dict[str, Any],
@@ -118,14 +161,20 @@ def slot_matches_vacated_window(
     return _interval_overlap_mins(v0, v1, c0, c1)
 
 
+def _removed_norm_set(removed_display: str | list[str]) -> set[str]:
+    if isinstance(removed_display, list):
+        return {_norm_course_key(r) for r in removed_display if (r or "").strip()}
+    return {_norm_course_key(removed_display)} if (removed_display or "").strip() else set()
+
+
 def new_recommended_courses(
     old_recommended: list[dict],
     new_recommended: list[dict],
-    removed_display: str,
+    removed_display: str | list[str],
 ) -> list[str]:
     """Course display strings that appear in ``new`` but not ``old`` (excluding removed)."""
     old_set = {_norm_course_key((x or {}).get("course")) for x in old_recommended if isinstance(x, dict)}
-    removed_n = _norm_course_key(removed_display)
+    removed_set = _removed_norm_set(removed_display)
     seen: set[str] = set()
     out: list[str] = []
     for x in new_recommended or []:
@@ -133,7 +182,7 @@ def new_recommended_courses(
             continue
         raw_c = (x.get("course") or "").strip()
         cn = _norm_course_key(raw_c)
-        if not cn or cn == removed_n:
+        if not cn or cn in removed_set:
             continue
         if cn in old_set or cn in seen:
             continue
@@ -147,7 +196,7 @@ def verify_calendar_replacements(
     old_plan: dict[str, Any],
     new_plan: dict[str, Any],
     gaps: list[dict],
-    removed_course: str,
+    removed_course: str | list[str],
     vacated_col_i: Optional[int],
     vacated_parsed: Optional[dict[str, Any]],
     base_schedule_map: dict[str, str],

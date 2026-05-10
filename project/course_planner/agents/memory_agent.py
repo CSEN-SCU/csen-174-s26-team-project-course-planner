@@ -352,8 +352,24 @@ def _shrink_until_under_budget(
     return out, changed
 
 
+def _split_transcript_tail(raw: str) -> tuple[str, str]:
+    """Split ``raw`` into (prefix before transcript section, tail from ``## Last Transcript`` onward)."""
+    s = raw or ""
+    idx = s.find("\n## Last Transcript")
+    if idx != -1:
+        return s[:idx], s[idx + 1 :].lstrip("\n")
+    if s.startswith("## Last Transcript"):
+        return "", s
+    idx2 = s.find("## Last Transcript")
+    if idx2 != -1:
+        return s[:idx2], s[idx2:]
+    return s, ""
+
+
 def _rewrite_blocks(uid: int, items: list[dict[str, Any]]) -> None:
     path = _user_file(uid)
+    raw = _read_raw(path)
+    _, tr_tail = _split_transcript_tail(raw)
     ordered = sorted(items, key=lambda x: int(x["id"]))
     body = "".join(
         _serialize_block(
@@ -366,7 +382,8 @@ def _rewrite_blocks(uid: int, items: list[dict[str, Any]]) -> None:
         )
         for it in ordered
     )
-    _write_atomic(path, _FILE_PREAMBLE + body)
+    suffix = ("\n\n" + tr_tail) if tr_tail else ""
+    _write_atomic(path, _FILE_PREAMBLE + body + suffix)
 
 
 def _maybe_compact_after_write(uid: int) -> None:
@@ -411,12 +428,25 @@ def write(
 
     path = _user_file(uid)
     raw = _read_raw(path)
-    body = _strip_preamble(raw)
+    prefix_before_tr, tr_tail = _split_transcript_tail(raw)
+    body = _strip_preamble(prefix_before_tr)
     items = _parse_blocks(body)
     next_id = max((it["id"] for it in items), default=0) + 1
     created = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     block = _serialize_block(next_id, uid, kind, created, meta, content.strip())
-    new_text = _FILE_PREAMBLE + body + block
+    new_core = "".join(
+        _serialize_block(
+            int(it["id"]),
+            int(it["user_id"]),
+            str(it["kind"]),
+            str(it.get("created") or ""),
+            it.get("meta") if isinstance(it.get("meta"), dict) else None,
+            str(it.get("content") or ""),
+        )
+        for it in sorted(items, key=lambda x: int(x["id"]))
+    ) + block
+    suffix = ("\n\n" + tr_tail) if tr_tail else ""
+    new_text = _FILE_PREAMBLE + new_core + suffix
     _write_atomic(path, new_text)
     _maybe_compact_after_write(uid)
     return next_id
@@ -511,7 +541,8 @@ def delete(
     iid = int(item_id)
     path = _user_file(uid)
     raw = _read_raw(path)
-    body = _strip_preamble(raw)
+    prefix_before_tr, tr_tail = _split_transcript_tail(raw)
+    body = _strip_preamble(prefix_before_tr)
     items = _parse_blocks(body)
     kept = [it for it in items if int(it["id"]) != iid]
     if len(kept) == len(items):
@@ -527,7 +558,8 @@ def delete(
         )
         for it in kept
     )
-    _write_atomic(path, _FILE_PREAMBLE + new_body)
+    suffix = ("\n\n" + tr_tail) if tr_tail else ""
+    _write_atomic(path, _FILE_PREAMBLE + new_body + suffix)
     return True
 
 
@@ -543,5 +575,35 @@ def delete_all_for_user(
     n = len(_parse_blocks(_strip_preamble(raw)))
     if n == 0:
         return 0
-    _write_atomic(path, _FILE_PREAMBLE)
+    _, tr_tail = _split_transcript_tail(raw)
+    suffix = ("\n\n" + tr_tail) if tr_tail else ""
+    _write_atomic(path, _FILE_PREAMBLE.rstrip("\n") + suffix)
     return n
+
+
+def save_last_transcript_snapshot(user_id, snapshot: dict[str, Any]) -> None:
+    """Append or replace a ``## Last Transcript`` JSON section at the end of the user's memory .md file."""
+    uid = _validate_user_id(user_id)
+    path = _user_file(uid)
+    raw = _read_raw(path)
+    base, _ = _split_transcript_tail(raw)
+    base = base.rstrip()
+    blob = json.dumps(snapshot, ensure_ascii=False, default=str)
+    appendix = f"\n\n## Last Transcript\n\n```json\n{blob}\n```\n"
+    _write_atomic(path, base + appendix)
+
+
+def load_last_transcript_snapshot(user_id) -> Optional[dict[str, Any]]:
+    """Load transcript snapshot from ``## Last Transcript`` in the user's memory .md file."""
+    uid = _validate_user_id(user_id)
+    raw = _read_raw(_user_file(uid))
+    _, tail = _split_transcript_tail(raw)
+    if not tail.strip():
+        return None
+    m = re.search(r"```json\s*\n(.*)\n```", tail, re.DOTALL)
+    if not m:
+        return None
+    try:
+        return json.loads(m.group(1).strip())
+    except json.JSONDecodeError:
+        return None

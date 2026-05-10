@@ -33,6 +33,8 @@ _AUTH_SESSION_KEY = "_scu_authenticator"
 # logout so user A cannot leak state into user B's next session.
 _USER_SCOPED_SESSION_KEYS = (
     "missing_details",
+    "parsed_rows",
+    "transcript_progress_snapshot",
     "planning_result",
     "enriched_courses",
     "_recommended_enrichment_fp",
