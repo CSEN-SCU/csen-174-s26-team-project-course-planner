@@ -47,7 +47,7 @@ _DAY_TOKEN_MAP: dict[str, int] = {
 _DAYS_HEADERS   = {"days", "day", "meeting days", "meeting day", "mtg days", "mtg day"}
 _START_HEADERS  = {"mtg start", "meeting start", "start time", "start", "begin time", "begin"}
 _END_HEADERS    = {"mtg end", "meeting end", "end time", "end"}
-_TIMES_HEADERS  = {"times", "meeting times", "time", "meeting time", "mtg time"}
+_TIMES_HEADERS  = {"times", "meeting times", "time", "meeting time", "mtg time", "meeting patterns", "meeting pattern", "mtg patterns", "patterns"}
 
 
 # ── helpers ─────────────────────────────────────────────────────────────────
