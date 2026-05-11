@@ -226,6 +226,11 @@ def _build_schedule_block(
         else:
             not_offered.append(code)
 
+    # Only inject constraint if we actually matched some courses.
+    # An empty allowed-list would tell the model it cannot recommend anything.
+    if not offered:
+        return "", set()
+
     lines = ["=== COURSES CONFIRMED IN NEXT-TERM SCHEDULE ==="]
     lines.append(
         "You MUST only recommend courses from the list below. "
