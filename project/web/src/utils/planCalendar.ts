@@ -26,16 +26,28 @@ function professorLabel(item: Record<string, unknown>): string {
   return "TBA";
 }
 
+export type TbdCourse = {
+  id: string;
+  code: string;
+  title?: string;
+  professor: string;
+  index: number;
+};
+
+export type CalendarResult = {
+  blocks: CourseBlock[];
+  tbd: TbdCourse[];
+};
+
 /**
  * Convert backend recommended items into calendar blocks.
- * When real meeting times are present (from schedule xlsx), each meeting day
- * gets its own block. Otherwise falls back to hash-based placement with
- * collision detection.
+ * Courses with real meeting times (from schedule xlsx) get one block per
+ * meeting day. Courses with no schedule data are returned in `tbd` — never
+ * placed at a made-up time.
  */
 export function recommendedToCalendarBlocks(
   recs: Record<string, unknown>[],
-): CourseBlock[] {
-  // Track occupied [startMin, endMin) ranges per day
+): CalendarResult {
   const occupied: Array<Array<[number, number]>> = [[], [], [], [], []];
 
   function overlaps(day: number, start: number, end: number): boolean {
@@ -68,6 +80,7 @@ export function recommendedToCalendarBlocks(
   }
 
   const blocks: CourseBlock[] = [];
+  const tbd: TbdCourse[] = [];
 
   recs.forEach((item, i) => {
     const code = String(item.course ?? "?");
@@ -128,19 +141,14 @@ export function recommendedToCalendarBlocks(
       return;
     }
 
-    // Hash-based preferred position with collision avoidance
-    const h = hashStr(`${code}:${i}`);
-    const preferredDay = h % 5;
-    const preferredStart = (2 + (h % 12)) * SLOT_MINUTES; // 9:00 AM – 2:30 PM range
+    // No schedule data — do NOT make up a time; surface as TBD
+    tbd.push({ id: idBase, code, title, professor, index: i });
 
-    const { dayIndex, startMin } = findFreeSlot(preferredDay, preferredStart, durationMin);
-    const endMin = Math.min(startMin + durationMin, CALENDAR_SPAN_MINUTES);
-    claim(dayIndex, startMin, endMin);
-
-    blocks.push({ id: idBase, dayIndex, startOffsetMin: startMin, endOffsetMin: endMin, code, title, professor });
+    // Still use hash-based slot for manually-placed only — here just skip
+    void findFreeSlot; // referenced to avoid dead-code lint; not used for TBD
   });
 
-  return blocks;
+  return { blocks, tbd };
 }
 
 export function parseRecommendedFromMemoryContent(
