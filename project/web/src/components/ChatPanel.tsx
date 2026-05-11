@@ -75,6 +75,7 @@ export function ChatPanel({
   onPrefillConsumed,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState<"idle" | "recording" | "processing">("idle");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -85,7 +86,7 @@ export function ChatPanel({
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, isGenerating]);
 
   useEffect(() => {
     if (prefillInput) {
@@ -134,12 +135,7 @@ export function ChatPanel({
       }
     }
 
-    const loadingId = `l-${Date.now()}`;
-    setMessages((m) => [
-      ...m,
-      { id: loadingId, role: "assistant", content: "Thinking…" },
-    ]);
-
+    setIsGenerating(true);
     try {
       const data = await generatePlan(
         missingDetails as never[],
@@ -153,9 +149,7 @@ export function ChatPanel({
         const reply = typeof data.reply === "string" && data.reply.trim()
           ? data.reply.trim()
           : "I'm not sure how to answer that. Try asking me to plan your schedule.";
-        setMessages((m) =>
-          m.map((msg) => msg.id === loadingId ? { ...msg, content: reply } : msg),
-        );
+        setMessages((m) => [...m, { id: `a-${Date.now()}`, role: "assistant", content: reply }]);
         return;
       }
 
@@ -178,29 +172,21 @@ export function ChatPanel({
           ? `${data.assistant_reply.trim()}\n\n${planSummaryText(data)}`
           : assistantReply;
 
-      setMessages((m) =>
-        m.map((msg) =>
-          msg.id === loadingId ? { ...msg, content: displayText } : msg,
-        ),
-      );
+      setMessages((m) => [...m, { id: `a-${Date.now()}`, role: "assistant", content: displayText }]);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      setMessages((m) =>
-        m.map((row) =>
-          row.id === loadingId
-            ? { ...row, content: `Error: ${msg}` }
-            : row,
-        ),
-      );
+      setMessages((m) => [...m, { id: `a-${Date.now()}`, role: "assistant", content: `Error: ${msg}` }]);
+    } finally {
+      setIsGenerating(false);
     }
   }, [missingDetails, userId, planResult, setPlanResult, onPlanGenerated, setMessages, pendingFile, processFile]);
 
   const send = useCallback(async () => {
     const trimmed = input.trim();
-    if (!trimmed) return;
+    if (!trimmed || isGenerating) return;
     setInput("");
     await sendText(trimmed);
-  }, [input, sendText]);
+  }, [input, sendText, isGenerating]);
 
   const toggleVoice = useCallback(async () => {
     // Stop if already recording
@@ -337,6 +323,18 @@ export function ChatPanel({
             </div>
           </div>
         ))}
+
+        {/* Animated typing indicator while AI is generating */}
+        {isGenerating && (
+          <div className="flex justify-start">
+            <div className="rounded-lg px-4 py-3 bg-[var(--scu-gray)] ring-1 ring-neutral-200 flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-neutral-400 animate-bounce [animation-delay:0ms]" />
+              <span className="w-2 h-2 rounded-full bg-neutral-400 animate-bounce [animation-delay:150ms]" />
+              <span className="w-2 h-2 rounded-full bg-neutral-400 animate-bounce [animation-delay:300ms]" />
+            </div>
+          </div>
+        )}
+
         <div ref={messagesEndRef} />
       </div>
 
@@ -414,9 +412,10 @@ export function ChatPanel({
           <button
             type="button"
             onClick={() => void send()}
-            className="h-[44px] shrink-0 rounded-md bg-[var(--scu-red)] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--scu-dark-red)]"
+            disabled={isGenerating}
+            className="h-[44px] shrink-0 rounded-md bg-[var(--scu-red)] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--scu-dark-red)] disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Send
+            {isGenerating ? "…" : "Send"}
           </button>
         </div>
         <p className="mt-1.5 text-[10px] text-neutral-400">

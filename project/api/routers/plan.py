@@ -72,7 +72,7 @@ def _answer_conversational(
     )
 
     client = get_genai_client(purpose="conversational Q&A")
-    config = types.GenerateContentConfig(max_output_tokens=256)
+    config = types.GenerateContentConfig(max_output_tokens=1024)
     try:
         response = client.models.generate_content(
             model="gemini-2.5-flash",
