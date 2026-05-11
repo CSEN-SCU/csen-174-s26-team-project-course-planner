@@ -27,9 +27,10 @@ function professorLabel(item: Record<string, unknown>): string {
 }
 
 /**
- * Backend recommended items do not include meeting times; place blocks on the
- * grid deterministically with collision detection so no two courses overlap on
- * the same day.
+ * Convert backend recommended items into calendar blocks.
+ * When real meeting times are present (from schedule xlsx), each meeting day
+ * gets its own block. Otherwise falls back to hash-based placement with
+ * collision detection.
  */
 export function recommendedToCalendarBlocks(
   recs: Record<string, unknown>[],
@@ -50,10 +51,8 @@ export function recommendedToCalendarBlocks(
     preferredStart: number,
     durationMin: number,
   ): { dayIndex: WeekdayIndex; startMin: number } {
-    // Try preferred day from preferred start, then fall through to other days
     for (let d = 0; d < 5; d++) {
       const day = (preferredDay + d) % 5;
-      // On fallback days start from 8:30 AM (slot 1) to avoid 8:00 AM pile-up
       const scanFrom = d === 0 ? preferredStart : SLOT_MINUTES;
       for (
         let s = Math.floor(scanFrom / SLOT_MINUTES) * SLOT_MINUTES;
@@ -65,16 +64,17 @@ export function recommendedToCalendarBlocks(
         }
       }
     }
-    // Last resort (calendar completely full — should never happen in practice)
     return { dayIndex: 4, startMin: 0 };
   }
 
-  return recs.map((item, i) => {
+  const blocks: CourseBlock[] = [];
+
+  recs.forEach((item, i) => {
     const code = String(item.course ?? "?");
     const units = Number(item.units) || 4;
     const durationSlots = Math.min(12, Math.max(2, Math.round(units) * 2));
     const durationMin = durationSlots * SLOT_MINUTES;
-    const id = `rec-${i}-${code.replace(/\s+/g, "-")}`;
+    const idBase = `rec-${i}-${code.replace(/\s+/g, "-")}`;
     const title =
       typeof item.title === "string" && item.title.trim()
         ? item.title.trim()
@@ -90,15 +90,42 @@ export function recommendedToCalendarBlocks(
       const startMin = item._start as number;
       const endMin = Math.min(startMin + durationMin, CALENDAR_SPAN_MINUTES);
       claim(item._day as number, startMin, endMin);
-      return {
-        id,
+      blocks.push({
+        id: idBase,
         dayIndex: (item._day as number) as WeekdayIndex,
         startOffsetMin: startMin,
         endOffsetMin: endMin,
         code,
         title,
         professor,
-      };
+      });
+      return;
+    }
+
+    // Real meeting times from schedule xlsx — one block per meeting day
+    const meetingDays = item.meeting_days;
+    const meetingStart = item.meeting_start_min;
+    const meetingEnd = item.meeting_end_min;
+    if (
+      Array.isArray(meetingDays) &&
+      meetingDays.length > 0 &&
+      typeof meetingStart === "number" &&
+      typeof meetingEnd === "number" &&
+      meetingStart < meetingEnd
+    ) {
+      meetingDays.forEach((dayIdx: number) => {
+        claim(dayIdx, meetingStart, meetingEnd);
+        blocks.push({
+          id: `${idBase}-d${dayIdx}`,
+          dayIndex: dayIdx as WeekdayIndex,
+          startOffsetMin: meetingStart,
+          endOffsetMin: meetingEnd,
+          code,
+          title,
+          professor,
+        });
+      });
+      return;
     }
 
     // Hash-based preferred position with collision avoidance
@@ -110,8 +137,10 @@ export function recommendedToCalendarBlocks(
     const endMin = Math.min(startMin + durationMin, CALENDAR_SPAN_MINUTES);
     claim(dayIndex, startMin, endMin);
 
-    return { id, dayIndex, startOffsetMin: startMin, endOffsetMin: endMin, code, title, professor };
+    blocks.push({ id: idBase, dayIndex, startOffsetMin: startMin, endOffsetMin: endMin, code, title, professor });
   });
+
+  return blocks;
 }
 
 export function parseRecommendedFromMemoryContent(

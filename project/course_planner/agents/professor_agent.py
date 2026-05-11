@@ -23,6 +23,7 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
 
 from utils.scu_course_schedule_xlsx import (
     load_schedule_section_index,
+    meeting_times_for_course,
     scheduled_instructors_for_course,
 )
 
@@ -304,7 +305,7 @@ def _professors_strictly_from_schedule(
     return out
 
 
-def _enrich_one_course(course: dict, *, schedule_index: dict[tuple[str, str], list[str]]) -> dict:
+def _enrich_one_course(course: dict, *, schedule_index: dict) -> dict:
     """One course: own client + paginated search + top professors by rating within the department."""
     enriched = dict(course)
     enriched["professors"] = []
@@ -313,6 +314,13 @@ def _enrich_one_course(course: dict, *, schedule_index: dict[tuple[str, str], li
     course_code = course.get("course") or ""
     category = course.get("category")
     scheduled_names = scheduled_instructors_for_course(course_code, schedule_index)
+
+    # Attach real meeting times when available from the schedule xlsx
+    times = meeting_times_for_course(course_code, schedule_index)
+    if times:
+        enriched["meeting_days"] = times["meeting_days"]
+        enriched["meeting_start_min"] = times["meeting_start_min"]
+        enriched["meeting_end_min"] = times["meeting_end_min"]
 
     try:
         with RMPClient() as client:
