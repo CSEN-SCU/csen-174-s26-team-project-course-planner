@@ -226,27 +226,32 @@ def _build_schedule_block(
         else:
             not_offered.append(code)
 
-    # Only inject constraint if we actually matched some courses.
-    # An empty allowed-list would tell the model it cannot recommend anything.
-    if not offered:
-        return "", set()
+    lines: list[str] = []
 
-    lines = ["=== COURSES CONFIRMED IN NEXT-TERM SCHEDULE ==="]
-    lines.append(
-        "You MUST only recommend courses from the list below. "
-        "Every recommended course code MUST appear here exactly. "
-        "Do NOT invent courses that are not in this list."
-    )
-    for item in offered:
-        code = item.get("course", "?")
-        cat = item.get("category", "")
-        units = item.get("units", "?")
-        lines.append(f"  {code} ({cat}, {units}u)")
+    if offered:
+        lines.append("=== COURSES CONFIRMED IN NEXT-TERM SCHEDULE ===")
+        lines.append(
+            "You MUST only recommend courses from the list below. "
+            "Every recommended course code MUST appear here exactly. "
+            "Do NOT invent courses that are not in this list."
+        )
+        for item in offered:
+            code = item.get("course", "?")
+            cat = item.get("category", "")
+            units = item.get("units", "?")
+            lines.append(f"  {code} ({cat}, {units}u)")
+
     if not_offered:
         lines.append(
-            "\nThe following requirements are NOT offered next term — do NOT recommend them: "
+            "\n=== NOT OFFERED NEXT TERM — DO NOT RECOMMEND ===\n"
+            "The following required courses are NOT available next term. "
+            "Do NOT include them in your plan under any circumstances:\n  "
             + ", ".join(not_offered)
         )
+
+    if not lines:
+        return "", set()
+
     return "\n".join(lines) + "\n\n", offered_keys
 
 
@@ -362,6 +367,11 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
             "actually in `recommended` (or explicitly say `removed: <code>` for codes that "
             "were in CURRENT STATE but are dropped now). It MUST quote the exact "
             "`total_units` value you produced. Never invent courses.\n"
+            "REAL COURSES ONLY: Every course code you output MUST exist in the official SCU "
+            "schedule for next term. Do NOT invent department prefixes (e.g. CREL, PHIL, RELS) "
+            "or course numbers that are not listed in the 'COURSES CONFIRMED IN NEXT-TERM "
+            "SCHEDULE' block. If no religion/ethics course appears in the confirmed list, do "
+            "NOT recommend any religion/ethics course — skip that requirement this term.\n"
             "For `assistant_reply`: first person. If the student asked yes/no, start with "
             "'Yes,' or 'No,'. Never leave it empty.\n"
             "For engineering Senior Design (often COEN/CSEN 194, 195, 196 as a sequence): "
