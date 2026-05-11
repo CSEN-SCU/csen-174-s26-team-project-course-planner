@@ -10,6 +10,7 @@ from typing import Any
 from google.genai import types
 
 from agents.gemini_client import get_genai_client
+from utils.scu_course_schedule_xlsx import load_schedule_section_index, planned_section_keys
 
 DEFAULT_MODEL = "gemini-2.5-flash"
 FALLBACK_MODELS = ("gemini-2.5-flash-lite", "gemini-1.5-flash")
@@ -201,6 +202,64 @@ def _summarize_previous_plan(previous_plan: dict | None) -> str:
     )
 
 
+def _build_schedule_block(
+    missing_details: list[dict], schedule_index: dict
+) -> tuple[str, set[tuple[str, str]]]:
+    """
+    Return a prompt block listing which required courses are offered next term,
+    and the set of (subject, number) keys that are confirmed in the schedule.
+    """
+    if not schedule_index:
+        return "", set()
+
+    offered: list[dict] = []
+    not_offered: list[str] = []
+    offered_keys: set[tuple[str, str]] = set()
+
+    for item in missing_details:
+        code = (item.get("course") or "").strip()
+        keys = planned_section_keys(code)
+        found = {k for k in keys if k in schedule_index}
+        if found:
+            offered.append(item)
+            offered_keys |= found
+        else:
+            not_offered.append(code)
+
+    lines = ["=== COURSES CONFIRMED IN NEXT-TERM SCHEDULE ==="]
+    lines.append(
+        "You MUST only recommend courses from the list below. "
+        "Every recommended course code MUST appear here exactly. "
+        "Do NOT invent courses that are not in this list."
+    )
+    for item in offered:
+        code = item.get("course", "?")
+        cat = item.get("category", "")
+        units = item.get("units", "?")
+        lines.append(f"  {code} ({cat}, {units}u)")
+    if not_offered:
+        lines.append(
+            "\nThe following requirements are NOT offered next term — do NOT recommend them: "
+            + ", ".join(not_offered)
+        )
+    return "\n".join(lines) + "\n\n", offered_keys
+
+
+def _filter_to_schedule(
+    recommended: list[dict], offered_keys: set[tuple[str, str]]
+) -> list[dict]:
+    """Remove any LLM-invented courses that are not in the schedule index."""
+    if not offered_keys:
+        return recommended
+    out = []
+    for item in recommended:
+        code = (item.get("course") or "").strip()
+        keys = planned_section_keys(code)
+        if keys & offered_keys:
+            out.append(item)
+    return out
+
+
 def run_planning_agent(
     missing_details: list[dict],
     user_preference: str,
@@ -222,6 +281,9 @@ def run_planning_agent(
     previous_plan: optional dict from the last UI plan for follow-up turns.
     """
     model = os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
+
+    schedule_index = load_schedule_section_index()
+    schedule_block, offered_keys = _build_schedule_block(missing_details, schedule_index)
 
     memory_block = _build_memory_block(memory_snippets)
     prev_block = _summarize_previous_plan(previous_plan)
@@ -248,7 +310,7 @@ def run_planning_agent(
         "exact `total_units` you put in the JSON.\n"
     )
 
-    prompt = f"""{memory_block}{prev_block}=== STUDENT REQUIREMENTS (gap analysis) ===
+    prompt = f"""{memory_block}{prev_block}{schedule_block}=== STUDENT REQUIREMENTS (gap analysis) ===
 {json.dumps(missing_details, ensure_ascii=False, indent=2)}
 
 === CURRENT ASK (this is the only instruction you must follow) ===
@@ -352,6 +414,8 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
         ) from e
 
     raw_recommended = parsed.get("recommended") or []
+    # Remove any courses the LLM invented that aren't in the confirmed schedule
+    raw_recommended = _filter_to_schedule(raw_recommended, offered_keys)
     paired = _pair_lab_corequirements(raw_recommended, missing_details)
     if paired != raw_recommended:
         parsed["recommended"] = paired
