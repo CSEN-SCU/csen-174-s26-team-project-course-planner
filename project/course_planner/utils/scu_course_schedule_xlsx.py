@@ -75,7 +75,9 @@ def _find_schedule_path(explicit: Path | None) -> Path | None:
     return None
 
 
-def _parse_section_subject_number(course_section: str | None) -> tuple[str, str] | None:
+def _parse_section_subject_number(
+    course_section: str | None,
+) -> tuple[str, str] | None:
     if not course_section or not isinstance(course_section, str):
         return None
     head = course_section.split(" - ")[0].strip().upper()
@@ -83,6 +85,19 @@ def _parse_section_subject_number(course_section: str | None) -> tuple[str, str]
     if not m:
         return None
     return m.group(1), m.group(2)
+
+
+def _parse_section_subject_number_with_sec(
+    course_section: str | None,
+) -> tuple[str, str, int] | None:
+    """Same as above but also returns the section number (e.g. '1' from 'CSEN 194L-1')."""
+    if not course_section or not isinstance(course_section, str):
+        return None
+    head = course_section.split(" - ")[0].strip().upper()
+    m = re.match(r"^([A-Z]{2,8})\s+(\d+[A-Z]?)\s*-\s*(\d+)\s*$", head)
+    if not m:
+        return None
+    return m.group(1), m.group(2), int(m.group(3))
 
 
 def _parse_days(cell: Any) -> list[int]:
@@ -357,3 +372,110 @@ def meeting_times_for_course(
                 "meeting_end_min": entry["meeting_end_min"],
             }
     return None
+
+
+def load_all_course_sections(
+    path: "Path | None" = None,
+) -> "dict[tuple[str, str], list[dict[str, Any]]]":
+    """
+    Return every lab/lecture section row as a list per (subject, number).
+    Each entry: {section, meeting_days, meeting_start_min, meeting_end_min, instructors}
+    Useful for displaying all available lab sections to the student.
+    """
+    p = _find_schedule_path(path)
+    if p is None:
+        return {}
+
+    result: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    wb = load_workbook(p, read_only=True, data_only=True)
+    try:
+        ws = wb.active
+        it = ws.iter_rows(values_only=True)
+        header_row = next(it, None)
+        if not header_row:
+            return {}
+        h = [str(c).strip() if c is not None else "" for c in header_row]
+
+        try:
+            idx_sec = h.index("Course Section")
+        except ValueError:
+            return {}
+        idx_inst = next((i for i, x in enumerate(h) if x == "All Instructors"), None)
+        idx_days  = _find_col(h, _DAYS_HEADERS)
+        idx_start = _find_col(h, _START_HEADERS)
+        idx_end   = _find_col(h, _END_HEADERS)
+        idx_times = _find_col(h, _TIMES_HEADERS)
+
+        def _get(row: tuple, idx: "int | None") -> Any:
+            if idx is None or idx >= len(row):
+                return None
+            return row[idx]
+
+        for row in it:
+            if not row or idx_sec >= len(row):
+                continue
+            parsed = _parse_section_subject_number_with_sec(row[idx_sec])
+            if not parsed:
+                continue
+            subj, num, sec_num = parsed
+
+            names = _split_instructor_aliases(_get(row, idx_inst)) if idx_inst is not None else []
+
+            days: list[int] = []
+            raw_days = _get(row, idx_days)
+            if raw_days:
+                days = _parse_days(raw_days)
+            elif idx_times is not None:
+                days = _parse_days(_get(row, idx_times))
+
+            time_range: tuple[int, int] | None = None
+            if idx_start is not None and idx_end is not None:
+                raw_s = _get(row, idx_start)
+                raw_e = _get(row, idx_end)
+                if raw_s and raw_e:
+                    s = _parse_single_time(str(raw_s))
+                    e = _parse_single_time(str(raw_e))
+                    if s is not None and e is not None:
+                        off_s = _offset(s)
+                        off_e = _offset(e)
+                        if off_s < off_e:
+                            time_range = (off_s, off_e)
+            if time_range is None and idx_times is not None:
+                time_range = _parse_time_range(_get(row, idx_times))
+
+            key = (subj, num)
+            result.setdefault(key, []).append({
+                "section": sec_num,
+                "meeting_days": days,
+                "meeting_start_min": time_range[0] if time_range else None,
+                "meeting_end_min": time_range[1] if time_range else None,
+                "instructors": names,
+            })
+
+        # Mirror ECEN ↔ ELEN
+        for (subj, num) in list(result.keys()):
+            if subj == "ECEN":
+                result.setdefault(("ELEN", num), result[(subj, num)])
+            elif subj == "ELEN":
+                result.setdefault(("ECEN", num), result[(subj, num)])
+
+    finally:
+        wb.close()
+
+    return result
+
+
+def all_sections_for_course(
+    course_code: str,
+    sections_index: "dict[tuple[str, str], list[dict[str, Any]]]",
+) -> "list[dict[str, Any]]":
+    """Return all schedule sections for a course code, combining COEN/CSEN aliases."""
+    out: list[dict[str, Any]] = []
+    seen_secs: set[int] = set()
+    for k in planned_section_keys(course_code):
+        for sec in sections_index.get(k, []):
+            if sec["section"] not in seen_secs:
+                seen_secs.add(sec["section"])
+                out.append(sec)
+    out.sort(key=lambda s: s["section"])
+    return out

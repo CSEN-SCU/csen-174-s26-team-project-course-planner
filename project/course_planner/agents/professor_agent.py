@@ -22,6 +22,8 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
     RMPClient = None
 
 from utils.scu_course_schedule_xlsx import (
+    all_sections_for_course,
+    load_all_course_sections,
     load_schedule_section_index,
     meeting_times_for_course,
     scheduled_instructors_for_course,
@@ -305,7 +307,7 @@ def _professors_strictly_from_schedule(
     return out
 
 
-def _enrich_one_course(course: dict, *, schedule_index: dict) -> dict:
+def _enrich_one_course(course: dict, *, schedule_index: dict, sections_index: dict) -> dict:
     """One course: own client + paginated search + top professors by rating within the department."""
     enriched = dict(course)
     enriched["professors"] = []
@@ -321,6 +323,11 @@ def _enrich_one_course(course: dict, *, schedule_index: dict) -> dict:
         enriched["meeting_days"] = times["meeting_days"]
         enriched["meeting_start_min"] = times["meeting_start_min"]
         enriched["meeting_end_min"] = times["meeting_end_min"]
+
+    # Attach all available sections so the UI can show section choices
+    all_secs = all_sections_for_course(course_code, sections_index)
+    if all_secs:
+        enriched["all_sections"] = all_secs
 
     try:
         with RMPClient() as client:
@@ -431,6 +438,7 @@ def run_professor_agent(recommended_courses: list[dict]) -> list[dict]:
     if not recommended_courses:
         return []
     schedule_index = load_schedule_section_index()
+    sections_index = load_all_course_sections()
 
     if RMPClient is None:
         results = []
@@ -453,13 +461,16 @@ def run_professor_agent(recommended_courses: list[dict]) -> list[dict]:
                 enriched["meeting_days"] = times["meeting_days"]
                 enriched["meeting_start_min"] = times["meeting_start_min"]
                 enriched["meeting_end_min"] = times["meeting_end_min"]
+            all_secs = all_sections_for_course(code, sections_index)
+            if all_secs:
+                enriched["all_sections"] = all_secs
             results.append(enriched)
         return results
     workers = max(1, min(_MAX_PARALLEL_COURSES, len(recommended_courses)))
     with ThreadPoolExecutor(max_workers=workers) as executor:
         return list(
             executor.map(
-                partial(_enrich_one_course, schedule_index=schedule_index),
+                partial(_enrich_one_course, schedule_index=schedule_index, sections_index=sections_index),
                 recommended_courses,
             )
         )

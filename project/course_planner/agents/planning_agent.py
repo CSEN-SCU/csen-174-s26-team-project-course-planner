@@ -251,16 +251,16 @@ def _build_schedule_block(
 
 
 def _filter_to_schedule(
-    recommended: list[dict], offered_keys: set[tuple[str, str]]
+    recommended: list[dict], schedule_index: dict
 ) -> list[dict]:
-    """Remove any LLM-invented courses that are not in the schedule index."""
-    if not offered_keys:
+    """Remove any LLM-invented courses that don't exist in the next-term schedule at all."""
+    if not schedule_index:
         return recommended
     out = []
     for item in recommended:
         code = (item.get("course") or "").strip()
         keys = planned_section_keys(code)
-        if keys & offered_keys:
+        if any(k in schedule_index for k in keys):
             out.append(item)
     return out
 
@@ -419,8 +419,8 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
         ) from e
 
     raw_recommended = parsed.get("recommended") or []
-    # Remove any courses the LLM invented that aren't in the confirmed schedule
-    raw_recommended = _filter_to_schedule(raw_recommended, offered_keys)
+    # Remove any courses the LLM invented that don't exist in the schedule at all
+    raw_recommended = _filter_to_schedule(raw_recommended, schedule_index)
     paired = _pair_lab_corequirements(raw_recommended, missing_details)
     if paired != raw_recommended:
         parsed["recommended"] = paired

@@ -6,6 +6,20 @@ import {
   WEEKDAY_LABELS,
 } from "../types";
 import { recommendedToCalendarBlocks, type TbdCourse } from "../utils/planCalendar";
+import { CALENDAR_START_HOUR as _CSH } from "../types";
+
+const DAY_ABBR = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+
+function sectionTimeLabel(sec: { meeting_days: number[]; meeting_start_min: number | null; meeting_end_min: number | null }): string {
+  if (!sec.meeting_days.length || sec.meeting_start_min == null || sec.meeting_end_min == null) return "TBD";
+  const base = _CSH * 60;
+  const fmt = (min: number) => {
+    const d = new Date(); d.setHours(Math.floor((base + min) / 60), (base + min) % 60, 0, 0);
+    return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  };
+  const days = sec.meeting_days.map((d) => DAY_ABBR[d] ?? "").join("/");
+  return `${days}  ${fmt(sec.meeting_start_min)} – ${fmt(sec.meeting_end_min)}`;
+}
 
 const SLOT_MINUTES = 30;
 const SLOT_COUNT = CALENDAR_SPAN_MINUTES / SLOT_MINUTES;
@@ -156,35 +170,49 @@ export function CalendarView({ recommendedCourses, onRemoveCourse, onSlotClick }
           </div>
         </div>
 
-        {/* TBD courses — no confirmed meeting time in the schedule */}
+        {/* TBD courses — no confirmed meeting time, or multi-section labs to choose from */}
         {tbdCourses.length > 0 && (
           <div className="min-w-[720px] rounded-lg border border-amber-200 bg-amber-50 shadow-sm px-4 py-3">
-            <p className="text-xs font-semibold text-amber-700 mb-2 flex items-center gap-1.5">
+            <p className="text-xs font-semibold text-amber-700 mb-3 flex items-center gap-1.5">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
                 <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-              Meeting time not confirmed — check with your instructor or the registrar
+              Choose a section / confirm meeting time with instructor or registrar
             </p>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-3">
               {tbdCourses.map((c) => (
                 <div
                   key={c.id}
-                  className="flex items-start gap-2 rounded-md border border-amber-300 bg-white px-3 py-2 text-sm shadow-sm"
+                  className="rounded-md border border-amber-300 bg-white px-3 py-2 shadow-sm min-w-[200px]"
                 >
-                  <div className="min-w-0">
-                    <p className="font-semibold text-[var(--scu-text)] text-xs">{c.code}</p>
-                    {c.title && <p className="text-[10px] text-neutral-500 truncate">{c.title}</p>}
-                    <p className="text-[10px] text-neutral-400">{c.professor}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-[var(--scu-text)] text-xs">{c.code}</p>
+                      {c.title && <p className="text-[10px] text-neutral-500">{c.title}</p>}
+                      <p className="text-[10px] text-neutral-400">{c.professor}</p>
+                    </div>
+                    {onRemoveCourse && (
+                      <button
+                        type="button"
+                        onClick={() => onRemoveCourse(c.index)}
+                        className="shrink-0 rounded p-0.5 text-neutral-300 hover:text-red-500 hover:bg-red-50 transition"
+                        aria-label={`Remove ${c.code}`}
+                      >
+                        <XIcon />
+                      </button>
+                    )}
                   </div>
-                  {onRemoveCourse && (
-                    <button
-                      type="button"
-                      onClick={() => onRemoveCourse(c.index)}
-                      className="shrink-0 rounded p-0.5 text-neutral-300 hover:text-red-500 hover:bg-red-50 transition"
-                      aria-label={`Remove ${c.code}`}
-                    >
-                      <XIcon />
-                    </button>
+                  {c.allSections && c.allSections.length > 0 ? (
+                    <div className="mt-1.5 space-y-0.5">
+                      {c.allSections.map((sec) => (
+                        <p key={sec.section} className="text-[10px] text-neutral-600 font-mono">
+                          <span className="font-semibold text-amber-700">§{sec.section}</span>{" "}
+                          {sectionTimeLabel(sec)}
+                        </p>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-[10px] text-neutral-400 italic">Time not yet posted</p>
                   )}
                 </div>
               ))}

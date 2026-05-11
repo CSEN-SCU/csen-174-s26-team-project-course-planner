@@ -26,12 +26,21 @@ function professorLabel(item: Record<string, unknown>): string {
   return "TBA";
 }
 
+export type ScheduleSection = {
+  section: number;
+  meeting_days: number[];
+  meeting_start_min: number | null;
+  meeting_end_min: number | null;
+  instructors: string[];
+};
+
 export type TbdCourse = {
   id: string;
   code: string;
   title?: string;
   professor: string;
   index: number;
+  allSections?: ScheduleSection[];
 };
 
 export type CalendarResult = {
@@ -115,10 +124,13 @@ export function recommendedToCalendarBlocks(
       return;
     }
 
-    // Real meeting times from schedule xlsx — one block per meeting day
+    // Real meeting times from schedule xlsx — one block per meeting day.
+    // For multi-section labs, show the first section on the calendar and
+    // surface all alternatives as TBD so the student can pick their section.
     const meetingDays = item.meeting_days;
     const meetingStart = item.meeting_start_min;
     const meetingEnd = item.meeting_end_min;
+    const allSections = Array.isArray(item.all_sections) ? (item.all_sections as ScheduleSection[]) : undefined;
     if (
       Array.isArray(meetingDays) &&
       meetingDays.length > 0 &&
@@ -126,6 +138,11 @@ export function recommendedToCalendarBlocks(
       typeof meetingEnd === "number" &&
       meetingStart < meetingEnd
     ) {
+      // Multi-section lab: send to TBD so student can choose their section
+      if (allSections && allSections.length > 1) {
+        tbd.push({ id: idBase, code, title, professor, index: i, allSections });
+        return;
+      }
       meetingDays.forEach((dayIdx: number) => {
         claim(dayIdx, meetingStart, meetingEnd);
         blocks.push({
@@ -142,7 +159,8 @@ export function recommendedToCalendarBlocks(
     }
 
     // No schedule data — do NOT make up a time; surface as TBD
-    tbd.push({ id: idBase, code, title, professor, index: i });
+    const allSections = Array.isArray(item.all_sections) ? (item.all_sections as ScheduleSection[]) : undefined;
+    tbd.push({ id: idBase, code, title, professor, index: i, allSections });
 
     // Still use hash-based slot for manually-placed only — here just skip
     void findFreeSlot; // referenced to avoid dead-code lint; not used for TBD
