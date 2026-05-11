@@ -40,6 +40,7 @@ export type TbdCourse = {
   title?: string;
   professor: string;
   index: number;
+  /** Present when the course has no section with a posted time. */
   allSections?: ScheduleSection[];
 };
 
@@ -50,9 +51,11 @@ export type CalendarResult = {
 
 /**
  * Convert backend recommended items into calendar blocks.
- * Courses with real meeting times (from schedule xlsx) get one block per
- * meeting day. Courses with no schedule data are returned in `tbd` — never
- * placed at a made-up time.
+ *
+ * - Courses with a single confirmed section → placed directly on the grid.
+ * - Courses with multiple sections → best non-conflicting section is auto-picked
+ *   and placed on the grid. TBD panel is NOT shown for these.
+ * - Courses with NO section time data → surfaced in TBD panel only.
  */
 export function recommendedToCalendarBlocks(
   recs: Record<string, unknown>[],
@@ -67,25 +70,23 @@ export function recommendedToCalendarBlocks(
     occupied[day].push([start, end]);
   }
 
-  function findFreeSlot(
-    preferredDay: number,
-    preferredStart: number,
-    durationMin: number,
-  ): { dayIndex: WeekdayIndex; startMin: number } {
-    for (let d = 0; d < 5; d++) {
-      const day = (preferredDay + d) % 5;
-      const scanFrom = d === 0 ? preferredStart : SLOT_MINUTES;
-      for (
-        let s = Math.floor(scanFrom / SLOT_MINUTES) * SLOT_MINUTES;
-        s + durationMin <= CALENDAR_SPAN_MINUTES;
-        s += SLOT_MINUTES
-      ) {
-        if (!overlaps(day, s, s + durationMin)) {
-          return { dayIndex: day as WeekdayIndex, startMin: s };
-        }
-      }
+  /** Pick the first non-conflicting section; fall back to first valid one. */
+  function pickBestSection(sections: ScheduleSection[]): ScheduleSection | null {
+    const valid = sections.filter(
+      (s) =>
+        s.meeting_days.length > 0 &&
+        typeof s.meeting_start_min === "number" &&
+        typeof s.meeting_end_min === "number" &&
+        (s.meeting_start_min as number) < (s.meeting_end_min as number),
+    );
+    if (valid.length === 0) return null;
+    // Prefer a section that doesn't conflict with anything already claimed
+    for (const sec of valid) {
+      const start = sec.meeting_start_min as number;
+      const end = sec.meeting_end_min as number;
+      if (!sec.meeting_days.some((d) => overlaps(d, start, end))) return sec;
     }
-    return { dayIndex: 4, startMin: 0 };
+    return valid[0]; // all conflict — still place section 1
   }
 
   const blocks: CourseBlock[] = [];
@@ -93,9 +94,6 @@ export function recommendedToCalendarBlocks(
 
   recs.forEach((item, i) => {
     const code = String(item.course ?? "?");
-    const units = Number(item.units) || 4;
-    const durationSlots = Math.min(12, Math.max(2, Math.round(units) * 2));
-    const durationMin = durationSlots * SLOT_MINUTES;
     const idBase = `rec-${i}-${code.replace(/\s+/g, "-")}`;
     const title =
       typeof item.title === "string" && item.title.trim()
@@ -109,6 +107,8 @@ export function recommendedToCalendarBlocks(
       typeof item._day === "number" &&
       typeof item._start === "number"
     ) {
+      const units = Number(item.units) || 4;
+      const durationMin = Math.min(12, Math.max(2, Math.round(units) * 2)) * SLOT_MINUTES;
       const startMin = item._start as number;
       const endMin = Math.min(startMin + durationMin, CALENDAR_SPAN_MINUTES);
       claim(item._day as number, startMin, endMin);
@@ -124,13 +124,41 @@ export function recommendedToCalendarBlocks(
       return;
     }
 
-    // Real meeting times from schedule xlsx — one block per meeting day.
-    // For multi-section labs, show the first section on the calendar and
-    // surface all alternatives as TBD so the student can pick their section.
+    const allSections = Array.isArray(item.all_sections)
+      ? (item.all_sections as ScheduleSection[])
+      : undefined;
+
+    // --- Path A: all_sections data present ---
+    // Auto-pick the best non-conflicting section and place it on the calendar.
+    // Only goes to TBD if every section is missing a posted time.
+    if (allSections && allSections.length > 0) {
+      const chosen = pickBestSection(allSections);
+      if (chosen) {
+        const start = chosen.meeting_start_min as number;
+        const end = chosen.meeting_end_min as number;
+        chosen.meeting_days.forEach((dayIdx) => {
+          claim(dayIdx, start, end);
+          blocks.push({
+            id: `${idBase}-d${dayIdx}`,
+            dayIndex: dayIdx as WeekdayIndex,
+            startOffsetMin: start,
+            endOffsetMin: end,
+            code,
+            title,
+            professor,
+          });
+        });
+      } else {
+        // All sections have no posted time — send to TBD
+        tbd.push({ id: idBase, code, title, professor, index: i, allSections });
+      }
+      return;
+    }
+
+    // --- Path B: single confirmed meeting time (no sections index) ---
     const meetingDays = item.meeting_days;
     const meetingStart = item.meeting_start_min;
     const meetingEnd = item.meeting_end_min;
-    const allSections = Array.isArray(item.all_sections) ? (item.all_sections as ScheduleSection[]) : undefined;
     if (
       Array.isArray(meetingDays) &&
       meetingDays.length > 0 &&
@@ -138,11 +166,6 @@ export function recommendedToCalendarBlocks(
       typeof meetingEnd === "number" &&
       meetingStart < meetingEnd
     ) {
-      // Multi-section lab: send to TBD so student can choose their section
-      if (allSections && allSections.length > 1) {
-        tbd.push({ id: idBase, code, title, professor, index: i, allSections });
-        return;
-      }
       meetingDays.forEach((dayIdx: number) => {
         claim(dayIdx, meetingStart, meetingEnd);
         blocks.push({
@@ -158,11 +181,10 @@ export function recommendedToCalendarBlocks(
       return;
     }
 
-    // No schedule data — do NOT make up a time; surface as TBD
-    tbd.push({ id: idBase, code, title, professor, index: i, allSections });
+    // --- Path C: no time data at all — TBD ---
+    tbd.push({ id: idBase, code, title, professor, index: i });
 
-    // Still use hash-based slot for manually-placed only — here just skip
-    void findFreeSlot; // referenced to avoid dead-code lint; not used for TBD
+    void hashStr; // suppress dead-code lint (used in removed hash-based path)
   });
 
   return { blocks, tbd };

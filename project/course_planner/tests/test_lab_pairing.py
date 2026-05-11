@@ -126,6 +126,19 @@ def test_pair_idempotent_when_pair_already_present():
 # ---------------------------------------------------------------------------
 
 
+def _fake_schedule(*codes: str) -> dict:
+    """Build a minimal fake schedule index for monkeypatching."""
+    index = {}
+    for code in codes:
+        parts = code.split()
+        if len(parts) == 2:
+            index[(parts[0], parts[1])] = {
+                "instructors": [], "meeting_days": [],
+                "meeting_start_min": None, "meeting_end_min": None,
+            }
+    return index
+
+
 def test_run_planning_agent_auto_pairs_and_recomputes_total(monkeypatch):
     """The model returns lecture-only; the agent fills in the lab + new total."""
     reply = {
@@ -138,6 +151,10 @@ def test_run_planning_agent_auto_pairs_and_recomputes_total(monkeypatch):
         "assistant_reply": "Here is a balanced first cut.",
     }
     monkeypatch.setattr(planning_agent, "get_genai_client", lambda **_kw: _stub_client(reply))
+    monkeypatch.setattr(
+        planning_agent, "load_schedule_section_index",
+        lambda: _fake_schedule("CSEN 194", "CSEN 194L", "COEN 194", "COEN 194L", "PHIL 11"),
+    )
 
     out = planning_agent.run_planning_agent(
         missing_details=[
@@ -170,6 +187,10 @@ def test_run_planning_agent_does_not_pair_when_lab_not_in_gap(monkeypatch):
         "assistant_reply": "Senior Design start.",
     }
     monkeypatch.setattr(planning_agent, "get_genai_client", lambda **_kw: _stub_client(reply))
+    monkeypatch.setattr(
+        planning_agent, "load_schedule_section_index",
+        lambda: _fake_schedule("CSEN 194", "COEN 194"),
+    )
 
     out = planning_agent.run_planning_agent(
         missing_details=[
@@ -195,6 +216,10 @@ def test_run_planning_agent_pairs_phys_lecture_with_phys_lab(monkeypatch):
         "assistant_reply": "Solid science quarter.",
     }
     monkeypatch.setattr(planning_agent, "get_genai_client", lambda **_kw: _stub_client(reply))
+    monkeypatch.setattr(
+        planning_agent, "load_schedule_section_index",
+        lambda: _fake_schedule("PHYS 31", "PHYS 31L"),
+    )
 
     out = planning_agent.run_planning_agent(
         missing_details=[
