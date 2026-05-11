@@ -1,0 +1,13 @@
+{
+  "name": "course-planner-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "npm --prefix .. test",
+    "test:ismael": "npm --prefix .. run test:ismael",
+    "test:jason": "npm --prefix .. run test:jason",
+    "test:joey": "npm --prefix .. run test:joey",
+    "test:jiasheng": "npm --prefix .. run test:jiasheng"
+  }
+}
+

@@ -1,6 +1,6 @@
 # Part 1: Overview
 
-This week we worked on setting up the tests that will be used for Test Driven Development throughout the course of hte project. We each wrote tests based on ownership as assigned in `architecture/architecture.md`. Tests can be found in the `project/api/tests` and `project/tests` folders and are labeled by who created them. 
+This week we worked on setting up the tests that will be used for Test Driven Development throughout the course of the project. We each wrote tests based on ownership as assigned in `architecture/architecture.md`. Tests can be found in the `project/course_planner/tests` folder and are labeled by who created them. 
 
 
 # Part 2: Red -> Green Tests
@@ -15,7 +15,7 @@ We installed the `obra/superpowers` **test-driven-development** skill because it
 
 # Part 4: AI critique
 
-We picked two AI-generated tests from `project/api/tests/ai_generated/sprint1/`.
+We picked two AI-generated tests from `project/course_planner/tests/api/ai_generated/sprint1/`.
 
 
 1) `jiasheng.session-cookie.secure-flag.test.ts`
@@ -29,10 +29,10 @@ This test expresses a user/security need (stored passwords should not reveal reu
 Before/after diff (improved AI-generated test):
 
 ```diff
-diff --git a/project/api/tests/ai_generated/sprint1/jiasheng.session-cookie.secure-flag.test.ts b/project/api/tests/ai_generated/sprint1/jiasheng.session-cookie.secure-flag.test.ts
+diff --git a/project/course_planner/tests/api/ai_generated/sprint1/jiasheng.session-cookie.secure-flag.test.ts b/project/course_planner/tests/api/ai_generated/sprint1/jiasheng.session-cookie.secure-flag.test.ts
 index 89a7c2a..f1d3a21 100644
---- a/project/api/tests/ai_generated/sprint1/jiasheng.session-cookie.secure-flag.test.ts
-+++ b/project/api/tests/ai_generated/sprint1/jiasheng.session-cookie.secure-flag.test.ts
+--- a/project/course_planner/tests/api/ai_generated/sprint1/jiasheng.session-cookie.secure-flag.test.ts
++++ b/project/course_planner/tests/api/ai_generated/sprint1/jiasheng.session-cookie.secure-flag.test.ts
 @@ -3,20 +3,32 @@ import { describe, expect, test } from "vitest";
  // AI-generated (TDD skill loaded): session cookie respects environment security settings.
  describe("auth/session cookie flags", () => {

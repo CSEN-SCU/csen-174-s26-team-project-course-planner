@@ -38,7 +38,7 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: npm test
 
-      - name: Run W5 test suite (project/tests via web Vitest config)
+      - name: Run W5 test suite (course_planner/tests via web Vitest config)
         working-directory: project/web
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}

@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
-import { generateSchedulePlans, getAiProvider } from "../../api/src/ai/scheduleAi.js";
+import { generateSchedulePlans, getAiProvider } from "../../bridges/api/ai/scheduleAi";
 
-vi.mock("../../api/src/services/courseService.js", () => ({
+vi.mock("../../bridges/api/services/courseService.js", () => ({
   getEligibleCourseResults: vi.fn(async () => [{ code: "CSE 130", name: "Programming Languages" }])
 }));
 
@@ -33,3 +33,4 @@ describe("Jason AI provider selection", () => {
     expect(Array.isArray(plans)).toBe(true);
   });
 });
+

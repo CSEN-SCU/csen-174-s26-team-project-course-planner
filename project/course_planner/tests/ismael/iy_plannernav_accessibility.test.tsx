@@ -1,6 +1,6 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
-import { PlannerNav } from "../../web/src/components/PlannerNav";
+import { PlannerNav } from "../../bridges/web/components/PlannerNav";
 
 describe("PlannerNav accessibility", () => {
   it("marks the active tab for assistive technology", () => {
@@ -25,3 +25,4 @@ describe("PlannerNav accessibility", () => {
     expect(activeTabButton).toHaveAttribute("aria-current", "page");
   });
 });
+

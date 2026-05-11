@@ -6,7 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "NODE_PATH=./node_modules vitest run --config ../vitest.config.ts",
+    "test:ismael": "NODE_PATH=./node_modules vitest run --config ../vitest.config.ts ../course_planner/tests/ismael",
+    "test:jason": "NODE_PATH=./node_modules vitest run --config ../vitest.config.ts ../course_planner/tests/jason",
+    "test:joey": "NODE_PATH=./node_modules vitest run --config ../vitest.config.ts joey",
+    "test:jiasheng": "NODE_PATH=./node_modules vitest run --config ../vitest.config.ts jiasheng"
   },
   "dependencies": {
     "react": "^18.3.1",

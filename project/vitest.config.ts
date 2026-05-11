@@ -5,7 +5,9 @@ const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 export default {
   root: projectRoot,
   resolve: {
+    dedupe: ["vitest"],
     alias: {
+      vitest: fileURLToPath(new URL("./course_planner/node_modules/vitest", import.meta.url)),
       react: fileURLToPath(new URL("./web/node_modules/react", import.meta.url)),
       "react/jsx-runtime": fileURLToPath(new URL("./web/node_modules/react/jsx-runtime.js", import.meta.url)),
       "react-dom": fileURLToPath(new URL("./web/node_modules/react-dom", import.meta.url)),
@@ -15,7 +17,7 @@ export default {
   test: {
     globals: true,
     environment: "jsdom",
-    include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
-    setupFiles: ["web/src/test/setup.ts"]
+    include: ["course_planner/tests/**/*.test.ts", "course_planner/tests/**/*.test.tsx"],
+    setupFiles: ["course_planner/tests/vitest.setup.ts"]
   }
 };
