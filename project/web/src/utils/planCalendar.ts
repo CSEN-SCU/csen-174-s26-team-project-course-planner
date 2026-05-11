@@ -159,7 +159,6 @@ export function recommendedToCalendarBlocks(
     }
 
     // No schedule data — do NOT make up a time; surface as TBD
-    const allSections = Array.isArray(item.all_sections) ? (item.all_sections as ScheduleSection[]) : undefined;
     tbd.push({ id: idBase, code, title, professor, index: i, allSections });
 
     // Still use hash-based slot for manually-placed only — here just skip
