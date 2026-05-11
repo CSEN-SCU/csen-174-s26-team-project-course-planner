@@ -7,7 +7,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
-import { generatePlan, transcribeAudio, uploadTranscript } from "../api/client";
+import { generatePlan, pollWorkdayStatus, startWorkdaySync, transcribeAudio, uploadTranscript } from "../api/client";
 
 export type ChatUiMessage = {
   id: string;
@@ -79,6 +79,12 @@ export function ChatPanel({
   const [isListening, setIsListening] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState<"idle" | "recording" | "processing">("idle");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [workdayStatus, setWorkdayStatus] = useState<{
+    syncing: boolean;
+    label: string;
+    phase: "idle" | "active" | "done" | "error";
+  }>({ syncing: false, label: "", phase: "idle" });
+  const workdayPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -109,6 +115,51 @@ export function ChatPanel({
       setMessages((m) => [...m, { id: `a-${Date.now()}`, role: "assistant", content: `Upload failed: ${msg}` }]);
     }
   }, [userId, setMissingDetails, setFileUploaded, setMessages]);
+
+  const startWorkdayScrap = useCallback(async () => {
+    if (workdayStatus.syncing) return;
+    setWorkdayStatus({ syncing: true, label: "Opening Workday…", phase: "active" });
+
+    let jobId: string;
+    try {
+      const res = await startWorkdaySync(userId ?? "");
+      jobId = res.job_id;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setWorkdayStatus({ syncing: false, label: `Failed to start: ${msg}`, phase: "error" });
+      return;
+    }
+
+    // Poll every 2 s until done or error
+    workdayPollRef.current = setInterval(async () => {
+      try {
+        const job = await pollWorkdayStatus(jobId);
+        setWorkdayStatus({ syncing: job.status !== "done" && job.status !== "error", label: job.label ?? job.status, phase: job.status === "done" ? "done" : job.status === "error" ? "error" : "active" });
+
+        if (job.status === "done") {
+          clearInterval(workdayPollRef.current!);
+          const md = job.missing_details ?? [];
+          setMissingDetails(md);
+          setFileUploaded(true);
+          setMessages((m) => [...m, {
+            id: `a-${Date.now()}`,
+            role: "assistant",
+            content: `Workday sync complete! Found ${md.length} remaining requirements. What are your preferences for next quarter?`,
+          }]);
+        } else if (job.status === "error") {
+          clearInterval(workdayPollRef.current!);
+          setMessages((m) => [...m, {
+            id: `a-${Date.now()}`,
+            role: "assistant",
+            content: `Workday sync failed: ${job.error ?? "Unknown error"}`,
+          }]);
+        }
+      } catch {
+        clearInterval(workdayPollRef.current!);
+        setWorkdayStatus({ syncing: false, label: "Connection lost", phase: "error" });
+      }
+    }, 2000);
+  }, [userId, workdayStatus.syncing, setMissingDetails, setFileUploaded, setMessages]);
 
   const sendText = useCallback(async (text: string) => {
     const trimmed = text.trim();
@@ -349,6 +400,29 @@ export function ChatPanel({
           onChange={onFileChange}
         />
 
+        {/* Workday sync status bar */}
+        {workdayStatus.phase !== "idle" && (
+          <div className={`mb-2 flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium ${
+            workdayStatus.phase === "error"
+              ? "bg-red-50 text-red-700"
+              : workdayStatus.phase === "done"
+              ? "bg-emerald-50 text-emerald-700"
+              : "bg-blue-50 text-blue-700"
+          }`}>
+            {workdayStatus.syncing && (
+              <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-blue-500 animate-pulse" />
+            )}
+            <span className="flex-1 truncate">{workdayStatus.label}</span>
+            {!workdayStatus.syncing && (
+              <button
+                type="button"
+                onClick={() => setWorkdayStatus({ syncing: false, label: "", phase: "idle" })}
+                className="shrink-0 text-neutral-400 hover:text-neutral-600"
+              >✕</button>
+            )}
+          </div>
+        )}
+
         {/* Voice status bar */}
         {voiceStatus !== "idle" && (
           <div
@@ -397,6 +471,19 @@ export function ChatPanel({
             </button>
             <button
               type="button"
+              onClick={() => void startWorkdayScrap()}
+              disabled={workdayStatus.syncing}
+              title={workdayStatus.syncing ? "Syncing from Workday…" : "Sync from Workday"}
+              className={`rounded-md p-2 transition ${
+                workdayStatus.syncing
+                  ? "bg-blue-100 text-blue-500 cursor-wait"
+                  : "text-neutral-500 hover:bg-neutral-100 hover:text-blue-600"
+              }`}
+            >
+              {workdayStatus.syncing ? <SpinnerIcon /> : <WorkdayIcon />}
+            </button>
+            <button
+              type="button"
               onClick={() => void toggleVoice()}
               disabled={voiceStatus === "processing"}
               title={micLabel}
@@ -421,7 +508,7 @@ export function ChatPanel({
           </button>
         </div>
         <p className="mt-1.5 text-[10px] text-neutral-400">
-          Voice works in all browsers — powered by Gemini transcription.
+          Upload your transcript manually, or click <WorkdayIcon size={10} /> to sync directly from Workday.
         </p>
       </div>
     </aside>
@@ -466,6 +553,17 @@ function MicIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </svg>
+  );
+}
+
+function WorkdayIcon({ size = 20 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="2" y="3" width="20" height="18" rx="2" stroke="currentColor" strokeWidth="2" />
+      <path d="M7 8h10M7 12h10M7 16h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="19" cy="16" r="3" fill="currentColor" opacity="0.3" />
+      <path d="M17.5 16l1 1 2-2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }

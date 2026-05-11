@@ -90,6 +90,30 @@ export async function saveMemory(userId: string, type: string, content: string) 
   return data;
 }
 
+export async function startWorkdaySync(user_id: string, workday_url?: string): Promise<{ job_id: string }> {
+  const res = await fetch(`${API_BASE}/workday/sync`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_id, workday_url: workday_url ?? "" }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(errFromBody(data));
+  return data as { job_id: string };
+}
+
+export async function pollWorkdayStatus(job_id: string) {
+  const res = await fetch(`${API_BASE}/workday/status/${encodeURIComponent(job_id)}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(errFromBody(data));
+  return data as {
+    status: string;
+    label: string;
+    missing_details?: unknown[];
+    parsed_rows?: unknown[];
+    error?: string;
+  };
+}
+
 export async function generateFourYearPlan(
   missing_details: any[],
   user_id: string,
