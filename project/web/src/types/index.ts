@@ -41,3 +41,26 @@ export const WEEKDAY_LABELS = [
   "Thu",
   "Fri",
 ] as const;
+
+// ── Four-year plan types ─────────────────────────────────────────────────────
+
+export interface PlanCourse {
+  course: string;
+  title: string;
+  category: string;
+  units: number;
+  reason: string;
+}
+
+export interface QuarterPlan {
+  term: string;
+  courses: PlanCourse[];
+  total_units: number;
+}
+
+export interface FourYearPlan {
+  quarters: QuarterPlan[];
+  graduation_term: string;
+  total_remaining_units: number;
+  advice: string;
+}

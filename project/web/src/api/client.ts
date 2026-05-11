@@ -90,6 +90,21 @@ export async function saveMemory(userId: string, type: string, content: string) 
   return data;
 }
 
+export async function generateFourYearPlan(
+  missing_details: any[],
+  user_id: string,
+  preferences?: string,
+) {
+  const res = await fetch(`${API_BASE}/four-year-plan`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ missing_details, user_id, preferences: preferences ?? "" }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(errFromBody(data));
+  return data;
+}
+
 export async function login(username: string, password: string) {
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: "POST",
