@@ -22,9 +22,10 @@ function errFromBody(data: unknown): string {
   return JSON.stringify(data);
 }
 
-export async function uploadTranscript(file: File) {
+export async function uploadTranscript(file: File, userId?: string) {
   const formData = new FormData();
   formData.append("file", file);
+  if (userId) formData.append("user_id", userId);
   const res = await fetch(`${API_BASE}/upload/transcript`, {
     method: "POST",
     body: formData,
@@ -38,11 +39,12 @@ export async function generatePlan(
   missing_details: any[],
   user_preference: string,
   user_id: string,
+  previous_plan?: Record<string, unknown> | null,
 ) {
   const res = await fetch(`${API_BASE}/plan`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ missing_details, user_preference, user_id }),
+    body: JSON.stringify({ missing_details, user_preference, user_id, previous_plan: previous_plan ?? null }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(errFromBody(data));
@@ -51,6 +53,31 @@ export async function generatePlan(
 
 export async function getMemory(user_id: string) {
   const res = await fetch(`${API_BASE}/memory/${user_id}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(errFromBody(data));
+  return data;
+}
+
+
+export async function transcribeAudio(blob: Blob): Promise<string> {
+  const ext = blob.type.split("/")[1]?.split(";")[0] ?? "webm";
+  const formData = new FormData();
+  formData.append("file", blob, `recording.${ext}`);
+  const res = await fetch(`${API_BASE}/voice/transcribe`, {
+    method: "POST",
+    body: formData,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(errFromBody(data));
+  return (data.transcript as string) ?? "";
+}
+
+export async function saveMemory(userId: string, type: string, content: string) {
+  const res = await fetch(`${API_BASE}/memory/${userId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ type, content }),
+  });
   const data = await res.json();
   if (!res.ok) throw new Error(errFromBody(data));
   return data;

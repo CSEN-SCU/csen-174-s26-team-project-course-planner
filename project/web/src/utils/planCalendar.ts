@@ -28,34 +28,89 @@ function professorLabel(item: Record<string, unknown>): string {
 
 /**
  * Backend recommended items do not include meeting times; place blocks on the
- * grid deterministically so the calendar reflects the current plan.
+ * grid deterministically with collision detection so no two courses overlap on
+ * the same day.
  */
 export function recommendedToCalendarBlocks(
   recs: Record<string, unknown>[],
 ): CourseBlock[] {
+  // Track occupied [startMin, endMin) ranges per day
+  const occupied: Array<Array<[number, number]>> = [[], [], [], [], []];
+
+  function overlaps(day: number, start: number, end: number): boolean {
+    return occupied[day].some(([s, e]) => start < e && end > s);
+  }
+
+  function claim(day: number, start: number, end: number) {
+    occupied[day].push([start, end]);
+  }
+
+  function findFreeSlot(
+    preferredDay: number,
+    preferredStart: number,
+    durationMin: number,
+  ): { dayIndex: WeekdayIndex; startMin: number } {
+    // Try preferred day from preferred start, then fall through to other days
+    for (let d = 0; d < 5; d++) {
+      const day = (preferredDay + d) % 5;
+      // On fallback days start from 8:30 AM (slot 1) to avoid 8:00 AM pile-up
+      const scanFrom = d === 0 ? preferredStart : SLOT_MINUTES;
+      for (
+        let s = Math.floor(scanFrom / SLOT_MINUTES) * SLOT_MINUTES;
+        s + durationMin <= CALENDAR_SPAN_MINUTES;
+        s += SLOT_MINUTES
+      ) {
+        if (!overlaps(day, s, s + durationMin)) {
+          return { dayIndex: day as WeekdayIndex, startMin: s };
+        }
+      }
+    }
+    // Last resort (calendar completely full — should never happen in practice)
+    return { dayIndex: 4, startMin: 0 };
+  }
+
   return recs.map((item, i) => {
     const code = String(item.course ?? "?");
-    const h = hashStr(`${code}:${i}`);
-    const dayIndex = (h % 5) as WeekdayIndex;
     const units = Number(item.units) || 4;
-    const startSlot = 2 + (h % 12);
-    const durationSlots = Math.min(
-      12,
-      Math.max(2, Math.round(units) * 2),
-    );
-    const startOffsetMin = startSlot * SLOT_MINUTES;
-    const endOffsetMin = Math.min(
-      startOffsetMin + durationSlots * SLOT_MINUTES,
-      CALENDAR_SPAN_MINUTES,
-    );
-    return {
-      id: `rec-${i}-${code.replace(/\s+/g, "-")}`,
-      dayIndex,
-      startOffsetMin,
-      endOffsetMin: Math.max(endOffsetMin, startOffsetMin + SLOT_MINUTES * 2),
-      code,
-      professor: professorLabel(item),
-    };
+    const durationSlots = Math.min(12, Math.max(2, Math.round(units) * 2));
+    const durationMin = durationSlots * SLOT_MINUTES;
+    const id = `rec-${i}-${code.replace(/\s+/g, "-")}`;
+    const title =
+      typeof item.title === "string" && item.title.trim()
+        ? item.title.trim()
+        : undefined;
+    const professor = professorLabel(item);
+
+    // Manually placed course (user clicked a slot)
+    if (
+      item._manual === true &&
+      typeof item._day === "number" &&
+      typeof item._start === "number"
+    ) {
+      const startMin = item._start as number;
+      const endMin = Math.min(startMin + durationMin, CALENDAR_SPAN_MINUTES);
+      claim(item._day as number, startMin, endMin);
+      return {
+        id,
+        dayIndex: (item._day as number) as WeekdayIndex,
+        startOffsetMin: startMin,
+        endOffsetMin: endMin,
+        code,
+        title,
+        professor,
+      };
+    }
+
+    // Hash-based preferred position with collision avoidance
+    const h = hashStr(`${code}:${i}`);
+    const preferredDay = h % 5;
+    const preferredStart = (2 + (h % 12)) * SLOT_MINUTES; // 9:00 AM – 2:30 PM range
+
+    const { dayIndex, startMin } = findFreeSlot(preferredDay, preferredStart, durationMin);
+    const endMin = Math.min(startMin + durationMin, CALENDAR_SPAN_MINUTES);
+    claim(dayIndex, startMin, endMin);
+
+    return { id, dayIndex, startOffsetMin: startMin, endOffsetMin: endMin, code, title, professor };
   });
 }
 

@@ -1,14 +1,13 @@
 import {
+  useCallback,
+  useEffect,
   useRef,
   useState,
   type ChangeEventHandler,
   type Dispatch,
   type SetStateAction,
 } from "react";
-import {
-  generatePlan,
-  uploadTranscript,
-} from "../api/client";
+import { generatePlan, transcribeAudio, uploadTranscript } from "../api/client";
 
 export type ChatUiMessage = {
   id: string;
@@ -27,6 +26,8 @@ export type ChatPanelProps = {
   fileUploaded: boolean;
   setFileUploaded: (v: boolean) => void;
   onPlanGenerated: (plan: Record<string, unknown>) => void;
+  prefillInput?: string | null;
+  onPrefillConsumed?: () => void;
 };
 
 function planSummaryText(plan: Record<string, unknown>): string {
@@ -44,6 +45,21 @@ function planSummaryText(plan: Record<string, unknown>): string {
   return `${lines.join("\n")}\n\nTotal: ${tu} units.${adv}`;
 }
 
+
+// Pick the MIME type the browser supports
+function getBestMimeType(): string {
+  const candidates = [
+    "audio/webm;codecs=opus",
+    "audio/ogg;codecs=opus",
+    "audio/mp4",
+    "audio/webm",
+  ];
+  for (const t of candidates) {
+    if (MediaRecorder.isTypeSupported(t)) return t;
+  }
+  return "";
+}
+
 export function ChatPanel({
   userId,
   missingDetails,
@@ -55,134 +71,196 @@ export function ChatPanel({
   fileUploaded,
   setFileUploaded,
   onPlanGenerated,
+  prefillInput,
+  onPrefillConsumed,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
+  const [isListening, setIsListening] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState<"idle" | "recording" | "processing">("idle");
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const send = async () => {
-    const trimmed = input.trim();
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  useEffect(() => {
+    if (prefillInput) {
+      setInput(prefillInput);
+      onPrefillConsumed?.();
+      setTimeout(() => textareaRef.current?.focus(), 0);
+    }
+  }, [prefillInput, onPrefillConsumed]);
+
+  const processFile = useCallback(async (f: File) => {
+    try {
+      const data = await uploadTranscript(f, userId ?? undefined);
+      const md = (data.missing_details as unknown[]) ?? [];
+      setMissingDetails(md);
+      setFileUploaded(true);
+      const reply = `Got it! Found ${md.length} missing requirements${userId ? " and saved your progress" : ""}. What are your preferences for next quarter?`;
+      setMessages((m) => [...m, { id: `a-${Date.now()}`, role: "assistant", content: reply }]);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setMessages((m) => [...m, { id: `a-${Date.now()}`, role: "assistant", content: `Upload failed: ${msg}` }]);
+    }
+  }, [userId, setMissingDetails, setFileUploaded, setMessages]);
+
+  const sendText = useCallback(async (text: string) => {
+    const trimmed = text.trim();
     if (!trimmed) return;
-    const userMsgId = `u-${Date.now()}`;
+
     setMessages((m) => [
       ...m,
-      { id: userMsgId, role: "user", content: trimmed },
+      { id: `u-${Date.now()}`, role: "user", content: trimmed },
     ]);
-    setInput("");
 
     const lower = trimmed.toLowerCase();
-    const mentionsUpload = lower.includes("upload");
 
-    if (
-      !fileUploaded &&
-      (mentionsUpload || missingDetails.length === 0)
-    ) {
+    // Handle pending transcript update confirmation
+    if (pendingFile) {
+      if (lower === "yes" || lower.startsWith("yes") || lower.includes("update")) {
+        const f = pendingFile;
+        setPendingFile(null);
+        await processFile(f);
+        return;
+      } else {
+        setPendingFile(null);
+        setMessages((m) => [...m, { id: `a-${Date.now()}`, role: "assistant", content: "Got it — keeping your existing academic progress." }]);
+        return;
+      }
+    }
+
+    const loadingId = `l-${Date.now()}`;
+    setMessages((m) => [
+      ...m,
+      { id: loadingId, role: "assistant", content: "Thinking…" },
+    ]);
+
+    try {
+      const data = await generatePlan(
+        missingDetails as never[],
+        trimmed,
+        userId ?? "",
+        planResult,
+      );
+
+      // Conversational answer — don't touch the calendar
+      if (data.type === "answer") {
+        const reply = typeof data.reply === "string" && data.reply.trim()
+          ? data.reply.trim()
+          : "I'm not sure how to answer that. Try asking me to plan your schedule.";
+        setMessages((m) =>
+          m.map((msg) => msg.id === loadingId ? { ...msg, content: reply } : msg),
+        );
+        return;
+      }
+
+      // Planning response
+      if (!Array.isArray(data.recommended)) {
+        throw new Error("Invalid plan response from server.");
+      }
+      setPlanResult(data);
+      onPlanGenerated(data);
+
+      const assistantReply =
+        typeof data.assistant_reply === "string" && data.assistant_reply.trim()
+          ? data.assistant_reply.trim()
+          : planResult
+          ? `Here's your updated schedule:\n\n${planSummaryText(data)}`
+          : `Here's your recommended schedule for next quarter:\n\n${planSummaryText(data)}`;
+
+      const displayText =
+        typeof data.assistant_reply === "string" && data.assistant_reply.trim()
+          ? `${data.assistant_reply.trim()}\n\n${planSummaryText(data)}`
+          : assistantReply;
+
+      setMessages((m) =>
+        m.map((msg) =>
+          msg.id === loadingId ? { ...msg, content: displayText } : msg,
+        ),
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setMessages((m) =>
+        m.map((row) =>
+          row.id === loadingId
+            ? { ...row, content: `Error: ${msg}` }
+            : row,
+        ),
+      );
+    }
+  }, [missingDetails, userId, planResult, setPlanResult, onPlanGenerated, setMessages, pendingFile, processFile]);
+
+  const send = useCallback(async () => {
+    const trimmed = input.trim();
+    if (!trimmed) return;
+    setInput("");
+    await sendText(trimmed);
+  }, [input, sendText]);
+
+  const toggleVoice = useCallback(async () => {
+    // Stop if already recording
+    if (isListening) {
+      mediaRecorderRef.current?.stop();
+      return;
+    }
+
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
       setMessages((m) => [
         ...m,
         {
           id: `a-${Date.now()}`,
           role: "assistant",
-          content:
-            "Please upload your Academic Progress xlsx file first.",
+          content: "Microphone access denied. Please allow microphone access in your browser settings.",
         },
       ]);
       return;
     }
 
-    if ((missingDetails.length > 0 || fileUploaded) && !planResult) {
-      const loadingId = `l-${Date.now()}`;
-      setMessages((m) => [
-        ...m,
-        {
-          id: loadingId,
-          role: "assistant",
-          content: "Planning your schedule...",
-        },
-      ]);
-      try {
-        const data = await generatePlan(
-          missingDetails as any[],
-          trimmed,
-          userId ?? "",
-        );
-        if (!Array.isArray(data.recommended)) {
-          throw new Error("Invalid plan response from server.");
-        }
-        setPlanResult(data);
-        onPlanGenerated(data);
-        const summary = planSummaryText(data);
-        setMessages((m) =>
-          m.map((msg) =>
-            msg.id === loadingId
-              ? {
-                  ...msg,
-                  content: `Here's your recommended schedule for next quarter:\n\n${summary}`,
-                }
-              : msg,
-          ),
-        );
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        setMessages((m) =>
-          m.map((row) =>
-            row.id === loadingId
-              ? {
-                  ...row,
-                  content: `Could not generate a plan: ${msg}`,
-                }
-              : row,
-          ),
-        );
-      }
-      return;
-    }
+    const mimeType = getBestMimeType();
+    const recorder = mimeType
+      ? new MediaRecorder(stream, { mimeType })
+      : new MediaRecorder(stream);
 
-    if (planResult) {
-      const loadingId = `l-${Date.now()}`;
-      setMessages((m) => [
-        ...m,
-        {
-          id: loadingId,
-          role: "assistant",
-          content: "Planning your schedule...",
-        },
-      ]);
+    const chunks: Blob[] = [];
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunks.push(e.data);
+    };
+
+    recorder.onstop = async () => {
+      stream.getTracks().forEach((t) => t.stop());
+      setIsListening(false);
+      setVoiceStatus("processing");
+
+      const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || "audio/webm" });
       try {
-        const data = await generatePlan(
-          missingDetails as any[],
-          trimmed,
-          userId ?? "",
-        );
-        if (!Array.isArray(data.recommended)) {
-          throw new Error("Invalid plan response from server.");
+        const transcript = await transcribeAudio(blob);
+        setVoiceStatus("idle");
+        if (transcript.trim()) {
+          await sendText(transcript.trim());
         }
-        setPlanResult(data);
-        onPlanGenerated(data);
-        const summary = planSummaryText(data);
-        setMessages((m) =>
-          m.map((msg) =>
-            msg.id === loadingId
-              ? {
-                  ...msg,
-                  content: `Here's your updated schedule:\n\n${summary}`,
-                }
-              : msg,
-          ),
-        );
       } catch (e) {
+        setVoiceStatus("idle");
         const msg = e instanceof Error ? e.message : String(e);
-        setMessages((m) =>
-          m.map((row) =>
-            row.id === loadingId
-              ? {
-                  ...row,
-                  content: `Could not update the plan: ${msg}`,
-                }
-              : row,
-          ),
-        );
+        setMessages((m) => [
+          ...m,
+          { id: `a-${Date.now()}`, role: "assistant", content: `Voice transcription failed: ${msg}` },
+        ]);
       }
-    }
-  };
+    };
+
+    mediaRecorderRef.current = recorder;
+    recorder.start();
+    setIsListening(true);
+    setVoiceStatus("recording");
+  }, [isListening, sendText, setMessages]);
 
   const onFilePick = () => fileInputRef.current?.click();
 
@@ -195,15 +273,10 @@ export function ChatPanel({
     if (name.endsWith(".pdf")) {
       setMessages((m) => [
         ...m,
-        {
-          id: `a-${Date.now()}`,
-          role: "assistant",
-          content: "PDF analysis coming soon",
-        },
+        { id: `a-${Date.now()}`, role: "assistant", content: "PDF analysis coming soon" },
       ]);
       return;
     }
-
     if (!name.endsWith(".xlsx") && !name.endsWith(".xlsm")) {
       setMessages((m) => [
         ...m,
@@ -216,41 +289,35 @@ export function ChatPanel({
       return;
     }
 
-    void (async () => {
-      try {
-        const data = await uploadTranscript(f);
-        const md = (data.missing_details as unknown[]) ?? [];
-        setMissingDetails(md);
-        setFileUploaded(true);
-        const n = md.length;
-        setMessages((m) => [
-          ...m,
-          {
-            id: `a-${Date.now()}`,
-            role: "assistant",
-            content: `Got it! I found ${n} missing requirements. What are your preferences for next quarter?`,
-          },
-        ]);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        setMessages((m) => [
-          ...m,
-          {
-            id: `a-${Date.now()}`,
-            role: "assistant",
-            content: `Upload failed: ${msg}`,
-          },
-        ]);
-      }
-    })();
+    if (fileUploaded) {
+      setPendingFile(f);
+      setMessages((m) => [
+        ...m,
+        {
+          id: `a-${Date.now()}`,
+          role: "assistant",
+          content: "You already have academic progress saved. Would you like to update it with the new file? Reply **yes** to update or **no** to keep the current one.",
+        },
+      ]);
+    } else {
+      void processFile(f);
+    }
   };
+
+  const micLabel =
+    voiceStatus === "recording"
+      ? "Tap to stop"
+      : voiceStatus === "processing"
+      ? "Transcribing…"
+      : "Tap to speak";
 
   return (
     <aside className="flex w-[380px] shrink-0 flex-col border-l border-neutral-200 bg-[var(--scu-white)] shadow-sm">
-      <div className="shrink-0 border-b border-neutral-200 px-4 py-3">
-        <h2 className="text-sm font-semibold text-[var(--scu-text)]">
-          SCU Course Planner
-        </h2>
+      <div className="shrink-0 border-b border-neutral-200 px-4 py-3 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-[var(--scu-text)]">SCU Course Planner</h2>
+        {fileUploaded && (
+          <span className="text-[10px] text-emerald-600 font-medium">● Progress loaded</span>
+        )}
       </div>
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
@@ -260,7 +327,7 @@ export function ChatPanel({
             className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
           >
             <div
-              className={`max-w-[90%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
+              className={`max-w-[90%] rounded-lg px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap ${
                 msg.role === "user"
                   ? "bg-neutral-100 text-[var(--scu-text)]"
                   : "bg-[var(--scu-gray)] text-[var(--scu-text)] ring-1 ring-neutral-200"
@@ -270,18 +337,43 @@ export function ChatPanel({
             </div>
           </div>
         ))}
+        <div ref={messagesEndRef} />
       </div>
 
       <div className="shrink-0 border-t border-neutral-200 p-3">
         <input
           ref={fileInputRef}
           type="file"
-          accept=".pdf,.xlsx,.xlsm,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          accept=".pdf,.xlsx,.xlsm"
           className="hidden"
           onChange={onFileChange}
         />
+
+        {/* Voice status bar */}
+        {voiceStatus !== "idle" && (
+          <div
+            className={`mb-2 flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium ${
+              voiceStatus === "recording"
+                ? "bg-red-50 text-[var(--scu-red)]"
+                : "bg-neutral-50 text-neutral-500"
+            }`}
+          >
+            <span
+              className={`inline-block h-2 w-2 rounded-full ${
+                voiceStatus === "recording"
+                  ? "bg-[var(--scu-red)] animate-pulse"
+                  : "bg-neutral-400 animate-pulse"
+              }`}
+            />
+            {voiceStatus === "recording"
+              ? "Recording — tap mic to stop"
+              : "Sending to AI for transcription…"}
+          </div>
+        )}
+
         <div className="flex items-end gap-2">
           <textarea
+            ref={textareaRef}
             rows={2}
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -298,22 +390,25 @@ export function ChatPanel({
             <button
               type="button"
               onClick={onFilePick}
-              className="rounded-md p-2 text-neutral-500 hover:bg-neutral-100 hover:text-[var(--scu-text)]"
-              title="Attach PDF or Excel"
-              aria-label="Attach PDF or Excel"
+              className="rounded-md p-2 text-neutral-500 hover:bg-neutral-100"
+              title="Attach Excel file"
             >
               <PaperclipIcon />
             </button>
             <button
               type="button"
-              onClick={() => {
-                /* voice placeholder */
-              }}
-              className="rounded-md p-2 text-neutral-500 hover:bg-neutral-100 hover:text-[var(--scu-text)]"
-              title="Voice (coming soon)"
-              aria-label="Voice input placeholder"
+              onClick={() => void toggleVoice()}
+              disabled={voiceStatus === "processing"}
+              title={micLabel}
+              className={`rounded-md p-2 transition ${
+                voiceStatus === "recording"
+                  ? "bg-[var(--scu-red)] text-white"
+                  : voiceStatus === "processing"
+                  ? "bg-neutral-100 text-neutral-400 cursor-wait"
+                  : "text-neutral-500 hover:bg-neutral-100 hover:text-[var(--scu-text)]"
+              }`}
             >
-              <MicIcon />
+              {voiceStatus === "processing" ? <SpinnerIcon /> : <MicIcon />}
             </button>
           </div>
           <button
@@ -324,8 +419,8 @@ export function ChatPanel({
             Send
           </button>
         </div>
-        <p className="mt-2 text-[10px] text-neutral-400">
-          PDF and .xlsx only (mock). Voice is not connected.
+        <p className="mt-1.5 text-[10px] text-neutral-400">
+          Voice works in all browsers — powered by Gemini transcription.
         </p>
       </div>
     </aside>
@@ -369,6 +464,30 @@ function MicIcon() {
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function SpinnerIcon() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden
+      className="animate-spin"
+    >
+      <circle
+        cx="12"
+        cy="12"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeDasharray="32"
+        strokeDashoffset="12"
+        strokeLinecap="round"
       />
     </svg>
   );

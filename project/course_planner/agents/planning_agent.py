@@ -23,11 +23,12 @@ PLANNING_SCHEMA = {
                 "type": "OBJECT",
                 "properties": {
                     "course": {"type": "STRING"},
+                    "title": {"type": "STRING"},
                     "category": {"type": "STRING"},
                     "units": {"type": "INTEGER"},
                     "reason": {"type": "STRING"},
                 },
-                "required": ["course", "category", "units", "reason"],
+                "required": ["course", "title", "category", "units", "reason"],
             },
         },
         "total_units": {"type": "INTEGER"},
@@ -255,7 +256,7 @@ def run_planning_agent(
 
 {followup_instruction}
 Recommend a schedule for next term and output JSON (fields are constrained by the response schema):
-- recommended: each item has course, category, units, reason (**each reason at most ~60 characters**, one line)
+- recommended: each item has course, title (full catalog course name, e.g. "Software Engineering"), category, units, reason (**each reason at most ~60 characters**, one line)
 - total_units: integer total units for the plan (must equal the sum of `units` across `recommended`)
 - advice: overall guidance **at most ~300 characters**
 - assistant_reply: chat-style reply to the CURRENT ASK (~280 chars max). MUST be self-consistent with `recommended` and `total_units`.
@@ -298,7 +299,14 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
             "'Yes,' or 'No,'. Never leave it empty.\n"
             "For engineering Senior Design (often COEN/CSEN 194, 195, 196 as a sequence): "
             "students typically take **one per quarter in their final year**, in order; "
-            "respect that cadence in the plan and advice—do not defer the whole sequence without cause."
+            "respect that cadence in the plan and advice—do not defer the whole sequence without cause.\n"
+            "DOUBLE-TAGGED COURSES: When filling Core or GE requirements, **always prefer "
+            "courses that are double-tagged** (count toward more than one requirement "
+            "simultaneously, e.g. a course satisfying both an Ethics Core and a Social Justice "
+            "requirement). These give more value per unit. Only override this preference if the "
+            "student explicitly requests a specific course or category.\n"
+            "COURSE TITLE: The `title` field must be the official full course name from the "
+            "SCU catalog (e.g. course='CSEN 174', title='Software Engineering'). Never leave it blank."
         ),
     )
 

@@ -18,6 +18,7 @@ export interface CourseBlock {
   /** Minutes from 8:00 AM */
   endOffsetMin: MinutesFromDayStart;
   code: string;
+  title?: string;
   professor: string;
 }
 

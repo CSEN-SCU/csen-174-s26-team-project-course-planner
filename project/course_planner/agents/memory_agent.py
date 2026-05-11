@@ -57,7 +57,7 @@ def _compaction_summary_max_chars() -> int:
 
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
-ALLOWED_KINDS = ("preference", "plan_outcome", "note")
+ALLOWED_KINDS = ("preference", "plan_outcome", "note", "academic_progress")
 
 _BLOCK_RE = re.compile(
     r"^<<<MEMORY (.+?)>>>\n(.*?)<<<END_MEMORY>>>\s*",
