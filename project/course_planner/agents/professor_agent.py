@@ -430,9 +430,12 @@ def run_professor_agent(recommended_courses: list[dict]) -> list[dict]:
     """
     if not recommended_courses:
         return []
+    schedule_index = load_schedule_section_index()
+
     if RMPClient is None:
-        return [
-            {
+        results = []
+        for course in recommended_courses:
+            enriched = {
                 **course,
                 "professors": [],
                 "best_professor": None,
@@ -441,10 +444,17 @@ def run_professor_agent(recommended_courses: list[dict]) -> list[dict]:
                     "'rmp_client' dependency is not installed."
                 ),
             }
-            for course in recommended_courses
-        ]
-
-    schedule_index = load_schedule_section_index()
+            code = course.get("course") or ""
+            scheduled = scheduled_instructors_for_course(code, schedule_index)
+            if scheduled:
+                enriched["scheduled_instructors"] = scheduled
+            times = meeting_times_for_course(code, schedule_index)
+            if times:
+                enriched["meeting_days"] = times["meeting_days"]
+                enriched["meeting_start_min"] = times["meeting_start_min"]
+                enriched["meeting_end_min"] = times["meeting_end_min"]
+            results.append(enriched)
+        return results
     workers = max(1, min(_MAX_PARALLEL_COURSES, len(recommended_courses)))
     with ThreadPoolExecutor(max_workers=workers) as executor:
         return list(
