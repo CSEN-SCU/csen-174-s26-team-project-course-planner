@@ -6,7 +6,9 @@ vi.mock("../../bridges/api/services/courseService.js", () => ({
 }));
 
 describe("Jason plan warnings", () => {
-  test.skip("includes non-empty warnings metadata for plan quality checks (reason=deferred to later sprint: warnings metadata not implemented yet)", async () => {
+  test("includes non-empty warnings metadata for plan quality checks", async ({ skip }) => {
+    skip("reason=deferred to later sprint: warnings metadata not implemented yet");
+
     // Arrange
     const env = { GEMINI_API_KEY: "" } as NodeJS.ProcessEnv;
 

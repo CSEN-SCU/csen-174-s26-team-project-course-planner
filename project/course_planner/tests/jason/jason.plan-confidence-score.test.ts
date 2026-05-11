@@ -6,7 +6,9 @@ vi.mock("../../bridges/api/services/courseService.js", () => ({
 }));
 
 describe("Jason plan confidence score", () => {
-  test.skip("includes a confidenceScore on each returned plan (reason=deferred to later sprint: confidence scoring not implemented yet)", async () => {
+  test("includes a confidenceScore on each returned plan", async ({ skip }) => {
+    skip("reason=deferred to later sprint: confidence scoring not implemented yet");
+
     // Arrange
     const env = { GEMINI_API_KEY: "" } as NodeJS.ProcessEnv;
 
