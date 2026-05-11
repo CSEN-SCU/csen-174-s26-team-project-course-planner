@@ -5,7 +5,7 @@
 ### Merged PR with passing CI
 
 - **PR link:**
-
+https://github.com/CSEN-SCU/csen-174-s26-team-project-course-planner/pull/21
 
 ### Secrets handling (3–5 sentences)
 
