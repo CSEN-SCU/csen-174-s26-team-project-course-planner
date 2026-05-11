@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from agents.memory_agent import ALLOWED_KINDS, list_for_user, write
+from agents.memory_agent import ALLOWED_KINDS, delete, list_for_user, write
 
 router = APIRouter()
 
@@ -24,6 +24,19 @@ def get_memory(user_id: str) -> dict[str, Any]:
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     return {"memories": items}
+
+
+@router.delete("/{user_id}/{item_id}")
+def delete_memory(user_id: str, item_id: int) -> dict[str, Any]:
+    try:
+        found = delete(user_id, item_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    if not found:
+        raise HTTPException(status_code=404, detail="Memory item not found.")
+    return {"success": True}
 
 
 @router.post("/{user_id}")

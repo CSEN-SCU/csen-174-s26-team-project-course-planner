@@ -25,7 +25,7 @@ export type ChatPanelProps = {
   setPlanResult: (v: Record<string, unknown> | null) => void;
   fileUploaded: boolean;
   setFileUploaded: (v: boolean) => void;
-  onPlanGenerated: (plan: Record<string, unknown>) => void;
+  onPlanGenerated: (plan: Record<string, unknown>, messages: ChatUiMessage[]) => void;
   prefillInput?: string | null;
   onPrefillConsumed?: () => void;
 };
@@ -114,10 +114,10 @@ export function ChatPanel({
     const trimmed = text.trim();
     if (!trimmed) return;
 
-    setMessages((m) => [
-      ...m,
-      { id: `u-${Date.now()}`, role: "user", content: trimmed },
-    ]);
+    // Capture conversation state before this turn so we can save a full snapshot
+    const userMsg: ChatUiMessage = { id: `u-${Date.now()}`, role: "user", content: trimmed };
+    const preTurnMessages = messages;
+    setMessages((m) => [...m, userMsg]);
 
     const lower = trimmed.toLowerCase();
 
@@ -158,7 +158,6 @@ export function ChatPanel({
         throw new Error("Invalid plan response from server.");
       }
       setPlanResult(data);
-      onPlanGenerated(data);
 
       const assistantReply =
         typeof data.assistant_reply === "string" && data.assistant_reply.trim()
@@ -172,14 +171,17 @@ export function ChatPanel({
           ? `${data.assistant_reply.trim()}\n\n${planSummaryText(data)}`
           : assistantReply;
 
-      setMessages((m) => [...m, { id: `a-${Date.now()}`, role: "assistant", content: displayText }]);
+      const assistantMsg: ChatUiMessage = { id: `a-${Date.now()}`, role: "assistant", content: displayText };
+      const fullConversation = [...preTurnMessages, userMsg, assistantMsg];
+      onPlanGenerated(data, fullConversation);
+      setMessages((m) => [...m, assistantMsg]);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setMessages((m) => [...m, { id: `a-${Date.now()}`, role: "assistant", content: `Error: ${msg}` }]);
     } finally {
       setIsGenerating(false);
     }
-  }, [missingDetails, userId, planResult, setPlanResult, onPlanGenerated, setMessages, pendingFile, processFile]);
+  }, [messages, missingDetails, userId, planResult, setPlanResult, onPlanGenerated, setMessages, pendingFile, processFile]);
 
   const send = useCallback(async () => {
     const trimmed = input.trim();

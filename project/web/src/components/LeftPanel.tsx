@@ -7,6 +7,7 @@ export type MemorySessionRow = {
   kind: "memory" | "snapshot" | "current";
   memoryContent?: string;
   recommended?: Record<string, unknown>[];
+  messages?: { id: string; role: string; content: string }[];
 };
 
 export type LeftPanelProps = {
@@ -15,6 +16,7 @@ export type LeftPanelProps = {
   sessions: MemorySessionRow[];
   activeSessionId: string | null;
   onSelectSession: (row: MemorySessionRow) => void;
+  onDeleteSession?: (id: string) => void;
   onNewPlan: () => void;
 };
 
@@ -24,6 +26,7 @@ export function LeftPanel({
   sessions,
   activeSessionId,
   onSelectSession,
+  onDeleteSession,
   onNewPlan,
 }: LeftPanelProps) {
   const [username, setUsername] = useState("");
@@ -112,11 +115,11 @@ export function LeftPanel({
             {sessions.map((s) => {
               const active = s.id === activeSessionId;
               return (
-                <li key={s.id}>
+                <li key={s.id} className="group relative">
                   <button
                     type="button"
                     onClick={() => onSelectSession(s)}
-                    className={`w-full rounded-md px-3 py-2.5 text-left text-sm transition ${
+                    className={`w-full rounded-md px-3 py-2.5 pr-8 text-left text-sm transition ${
                       active
                         ? "bg-[var(--scu-gray)] font-medium text-[var(--scu-text)] ring-1 ring-neutral-200"
                         : "text-neutral-700 hover:bg-neutral-50"
@@ -127,6 +130,18 @@ export function LeftPanel({
                       {s.dateLabel}
                     </span>
                   </button>
+                  {onDeleteSession && s.kind !== "current" && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onDeleteSession(s.id); }}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-neutral-300 opacity-0 group-hover:opacity-100 hover:text-red-500 hover:bg-red-50 transition"
+                      aria-label={`Delete ${s.title}`}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
+                        <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/>
+                      </svg>
+                    </button>
+                  )}
                 </li>
               );
             })}

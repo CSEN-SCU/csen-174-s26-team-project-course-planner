@@ -72,6 +72,13 @@ export async function transcribeAudio(blob: Blob): Promise<string> {
   return (data.transcript as string) ?? "";
 }
 
+export async function deleteMemory(userId: string, itemId: number) {
+  const res = await fetch(`${API_BASE}/memory/${userId}/${itemId}`, { method: "DELETE" });
+  const data = await res.json();
+  if (!res.ok) throw new Error(errFromBody(data));
+  return data;
+}
+
 export async function saveMemory(userId: string, type: string, content: string) {
   const res = await fetch(`${API_BASE}/memory/${userId}`, {
     method: "POST",

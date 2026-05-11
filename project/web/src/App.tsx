@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getMemory, login as apiLogin, saveMemory } from "./api/client";
+import { deleteMemory, getMemory, login as apiLogin, saveMemory } from "./api/client";
 import { CalendarView } from "./components/CalendarView";
 import { ChatPanel, type ChatUiMessage } from "./components/ChatPanel";
 import { LeftPanel, type MemorySessionRow } from "./components/LeftPanel";
@@ -16,7 +16,7 @@ export default function App() {
     { id: "m0", role: "assistant", content: WELCOME_TEXT },
   ]);
   const [planSnapshots, setPlanSnapshots] = useState<
-    { id: string; title: string; dateLabel: string; recommended: Record<string, unknown>[] }[]
+    { id: string; memoryId?: number; title: string; dateLabel: string; recommended: Record<string, unknown>[]; messages?: ChatUiMessage[] }[]
   >([]);
   const [sessionCalendarRecommended, setSessionCalendarRecommended] =
     useState<Record<string, unknown>[] | null>(null);
@@ -58,14 +58,16 @@ export default function App() {
         const loadedSnaps = planMems.flatMap((m) => {
           try {
             const data = JSON.parse(String(m.content ?? "")) as {
-              recommended?: unknown; title?: string; dateLabel?: string;
+              recommended?: unknown; title?: string; dateLabel?: string; messages?: unknown;
             };
             if (Array.isArray(data.recommended) && data.recommended.length > 0) {
               return [{
                 id: `mem-snap-${String(m.id ?? Date.now())}`,
+                memoryId: typeof m.id === "number" ? m.id : undefined,
                 title: data.title ?? "Past plan",
                 dateLabel: data.dateLabel ?? String(m.created_at ?? ""),
                 recommended: data.recommended as Record<string, unknown>[],
+                messages: Array.isArray(data.messages) ? data.messages as ChatUiMessage[] : undefined,
               }];
             }
           } catch { /* ignore */ }
@@ -104,7 +106,7 @@ export default function App() {
       });
     }
     for (const snap of planSnapshots) {
-      rows.push({ id: snap.id, title: snap.title, dateLabel: snap.dateLabel, kind: "snapshot", recommended: snap.recommended });
+      rows.push({ id: snap.id, title: snap.title, dateLabel: snap.dateLabel, kind: "snapshot", recommended: snap.recommended, messages: snap.messages });
     }
     return rows;
   }, [planResult, planSnapshots]);
@@ -136,10 +138,15 @@ export default function App() {
       setSessionCalendarRecommended(null);
     } else if (row.kind === "snapshot") {
       setSessionCalendarRecommended(row.recommended ?? null);
+      if (row.messages && row.messages.length > 0) {
+        setMessages(row.messages as ChatUiMessage[]);
+      } else {
+        setMessages([{ id: "m-restore", role: "assistant", content: "Viewing a past session. The calendar shows courses from this plan." }]);
+      }
     }
-  }, []);
+  }, [setMessages]);
 
-  const handlePlanGenerated = useCallback((plan: Record<string, unknown>) => {
+  const handlePlanGenerated = useCallback((plan: Record<string, unknown>, msgs: ChatUiMessage[]) => {
     setLocalOverride(null);
     setSessionCalendarRecommended(null);
     setActiveSessionId("current");
@@ -147,11 +154,18 @@ export default function App() {
     if (recs.length > 0) {
       const d = new Date().toLocaleDateString();
       const title = `Plan · ${recs.length} courses`;
-      const snap = { id: `snap-${Date.now()}`, title, dateLabel: d, recommended: recs };
-      setPlanSnapshots((prev) => [snap, ...prev]);
+      const snapId = `snap-${Date.now()}`;
       if (userId) {
-        void saveMemory(userId, "plan_outcome", JSON.stringify({ recommended: recs, title, dateLabel: d }))
-          .catch(() => { /* non-fatal */ });
+        void saveMemory(userId, "plan_outcome", JSON.stringify({ recommended: recs, title, dateLabel: d, messages: msgs }))
+          .then((r) => {
+            const memoryId = typeof r?.id === "number" ? r.id : undefined;
+            setPlanSnapshots((prev) => [{ id: snapId, memoryId, title, dateLabel: d, recommended: recs, messages: msgs }, ...prev]);
+          })
+          .catch(() => {
+            setPlanSnapshots((prev) => [{ id: snapId, title, dateLabel: d, recommended: recs, messages: msgs }, ...prev]);
+          });
+      } else {
+        setPlanSnapshots((prev) => [{ id: snapId, title, dateLabel: d, recommended: recs, messages: msgs }, ...prev]);
       }
     }
   }, [userId]);
@@ -164,6 +178,19 @@ export default function App() {
     setActiveSessionId(null);
     setMessages([{ id: "m0", role: "assistant", content: WELCOME_TEXT }]);
   }, []);
+
+  const handleDeleteSession = useCallback((id: string) => {
+    const snap = planSnapshots.find((s) => s.id === id);
+    setPlanSnapshots((prev) => prev.filter((s) => s.id !== id));
+    if (activeSessionId === id) {
+      setActiveSessionId(null);
+      setSessionCalendarRecommended(null);
+      setMessages([{ id: "m0", role: "assistant", content: WELCOME_TEXT }]);
+    }
+    if (userId && snap?.memoryId != null) {
+      void deleteMemory(userId, snap.memoryId).catch(() => { /* non-fatal */ });
+    }
+  }, [planSnapshots, activeSessionId, userId, setMessages]);
 
   const handleRemoveCourse = useCallback((idx: number) => {
     const base = localOverride ?? calendarRecommended ?? [];
@@ -187,6 +214,7 @@ export default function App() {
         sessions={sessions}
         activeSessionId={activeSessionId}
         onSelectSession={handleSelectSession}
+        onDeleteSession={handleDeleteSession}
         onNewPlan={handleNewPlan}
       />
       <CalendarView
