@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { deleteMemory, getMemory, login as apiLogin, saveMemory } from "./api/client";
+import { deleteMemory, generateFourYearPlan, getMemory, login as apiLogin, saveMemory } from "./api/client";
 import { CalendarView } from "./components/CalendarView";
 import { ChatPanel, type ChatUiMessage } from "./components/ChatPanel";
+import { FourYearPlanView } from "./components/FourYearPlanView";
 import { LeftPanel, type MemorySessionRow } from "./components/LeftPanel";
+import type { FourYearPlan } from "./types";
 import { CALENDAR_START_HOUR, WEEKDAY_LABELS } from "./types";
 
 const WELCOME_TEXT =
@@ -24,6 +26,9 @@ export default function App() {
   const [fileUploaded, setFileUploaded] = useState(false);
   const [localOverride, setLocalOverride] = useState<Record<string, unknown>[] | null>(null);
   const [chatPrefill, setChatPrefill] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"calendar" | "four-year">("calendar");
+  const [fourYearPlan, setFourYearPlan] = useState<FourYearPlan | null>(null);
+  const [fourYearGenerating, setFourYearGenerating] = useState(false);
 
   // Load academic progress + past plan snapshots on login
   useEffect(() => {
@@ -197,6 +202,22 @@ export default function App() {
     setLocalOverride(base.filter((_, i) => i !== idx));
   }, [localOverride, calendarRecommended]);
 
+  const handleGenerateFourYearPlan = useCallback(async () => {
+    if (!missingDetails.length || fourYearGenerating) return;
+    setFourYearGenerating(true);
+    try {
+      const result = await generateFourYearPlan(
+        missingDetails,
+        userId ?? "anonymous",
+      );
+      setFourYearPlan(result as FourYearPlan);
+    } catch (e) {
+      console.error("Four-year plan generation failed:", e);
+    } finally {
+      setFourYearGenerating(false);
+    }
+  }, [missingDetails, userId, fourYearGenerating]);
+
   const handleSlotClick = useCallback((dayIndex: number, slotIndex: number) => {
     const dayName = WEEKDAY_LABELS[dayIndex] ?? "Monday";
     const totalMin = CALENDAR_START_HOUR * 60 + slotIndex * 30;
@@ -217,11 +238,49 @@ export default function App() {
         onDeleteSession={handleDeleteSession}
         onNewPlan={handleNewPlan}
       />
-      <CalendarView
-        recommendedCourses={effectiveRecommended}
-        onRemoveCourse={handleRemoveCourse}
-        onSlotClick={handleSlotClick}
-      />
+
+      {/* Main view area with tab toggle */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Tab bar */}
+        <div className="flex shrink-0 border-b border-neutral-200 bg-white px-3 pt-1">
+          <button
+            className={`px-4 py-2 text-xs font-semibold border-b-2 transition ${
+              viewMode === "calendar"
+                ? "border-[var(--scu-red)] text-[var(--scu-red)]"
+                : "border-transparent text-neutral-400 hover:text-neutral-600"
+            }`}
+            onClick={() => setViewMode("calendar")}
+          >
+            This Quarter
+          </button>
+          <button
+            className={`px-4 py-2 text-xs font-semibold border-b-2 transition ${
+              viewMode === "four-year"
+                ? "border-[var(--scu-red)] text-[var(--scu-red)]"
+                : "border-transparent text-neutral-400 hover:text-neutral-600"
+            }`}
+            onClick={() => setViewMode("four-year")}
+          >
+            4-Year Plan
+          </button>
+        </div>
+
+        {viewMode === "calendar" ? (
+          <CalendarView
+            recommendedCourses={effectiveRecommended}
+            onRemoveCourse={handleRemoveCourse}
+            onSlotClick={handleSlotClick}
+          />
+        ) : (
+          <FourYearPlanView
+            plan={fourYearPlan}
+            isGenerating={fourYearGenerating}
+            hasTranscript={fileUploaded}
+            onGenerate={handleGenerateFourYearPlan}
+          />
+        )}
+      </div>
+
       <ChatPanel
         userId={userId}
         missingDetails={missingDetails}

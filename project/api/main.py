@@ -23,7 +23,7 @@ from typing import Dict
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import auth, memory, plan, upload, voice
+from routers import auth, four_year_plan, memory, plan, upload, voice, workday
 
 app = FastAPI(title="SCU Course Planner API")
 
@@ -41,9 +41,11 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(plan.router, prefix="/api/plan", tags=["plan"])
+app.include_router(four_year_plan.router, prefix="/api/four-year-plan", tags=["four-year-plan"])
 app.include_router(memory.router, prefix="/api/memory", tags=["memory"])
 app.include_router(upload.router, prefix="/api/upload", tags=["upload"])
 app.include_router(voice.router, prefix="/api/voice", tags=["voice"])
+app.include_router(workday.router, prefix="/api/workday", tags=["workday"])
 
 
 @app.get("/api/health")
