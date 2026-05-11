@@ -18,28 +18,15 @@ jobs:
           node-version: "20"
           cache: "npm"
           cache-dependency-path: |
-            project/api/package-lock.json
-            project/web/package-lock.json
+            project/course_planner/package-lock.json
+            project/course_planner/tests/package-lock.json
 
-      - name: Install API dependencies
-        working-directory: project/api
+      - name: Install course_planner dependencies
+        working-directory: project/course_planner
         run: npm ci
 
-      - name: Install Web test dependencies
-        working-directory: project/web
-        run: npm ci
-
-      - name: Run API tests (Vitest)
-        working-directory: project/api
-        env:
-          # Optional: if set in GitHub Secrets, enables live AI calls.
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: npm test
-
-      - name: Run W5 test suite (course_planner/tests via web Vitest config)
-        working-directory: project/web
+      - name: Run course_planner tests (project/course_planner/tests)
+        working-directory: project/course_planner/tests
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}

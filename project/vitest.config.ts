@@ -8,10 +8,10 @@ export default {
     dedupe: ["vitest"],
     alias: {
       vitest: fileURLToPath(new URL("./course_planner/node_modules/vitest", import.meta.url)),
-      react: fileURLToPath(new URL("./web/node_modules/react", import.meta.url)),
-      "react/jsx-runtime": fileURLToPath(new URL("./web/node_modules/react/jsx-runtime.js", import.meta.url)),
-      "react-dom": fileURLToPath(new URL("./web/node_modules/react-dom", import.meta.url)),
-      "@testing-library/react": fileURLToPath(new URL("./web/node_modules/@testing-library/react", import.meta.url))
+      react: fileURLToPath(new URL("./course_planner/node_modules/react", import.meta.url)),
+      "react/jsx-runtime": fileURLToPath(new URL("./course_planner/node_modules/react/jsx-runtime.js", import.meta.url)),
+      "react-dom": fileURLToPath(new URL("./course_planner/node_modules/react-dom", import.meta.url)),
+      "@testing-library/react": fileURLToPath(new URL("./course_planner/node_modules/@testing-library/react", import.meta.url))
     }
   },
   test: {
