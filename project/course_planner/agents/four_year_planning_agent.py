@@ -195,13 +195,76 @@ Output JSON matching the schema exactly.
     # ── Hallucination filter ─────────────────────────────────────────────────
     # The four-year plan must ONLY distribute courses that are in missing_details.
     # Build a whitelist of normalised codes from the input requirements.
-    required_codes: set[str] = {
-        str(item.get("course") or "").strip().upper()
-        for item in missing_details
-        if item.get("course")
-    }
+    # NOTE: For Workday transcripts, item["course"] is often None — codes are
+    # embedded in the "requirement" or "category" text (e.g. "CSEN/COEN 122 &
+    # 122L").  We therefore also extract codes from those text fields via regex.
+
+    def _extract_codes_from_text(text: str) -> set[str]:
+        """Extract all course codes from a free-form requirement string."""
+        codes: set[str] = set()
+        text = text.strip().upper()
+
+        # Handle slash-subject groups: "CSEN/COEN 122" → both subjects
+        for m in re.finditer(
+            r"([A-Z]{2,6}(?:/[A-Z]{2,6})+)\s+(\d{1,3}[A-Z]?)", text
+        ):
+            subjects = m.group(1).split("/")
+            number = m.group(2)
+            for subj in subjects:
+                codes.add(f"{subj} {number}")
+        # Handle "& 122L" continuations after a slash-group match
+        # e.g. "CSEN/COEN 122 & 122L" — pick up the bare number after &
+        for m in re.finditer(
+            r"([A-Z]{2,6}(?:/[A-Z]{2,6})+)\s+(\d{1,3}[A-Z]?)(?:\s*&\s*(\d{1,3}[A-Z]?))?",
+            text,
+        ):
+            subjects = m.group(1).split("/")
+            for number in filter(None, [m.group(2), m.group(3)]):
+                for subj in subjects:
+                    codes.add(f"{subj} {number}")
+
+        # Handle simple pairs: "CSEN 140L"
+        for m in re.finditer(r"\b([A-Z]{2,6})\s+(\d{1,3}[A-Z]?)\b", text):
+            codes.add(f"{m.group(1)} {m.group(2)}")
+
+        # For every code, also add the lab/non-lab variant
+        extra: set[str] = set()
+        for code in list(codes):
+            if code.endswith("L"):
+                extra.add(code[:-1])
+            else:
+                extra.add(code + "L")
+        codes |= extra
+
+        # CSEN ↔ COEN aliases
+        alias: set[str] = set()
+        for code in list(codes):
+            if code.startswith("CSEN "):
+                alias.add("COEN " + code[5:])
+            elif code.startswith("COEN "):
+                alias.add("CSEN " + code[5:])
+        codes |= alias
+
+        return codes
+
+    required_codes: set[str] = set()
+    # First pass: explicit "course" field (sometimes populated)
+    for item in missing_details:
+        raw = str(item.get("course") or "").strip().upper()
+        if raw:
+            required_codes.add(raw)
+    # Second pass: extract from text fields for Workday-style requirements
+    for item in missing_details:
+        for field in ("requirement", "category", "course"):
+            val = item.get(field)
+            if val and isinstance(val, str):
+                required_codes |= _extract_codes_from_text(val)
 
     def _is_valid_course(course_code: str) -> bool:
+        # If we couldn't identify any specific codes (e.g. all open-ended
+        # requirements like "RTC 3"), skip the filter entirely.
+        if not required_codes:
+            return True
         code = (course_code or "").strip().upper()
         if not code:
             return False
@@ -212,6 +275,11 @@ Output JSON matching the schema exactly.
         if code.endswith("L") and code[:-1] in required_codes:
             return True
         if code + "L" in required_codes:
+            return True
+        # CSEN ↔ COEN aliases
+        if code.startswith("CSEN ") and ("COEN " + code[5:]) in required_codes:
+            return True
+        if code.startswith("COEN ") and ("CSEN " + code[5:]) in required_codes:
             return True
         return False
 

@@ -4,7 +4,7 @@ import { CalendarView } from "./components/CalendarView";
 import { ChatPanel, type ChatUiMessage } from "./components/ChatPanel";
 import { FourYearPlanView } from "./components/FourYearPlanView";
 import { LeftPanel, type MemorySessionRow } from "./components/LeftPanel";
-import type { FourYearPlan } from "./types";
+import type { FourYearPlan, ParsedRow } from "./types";
 import { CALENDAR_START_HOUR, WEEKDAY_LABELS } from "./types";
 
 const WELCOME_TEXT =
@@ -29,6 +29,7 @@ export default function App() {
   const [viewMode, setViewMode] = useState<"calendar" | "four-year">("calendar");
   const [fourYearPlan, setFourYearPlan] = useState<FourYearPlan | null>(null);
   const [fourYearGenerating, setFourYearGenerating] = useState(false);
+  const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
 
   // Load academic progress + past plan snapshots on login
   useEffect(() => {
@@ -36,6 +37,7 @@ export default function App() {
       setMissingDetails([]);
       setFileUploaded(false);
       setPlanSnapshots([]);
+      setParsedRows([]);
       return;
     }
     void getMemory(userId)
@@ -296,6 +298,7 @@ export default function App() {
             isGenerating={fourYearGenerating}
             hasTranscript={fileUploaded}
             onGenerate={handleGenerateFourYearPlan}
+            parsedRows={parsedRows}
           />
         )}
       </div>
@@ -313,6 +316,7 @@ export default function App() {
         onPlanGenerated={handlePlanGenerated}
         prefillInput={chatPrefill}
         onPrefillConsumed={() => setChatPrefill(null)}
+        setParsedRows={setParsedRows}
       />
     </div>
   );

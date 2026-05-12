@@ -64,3 +64,14 @@ export interface FourYearPlan {
   total_remaining_units: number;
   advice: string;
 }
+
+export interface ParsedRow {
+  requirement: string;
+  status: string;
+  remaining: string | number | null;
+  registration: string | null;
+  course_code: string | null;
+  academic_period: string | null;
+  units: number | string | null;
+  grade: string | number | null;
+}

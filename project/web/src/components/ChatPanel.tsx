@@ -8,6 +8,7 @@ import {
   type SetStateAction,
 } from "react";
 import { generatePlan, pollWorkdayStatus, startWorkdaySync, transcribeAudio, uploadTranscript } from "../api/client";
+import type { ParsedRow } from "../types";
 
 export type ChatUiMessage = {
   id: string;
@@ -28,6 +29,7 @@ export type ChatPanelProps = {
   onPlanGenerated: (plan: Record<string, unknown>, messages: ChatUiMessage[]) => void;
   prefillInput?: string | null;
   onPrefillConsumed?: () => void;
+  setParsedRows?: (v: ParsedRow[]) => void;
 };
 
 function planSummaryText(plan: Record<string, unknown>): string {
@@ -73,6 +75,7 @@ export function ChatPanel({
   onPlanGenerated,
   prefillInput,
   onPrefillConsumed,
+  setParsedRows,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -107,6 +110,8 @@ export function ChatPanel({
       const data = await uploadTranscript(f, userId ?? undefined);
       const md = (data.missing_details as unknown[]) ?? [];
       setMissingDetails(md);
+      const pr = (data.parsed_rows as ParsedRow[]) ?? [];
+      setParsedRows?.(pr);
       setFileUploaded(true);
       const reply = `Got it! Found ${md.length} missing requirements${userId ? " and saved your progress" : ""}. What are your preferences for next quarter?`;
       setMessages((m) => [...m, { id: `a-${Date.now()}`, role: "assistant", content: reply }]);
@@ -114,7 +119,7 @@ export function ChatPanel({
       const msg = err instanceof Error ? err.message : String(err);
       setMessages((m) => [...m, { id: `a-${Date.now()}`, role: "assistant", content: `Upload failed: ${msg}` }]);
     }
-  }, [userId, setMissingDetails, setFileUploaded, setMessages]);
+  }, [userId, setMissingDetails, setParsedRows, setFileUploaded, setMessages]);
 
   const startWorkdayScrap = useCallback(async () => {
     if (workdayStatus.syncing) return;
