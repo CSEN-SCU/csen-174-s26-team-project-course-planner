@@ -125,5 +125,5 @@ def is_configured() -> dict[str, Any]:
     return {
         "configured": bool(url),
         "url": url or "",
-        "default_url": "https://wd5.myworkday.com/scu/d/home.htmld",
+        "default_url": "https://www.myworkday.com/scu/d/task/2998$44123.htmld",
     }

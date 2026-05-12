@@ -2,18 +2,16 @@
 Playwright-based Workday scraper for SCU Academic Progress.
 
 Flow:
-  1. Open Chromium (visible) at the configured Workday URL.
-  2. Wait up to 5 min for the student to complete SSO / MFA.
-  3. Use Workday's global search to open "View My Academic Progress".
+  1. Open Chromium (visible) and navigate directly to the task URL.
+     Workday redirects to SCU SSO automatically.
+  2. Wait for the student to complete SSO / MFA (up to 5 min).
+  3. If redirected to home after SSO, navigate back to the task URL.
   4. Export the report to Excel.
-  5. Return the raw bytes and the parsed missing_details.
+  5. Parse and return missing_details.
 
 Configuration:
-  Set SCU_WORKDAY_URL in .env, e.g.:
-    SCU_WORKDAY_URL=https://wd5.myworkday.com/scu/d/home.htmld
-
-Usage (in a background thread — do NOT await):
-  result = scrape_workday_sync(progress_cb=lambda msg: print(msg))
+  SCU_WORKDAY_URL=https://www.myworkday.com/scu/d/task/2998$44123.htmld
+  (already set in .env — this is the direct "View My Academic Progress" URL)
 """
 
 from __future__ import annotations
@@ -34,122 +32,87 @@ from utils.academic_progress_xlsx import parse_academic_progress_xlsx
 
 # ── Config ───────────────────────────────────────────────────────────────────
 
-DEFAULT_WORKDAY_URL = os.environ.get(
+TASK_URL = os.environ.get(
     "SCU_WORKDAY_URL",
-    "https://wd5.myworkday.com/scu/d/home.htmld",
+    "https://www.myworkday.com/scu/d/task/2998$44123.htmld",
 )
 
+# Workday tenant root — everything after this up to /d/ is the tenant path
+_WORKDAY_BASE = "myworkday.com/scu"
+
 LOGIN_TIMEOUT_MS = 5 * 60 * 1000   # 5 min for SSO / MFA
-NAV_TIMEOUT_MS   = 60 * 1000       # 60 s for page actions after login
-DL_TIMEOUT_MS    = 90 * 1000       # 90 s download
+NAV_TIMEOUT_MS   = 60 * 1000
+DL_TIMEOUT_MS    = 90 * 1000
 
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
+# ── Login detection ───────────────────────────────────────────────────────────
 
-def _is_logged_in(page: Page, workday_base: str) -> bool:
+_SSO_KEYWORDS = ("login", "sso", "saml", "oauth", "auth", "signin",
+                 "adfs", "okta", "microsoftonline", "shibboleth")
+
+
+def _on_sso_page(page: Page) -> bool:
     url = page.url.lower()
-    base = workday_base.lower().split("/d/")[0]   # e.g. "https://wd5.myworkday.com/scu"
-    if base not in url:
-        return False
-    # SSO/login pages contain these keywords
-    for kw in ("login", "sso", "saml", "oauth", "auth", "signin", "adfs", "okta", "microsoftonline"):
-        if kw in url:
-            return False
-    # Check for a Workday home element
-    try:
-        page.wait_for_selector('[data-automation-id="workdayLogo"], [data-automation-id="home"], '
-                               '[aria-label="Home"], [data-automation-id="globalNav"]',
-                               timeout=2000)
-        return True
-    except PWTimeout:
-        return False
+    return any(kw in url for kw in _SSO_KEYWORDS)
 
 
-def _wait_for_login(page: Page, workday_base: str, cb: Callable[[str], None]) -> None:
+def _on_workday(page: Page) -> bool:
+    return _WORKDAY_BASE in page.url.lower() and not _on_sso_page(page)
+
+
+def _wait_for_login(page: Page, cb: Callable[[str], None]) -> None:
+    """Block until the browser is on a Workday page (not SSO)."""
     cb("browser_open")
     deadline = time.monotonic() + LOGIN_TIMEOUT_MS / 1000
     while time.monotonic() < deadline:
-        if _is_logged_in(page, workday_base):
+        if _on_workday(page):
             return
-        time.sleep(2)
-    raise TimeoutError("Login timed out after 5 minutes. Please try again.")
-
-
-def _open_academic_progress(page: Page, cb: Callable[[str], None]) -> None:
-    cb("searching")
-
-    # Strategy 1: Workday global search (most reliable across tenants)
-    search_selectors = [
-        '[data-automation-id="searchInputBox"]',
-        '[data-automation-id="searchInput"]',
-        '[aria-label="Search"]',
-        'input[type="search"]',
-        '[placeholder*="Search"]',
-    ]
-    search_input = None
-    for sel in search_selectors:
-        try:
-            search_input = page.wait_for_selector(sel, timeout=10000)
-            if search_input:
-                break
-        except PWTimeout:
-            continue
-
-    if search_input:
-        search_input.click()
-        search_input.fill("View My Academic Progress")
-        page.keyboard.press("Enter")
-        page.wait_for_timeout(3000)
-
-        # Click the search result
-        result_selectors = [
-            'text="View My Academic Progress"',
-            '[data-automation-id*="searchResult"] >> text=Academic Progress',
-        ]
-        for sel in result_selectors:
-            try:
-                page.click(sel, timeout=10000)
-                page.wait_for_load_state("networkidle", timeout=NAV_TIMEOUT_MS)
-                return
-            except (PWTimeout, Exception):
-                continue
-
-    # Strategy 2: Navigate via menu
-    # Look for "Academics" in the navigation, then "View My Academic Progress"
-    try:
-        page.click('[data-automation-id*="academics"], text="Academics"', timeout=8000)
-        page.click('text="View My Academic Progress"', timeout=8000)
-        page.wait_for_load_state("networkidle", timeout=NAV_TIMEOUT_MS)
-        return
-    except (PWTimeout, Exception):
-        pass
-
-    raise RuntimeError(
-        "Could not find 'View My Academic Progress' in Workday. "
-        "Make sure you are logged in and the report is available in your account."
+        time.sleep(1.5)
+    raise TimeoutError(
+        "Login timed out after 5 minutes — please try again and complete SSO promptly."
     )
 
+
+# ── Report navigation ─────────────────────────────────────────────────────────
+
+def _ensure_on_task(page: Page, task_url: str, cb: Callable[[str], None]) -> None:
+    """After login, make sure we're on the Academic Progress task page."""
+    task_path = task_url.split("/scu/", 1)[-1].split("?")[0].lower()
+    if task_path not in page.url.lower():
+        cb("navigating")
+        page.goto(task_url, timeout=NAV_TIMEOUT_MS)
+        page.wait_for_load_state("networkidle", timeout=NAV_TIMEOUT_MS)
+
+
+# ── Excel export ──────────────────────────────────────────────────────────────
 
 def _export_to_excel(page: Page, download_dir: Path, cb: Callable[[str], None]) -> Path:
     cb("downloading")
 
+    # Workday shows the report as a grid/table. Common export selectors:
     export_selectors = [
-        # Common Workday export/download buttons
+        # Workday's built-in "Export to Excel" / "Export to Spreadsheet" buttons
         '[data-automation-id="excelButton"]',
-        '[data-automation-id="downloadButton"]',
-        '[aria-label*="Excel"]',
-        '[aria-label*="Export"]',
-        '[aria-label*="Download"]',
+        '[data-automation-id="spreadsheetButton"]',
+        '[data-automation-id="exportButton"]',
+        '[data-automation-id="viewAllExcelButton"]',
+        # Aria-label based
+        'button[aria-label*="Excel" i]',
+        'button[aria-label*="Export" i]',
+        'button[aria-label*="Spreadsheet" i]',
+        # Text-based fallbacks
         'button:has-text("Excel")',
         'button:has-text("Export")',
-        '[title*="Excel"]',
+        'button:has-text("Spreadsheet")',
+        # Generic download icon
+        '[data-automation-id*="download" i]',
     ]
 
     for sel in export_selectors:
         try:
-            page.wait_for_selector(sel, timeout=8000)
+            page.wait_for_selector(sel, timeout=6000)
             with page.expect_download(timeout=DL_TIMEOUT_MS) as dl_info:
-                page.click(sel)
+                page.click(sel, timeout=6000)
             dl = dl_info.value
             dest = download_dir / "academic_progress.xlsx"
             dl.save_as(str(dest))
@@ -157,41 +120,52 @@ def _export_to_excel(page: Page, download_dir: Path, cb: Callable[[str], None]) 
         except (PWTimeout, Exception):
             continue
 
-    # Fallback: try the Actions menu
-    try:
-        page.click('[data-automation-id="actions"], button:has-text("Actions")', timeout=8000)
-        page.wait_for_timeout(1000)
-        with page.expect_download(timeout=DL_TIMEOUT_MS) as dl_info:
-            page.click('[data-automation-id*="excel"], text="Export to Excel", text="Excel"', timeout=8000)
-        dl = dl_info.value
-        dest = download_dir / "academic_progress.xlsx"
-        dl.save_as(str(dest))
-        return dest
-    except (PWTimeout, Exception):
-        pass
+    # Try the Actions / gear menu as a fallback
+    action_selectors = [
+        '[data-automation-id="actions"]',
+        '[aria-label*="Actions" i]',
+        '[aria-label*="More" i]',
+        'button:has-text("Actions")',
+    ]
+    for act_sel in action_selectors:
+        try:
+            page.click(act_sel, timeout=5000)
+            page.wait_for_timeout(800)
+            with page.expect_download(timeout=DL_TIMEOUT_MS) as dl_info:
+                page.click(
+                    '[data-automation-id*="excel" i], '
+                    'text="Export to Excel", text="Export to Spreadsheet", '
+                    'text="Excel"',
+                    timeout=6000,
+                )
+            dl = dl_info.value
+            dest = download_dir / "academic_progress.xlsx"
+            dl.save_as(str(dest))
+            return dest
+        except (PWTimeout, Exception):
+            continue
 
     raise RuntimeError(
-        "Could not find the Excel export button on the Academic Progress report page. "
-        "The Workday UI may have changed — please export the file manually and upload it."
+        "Could not find an Excel export button on the Academic Progress page.\n"
+        "The Workday UI may have changed — please export the file manually "
+        "(look for an Excel/Export icon on the report page) and upload it."
     )
 
 
-# ── Main entry point ─────────────────────────────────────────────────────────
+# ── Main entry point ──────────────────────────────────────────────────────────
 
 def scrape_workday_sync(
     workday_url: str | None = None,
     progress_cb: Callable[[str], None] | None = None,
 ) -> dict:
     """
-    Run the full Workday scrape in the calling thread (use in a background thread).
+    Run the full Workday scrape in the calling thread (call from a background thread).
 
-    Returns:
-        {"missing_details": [...], "raw_bytes": bytes}
-    Raises:
-        RuntimeError / TimeoutError on failure.
+    Returns {"missing_details": [...], "parsed_rows": [...]}
+    Raises RuntimeError / TimeoutError on failure.
     """
     cb = progress_cb or (lambda _: None)
-    base_url = (workday_url or DEFAULT_WORKDAY_URL).rstrip("/")
+    task_url = (workday_url or TASK_URL).strip()
 
     with tempfile.TemporaryDirectory() as tmpdir:
         download_dir = Path(tmpdir)
@@ -203,26 +177,29 @@ def scrape_workday_sync(
             )
             context = browser.new_context(
                 accept_downloads=True,
-                viewport={"width": 1400, "height": 900},
+                viewport={"width": 1440, "height": 900},
             )
             page = context.new_page()
 
             try:
+                # Navigate directly to the task — Workday auto-redirects to SSO
                 cb("navigating")
-                page.goto(base_url, timeout=30000)
+                page.goto(task_url, timeout=30000)
 
-                _wait_for_login(page, base_url, cb)
+                # Wait for student to complete SSO / MFA
+                _wait_for_login(page, cb)
                 cb("logged_in")
 
-                _open_academic_progress(page, cb)
+                # If SSO redirected to Workday home, navigate back to the task
+                _ensure_on_task(page, task_url, cb)
                 cb("report_open")
 
+                # Export to Excel
                 xlsx_path = _export_to_excel(page, download_dir, cb)
-                cb("parsing")
 
+                cb("parsing")
                 raw_bytes = xlsx_path.read_bytes()
                 parsed = parse_academic_progress_xlsx(raw_bytes)
-                # Mirror the upload endpoint's response shape
                 return {
                     "missing_details": parsed.get("not_satisfied") or [],
                     "parsed_rows": parsed.get("detail_rows") or [],
