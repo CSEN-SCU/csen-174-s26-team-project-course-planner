@@ -356,6 +356,14 @@ def run_planning_agent(
 
     previous_plan: optional dict from the last UI plan for follow-up turns.
     """
+    # Cannot plan without a requirement list — the schedule block would be empty
+    # and the LLM would either hallucinate freely or return 0 courses.
+    if not missing_details and not previous_plan:
+        raise ValueError(
+            "No academic progress data found. "
+            "Please upload your Academic Progress (.xlsx) file first."
+        )
+
     model = os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
 
     schedule_index = load_schedule_section_index()

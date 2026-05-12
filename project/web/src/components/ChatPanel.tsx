@@ -172,6 +172,20 @@ export function ChatPanel({
 
     const lower = trimmed.toLowerCase();
 
+    // Gate: must have transcript before planning
+    if (!fileUploaded) {
+      setMessages((m) => [
+        ...m,
+        {
+          id: `a-${Date.now()}`,
+          role: "assistant",
+          content:
+            "Please upload your Academic Progress (.xlsx) file first, or sync directly from Workday using the button below.",
+        },
+      ]);
+      return;
+    }
+
     // Handle pending transcript update confirmation
     if (pendingFile) {
       if (lower === "yes" || lower.startsWith("yes") || lower.includes("update")) {
