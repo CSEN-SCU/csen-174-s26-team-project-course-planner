@@ -1,47 +1,48 @@
-# Sprint 1 Retrospective (W6D2)
+# Sprint 1 Retrospective
 
 ## What went well in Sprint 1?
 
-In Sprint 1, we focused on building a sustainable development foundation first. We set up and expanded a testing baseline (unit + integration, with an end-to-end mindset for user-visible flows), and we actually used the **Red → Green** loop instead of treating tests as “documentation that nobody runs.” A concrete example: while running our tests, we identified a “contract gap” in backend security functionality and filled in missing session/password-related modules so that targeted tests moved from Red to Green and stayed reproducible.
+In Sprint 1, we built a sustainable development workflow for the project. We first organized our project ideas and split work ownership into multiple systems, as defined at the bottom of `architecture/architecture.md`. We then set up the testing suite in the `project/course_planner/tests` folder so that we could automatically validate our work. Lastly, we began to work on the features and functionality of the project with a new frontend and backend that will be used for the final product. On the AI implementation side, we made schedule generation more operationally robust: explicit handling when the model provider is misconfigured or overloaded, tests that encode the expected contract, and a path to extend planning features without breaking existing behavior.
 
-Collaboration also improved because we aligned on module ownership first (based on `architecture/architecture.md`), then split test writing by that ownership, and labeled new test files by author. That reduced coordination overhead (“who owns this failure?”) and made failures easier to route and debug. Overall, tests became more predictable to run, bugs were easier to isolate, and we now have a stronger regression safety net going into feature work.
 
 ## What could be improved?
 
-Sprint 1 delivered tests and baseline security modules, but from a “usable product that can evolve” perspective we still lack two key capabilities: a **user account system** and **per-user LLM memory / long-term context**. Right now the app feels closer to a single-user/single-session experience: we cannot reliably isolate preferences and planning data per user, and LLM context does not persist across repeated usage. That’s a major gap for course planning, where students iteratively revise plans over multiple days/weeks.
+During Sprint 1 we delivered tests, basic security, and a foundation for the final project, but we still have many features left to implement. Right now the app feels closer to a single-session experience: we cannot reliably isolate preferences and planning data per user, and LLM context does not persist across repeated usage. That's the functionality we will focus on during the next Sprint. We feel we could spend more time dedicated to adding these features outside of course and the lab sections, which we mainly spend on the assignments. During Sprint 2, we would like to see a better mix of general progress and assignment work so that both progress well. 
 
-Our testing work also exposed areas to improve: (1) keep a cleaner boundary between tests and implementation details so tests remain stable under refactors, and (2) add more end-to-end validation of **user-level behaviors** (e.g., data isolation after login, memory never leaking across users, and correct behavior when sessions expire). In Sprint 2 we should extend tests from “engineering foundation” into “product behavior guarantees.”
+AI implementation improvements:
+Observability for AI failures: clearer user-facing copy + logging/metrics when Gemini returns 503 / empty responses, so support and demos don’t depend on guessing. 
+Evaluation, not only correctness tests: lightweight checks that recommendations stay on-policy (e.g. units caps, no hallucinated course codes) before we add explainability (#12) and feedback (#13).
 
-## Celebrate (specific people + specific contributions)
+## Celebrate
 
-Use this table during/after class for **Jiasheng, Jason, Ismael, and Joey** to fill in and confirm specific contributions. Aim to include concrete artifacts (files/modules/tests/bugs fixed/PRs) and the impact of the work.
-
-| Member | Specific contributions (what you built, where it lives, and why it mattered) |
+| Member | Specific contributions |
 |---|---|
-| **Jiasheng** | add rate my professor api to llm recommand system, add feature that pattern match user's transcript to fetch.  |
-| **Jason** | Added AI-provider fallback behavior so schedule generation returns a safe fallback response when the upstream model is unavailable/rate-limited instead of timing out with a user-facing error; also added/maintained AI tests to validate provider selection and fallback behavior (`project/course_planner/tests/jason/test_planning_agent_provider_fallback.py`) and authored red tests for next API features (`project/course_planner/tests/jason/test_planning_agent_future_features_red.py`). |
-| **Ismael** | (to fill in) |
-| **Joey** | (to fill in) |
+| **Jiasheng** | Added rate my professor API to LLM recommendation system, added feature that pattern match user's transcript to fetch.  |
+| **Jason** | Implemented and hardened AI-backed schedule generation in the main planner: provider selection and safe fallback when Gemini is unavailable or rate-limited so users get a predictable response instead of a hard failure; added automated tests under project/tests/jason/ to lock in provider/fallback behavior and red tests for upcoming planning API behavior so we can extend the AI surface without regressions. (If you also shipped resilience in project/course_planner — e.g. retries / model fallback on 503 — add one short clause: “Added retry + fallback model behavior for transient Gemini 503s.”  |
 
-## AI tools reflection (two short paragraphs)
+| **Ismael** | Implemented Vitest and Testing Library under project/web, added owner-scoped test scripts and project/tests/README.md so the frontend suite runs from project/web. Added project/tests/ismael/iy_plannernav_accessibility.test.tsx, which checks that when Build is the active planner tab, that tab’s button exposes aria-current="page" so screen readers can tell which section of the planner is selected—not only visual styling. That check started RED because PlannerNav did not set aria-current; implementing aria-current on the active tab (and type="button" on tab buttons) made the test GREEN.
 
-AI tools were most helpful for test work this sprint. Using Cursor/Claude, we could generate a lot of **correctly-structured** test scaffolding quickly (Arrange/Act/Assert), fill in repetitive boilerplate (setup, mocks, common assertions), and expand unit + integration coverage with less manual typing. In our case, AI was especially effective at translating “what behavior should users rely on?” into executable test descriptions, which we then refined into stronger assertions (for example: session cookie security flags, password storage properties like unique salts and verification behavior). Net effect: going from zero to a runnable test file was dramatically faster.
+| **Joey** | Ported test suite from initial project based on Ismael's prototype, found in the `project` directory, to the final project location in the `project/course_planner` directory. In addition, consolidated tests from a tests and api/tests folder into one tests folder. This corrected a mistake we made during week 5, where we wrote our test suite for the initial project on top of Ismeal's prototype, rather than the new project base. This consolidation allowed us to continue using our necessary testing in the final code location. |
 
-AI also made some things harder. First, without full context it can **invent APIs/paths** that look plausible but fail immediately when run, which forces extra time to reconcile real module boundaries and imports. Second, AI-generated assertions often drift toward implementation details (e.g., hard-coding a specific hash prefix or internal structure), which can make tests brittle during refactors unless we correct them. Third, when tests fail, AI suggestions can be overconfident and push changes in the wrong layer “just to make it green.” Our practical workflow this sprint was: let AI accelerate drafts and edge-case enumeration, but keep humans responsible for anchoring tests on user-observable behavior and enforcing the Red→Green minimal-change discipline.
+## AI tools reflection
 
-## Sprint 2 commitments (2–3 improvements + linked Kanban cards)
+AI tools were most helpful for developing the test suite during Sprint 1. Using Cursor and Claude, we generated a lot of test scaffolding quickly using the Arrange/Act/Assert design discussed in class. For example: session cookie security flags, password storage properties like unique salts and verification behavior.
 
-In Sprint 2, we commit to extending our Sprint 1 testing foundation into “multi-user + durable memory” product capabilities. Each commitment maps directly to a Kanban card:
+We also faced some challenges using AI tools during this Sprint. We ran into some cases of hallucination, where AI improperly created or solved a test. For example, when asking it to create a Database test, it would also create the database even though it was not prompted to do so. Another example was AI inventing fake APIs that looked plausible but failed to run. We had to keep these in mind and not just blindly run code as written.
+
+## Sprint 2 Commitments
+
+In Sprint 2, we commit to extending our Sprint 1 foundation with the features in our project plan. Each commitment maps directly to a Kanban card:
 
 1) **Integrate the 4-Year Plan feature into the main workflow**  
    - Kanban card: [Issue #5 — Integrate 4 Year Plan Feature](https://github.com/CSEN-SCU/csen-174-s26-team-project-course-planner/issues/5)  
    - What we will do: define the 4-year plan data model and UI entry points; add tests for key flows (at minimum: create/edit and a primary “view/export” path) so existing behavior stays stable as we ship new functionality.
 
-2) **Add a user account system (login/session/data isolation)**  
+2) **Add a user account system**  
    - Kanban card: [Issue #6 — Add User Account System](https://github.com/CSEN-SCU/csen-174-s26-team-project-course-planner/issues/6)  
    - What we will do: implement a minimum viable account + session flow; define acceptance criteria for user data isolation; add end-to-end coverage (each user sees only their own data, correct behavior after logout/session expiration).
 
-3) **Add a per-user RAG/memory database (LLM personalization over time)**  
+3) **Add a per-user RAG/memory database**  
    - Kanban card: [Issue #9 — add RAG database for user](https://github.com/CSEN-SCU/csen-174-s26-team-project-course-planner/issues/9)  
    - What we will do: bind memory storage/retrieval to a userId; implement a minimal retrieval chain (write → retrieve → inject into prompts/context); add tests and basic guardrails to prevent cross-user leakage (retrieve only current user memory, controllable top-k and context length limits).
 
