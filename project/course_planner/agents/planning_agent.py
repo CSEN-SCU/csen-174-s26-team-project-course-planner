@@ -94,9 +94,10 @@ def _pair_lab_corequirements(
 
     md_by_code: dict[str, dict] = {}
     for item in missing_details or []:
-        code = _normalize_code((item or {}).get("course"))
-        if code:
-            md_by_code[code] = item
+        for code in _resolve_item_codes(item):
+            norm = _normalize_code(code)
+            if norm and norm not in md_by_code:
+                md_by_code[norm] = item
 
     out = list(recommended)
     seen_codes = {_normalize_code(item.get("course")) for item in out}
@@ -121,7 +122,16 @@ def _pair_lab_corequirements(
         partner_code = f"{subject} {partner_number}"
         if partner_code in seen_codes:
             continue
+
+        # Try the primary alias first, then CSEN↔COEN swap
+        _alias_map = {"CSEN": "COEN", "COEN": "CSEN"}
         partner_md = md_by_code.get(partner_code)
+        resolved_partner_code = partner_code
+        if not partner_md and subject in _alias_map:
+            alt = f"{_alias_map[subject]} {partner_number}"
+            partner_md = md_by_code.get(alt)
+            if partner_md:
+                resolved_partner_code = alt
         if not partner_md:
             continue
 
@@ -133,13 +143,15 @@ def _pair_lab_corequirements(
 
         additions.append(
             {
-                "course": partner_md.get("course", partner_code),
+                "course": resolved_partner_code,
+                "title": partner_md.get("title", f"{partner_kind.capitalize()} for {item.get('course', code)}"),
                 "category": partner_md.get("category", item.get("category", "")),
                 "units": partner_units_int,
                 "reason": f"{partner_kind.capitalize()} co-requirement of {item.get('course', code)}",
             }
         )
         seen_codes.add(partner_code)
+        seen_codes.add(resolved_partner_code)
 
     return out + additions
 
