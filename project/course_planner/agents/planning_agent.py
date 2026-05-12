@@ -144,6 +144,61 @@ def _pair_lab_corequirements(
     return out + additions
 
 
+def _extract_codes_from_requirement(text: str) -> list[str]:
+    """Extract every course code embedded in a requirement description.
+
+    Handles SCU Workday patterns like:
+      "CSEN/COEN 122 & 122L"    → CSEN 122, COEN 122, CSEN 122L, COEN 122L
+      "CSEN/COEN 194/L"         → CSEN 194, COEN 194, CSEN 194L, COEN 194L
+      "ECEN/ELEN 153 & 153L"    → ECEN 153, ELEN 153, ECEN 153L, ELEN 153L
+      "Core: ENGR: RTC 3"       → []  (no usable course code)
+    """
+    t = text.upper()
+    # "194/L" → "194 & 194L"
+    t = re.sub(r"(\d+[A-Z]?)/L\b", r"\1 & \1L", t)
+
+    # Find all slash-paired subject groups: "CSEN/COEN" → ["CSEN", "COEN"]
+    slash_subj_re = re.compile(r"\b([A-Z]{2,6}(?:/[A-Z]{2,6})+)\b")
+    subj_groups: list[list[str]] = []
+    subj_group_positions: list[tuple[int, int, list[str]]] = []
+    for m in slash_subj_re.finditer(t):
+        variants = m.group(0).split("/")
+        subj_group_positions.append((m.start(), m.end(), variants))
+
+    # Find all standalone subjects (not part of a slash group)
+    solo_subj_re = re.compile(r"\b([A-Z]{2,6})\b")
+
+    # Find all number tokens (course numbers) that follow a subject group
+    num_re = re.compile(r"\b(\d{1,3}[A-Z]?)\b")
+
+    codes: list[str] = []
+    seen: set[str] = set()
+
+    # Walk through slash-groups and collect the numbers that follow each group
+    for start, end, variants in subj_group_positions:
+        # Look for numbers in the text after this group (up to the next subject or 60 chars)
+        tail = t[end:end + 80]
+        nums = num_re.findall(tail)
+        # Stop at the first non-number/non-separator token (rough heuristic: take up to 4 nums)
+        for num in nums[:4]:
+            for subj in variants:
+                c = f"{subj} {num}"
+                if c not in seen:
+                    codes.append(c)
+                    seen.add(c)
+
+    # If nothing found via slash-groups, fall back to simple SUBJ NUM pairs
+    if not codes:
+        simple_re = re.compile(r"\b([A-Z]{2,6})\s+(\d{1,3}[A-Z]?)\b")
+        for subj, num in simple_re.findall(t):
+            c = f"{subj} {num}"
+            if c not in seen:
+                codes.append(c)
+                seen.add(c)
+
+    return codes
+
+
 def _recompute_total_units(recommended: list[dict]) -> int:
     total = 0
     for item in recommended or []:
@@ -202,6 +257,25 @@ def _summarize_previous_plan(previous_plan: dict | None) -> str:
     )
 
 
+def _resolve_item_codes(item: dict) -> list[str]:
+    """Return the list of course codes to try for one missing_details item.
+
+    Workday transcripts often have course_code=None with the code embedded
+    in the requirement text, e.g. "CSEN/COEN 122 & 122L".  Fall back to
+    extracting from the category/requirement field when the course field is empty.
+    """
+    explicit = (item.get("course") or "").strip()
+    if explicit:
+        return [explicit]
+    for key in ("category", "requirement"):
+        text = (item.get(key) or "").strip()
+        if text:
+            extracted = _extract_codes_from_requirement(text)
+            if extracted:
+                return extracted
+    return []
+
+
 def _build_schedule_block(
     missing_details: list[dict], schedule_index: dict
 ) -> tuple[str, set[tuple[str, str]]]:
@@ -217,14 +291,23 @@ def _build_schedule_block(
     offered_keys: set[tuple[str, str]] = set()
 
     for item in missing_details:
-        code = (item.get("course") or "").strip()
-        keys = planned_section_keys(code)
-        found = {k for k in keys if k in schedule_index}
+        codes = _resolve_item_codes(item)
+        if not codes:
+            # requirement has no parseable course code (e.g. open-ended Core categories)
+            label = (item.get("category") or item.get("requirement") or "unknown")[:60]
+            not_offered.append(f"[open requirement: {label}]")
+            continue
+        found: set[tuple[str, str]] = set()
+        for code in codes:
+            found |= {k for k in planned_section_keys(code) if k in schedule_index}
         if found:
-            offered.append(item)
+            # Attach the resolved primary code so the LLM sees an explicit code
+            primary = codes[0]
+            enriched = {**item, "course": primary}
+            offered.append(enriched)
             offered_keys |= found
         else:
-            not_offered.append(code)
+            not_offered.extend(codes)
 
     lines: list[str] = []
 
@@ -238,9 +321,10 @@ def _build_schedule_block(
         )
         for item in offered:
             code = item.get("course", "?")
-            cat = item.get("category", "")
-            units = item.get("units", "?")
-            lines.append(f"  {code} ({cat}, {units}u)")
+            cat = (item.get("category") or item.get("requirement") or "").strip()
+            units = item.get("units")
+            unit_str = f"{units}u" if units not in (None, "", "?") else "see catalog"
+            lines.append(f"  {code} ({cat}, {unit_str})")
 
     if not_offered:
         lines.append(
@@ -505,13 +589,23 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
     raw_recommended = parsed.get("recommended") or []
 
     # ── Build requirement whitelist ──────────────────────────────────────────
+    # Use _resolve_item_codes so we catch codes embedded in requirement text.
+    # Expand each code through planned_section_keys to cover CSEN↔COEN aliases
+    # and lab variants so the whitelist never rejects a valid alias.
     req_codes: set[str] | None = None
     if missing_details:
-        req_codes = {
-            str(item.get("course") or "").strip().upper()
-            for item in missing_details
-            if item.get("course")
-        }
+        resolved: set[str] = set()
+        for item in missing_details:
+            for c in _resolve_item_codes(item):
+                resolved.add(c.upper())
+                for subj, num in planned_section_keys(c):
+                    resolved.add(f"{subj} {num}")
+                    # Add lab variant (only if not already a lab code)
+                    if not num.endswith("L"):
+                        resolved.add(f"{subj} {num}L")
+                    else:
+                        resolved.add(f"{subj} {num[:-1]}")  # base without L
+        req_codes = resolved if resolved else None  # None = skip whitelist (open Core)
 
     # ── Validate → feedback loop (max 2 correction rounds) ──────────────────
     # Instead of silently dropping hallucinated courses, we tell the LLM exactly
