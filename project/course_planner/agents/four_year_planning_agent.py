@@ -192,6 +192,44 @@ Output JSON matching the schema exactly.
     except json.JSONDecodeError as e:
         raise ValueError(f"Could not parse four-year plan JSON: {e}") from e
 
+    # ── Hallucination filter ─────────────────────────────────────────────────
+    # The four-year plan must ONLY distribute courses that are in missing_details.
+    # Build a whitelist of normalised codes from the input requirements.
+    required_codes: set[str] = {
+        str(item.get("course") or "").strip().upper()
+        for item in missing_details
+        if item.get("course")
+    }
+
+    def _is_valid_course(course_code: str) -> bool:
+        code = (course_code or "").strip().upper()
+        if not code:
+            return False
+        if code in required_codes:
+            return True
+        # Accept lab variants: e.g. "CSEN 194L" when requirement is "CSEN 194"
+        # and vice-versa (strip trailing L or add it).
+        if code.endswith("L") and code[:-1] in required_codes:
+            return True
+        if code + "L" in required_codes:
+            return True
+        return False
+
+    for quarter in parsed.get("quarters") or []:
+        original = quarter.get("courses") or []
+        filtered = [c for c in original if _is_valid_course(str(c.get("course") or ""))]
+        if len(filtered) < len(original):
+            removed = [str(c.get("course", "?")) for c in original if c not in filtered]
+            import warnings
+            warnings.warn(
+                f"[four_year_plan] Hallucinated courses removed from {quarter.get('term', '?')}: "
+                + ", ".join(removed),
+                stacklevel=2,
+            )
+        quarter["courses"] = filtered
+        quarter["total_units"] = sum(int(c.get("units") or 0) for c in filtered)
+
+    # ────────────────────────────────────────────────────────────────────────
     parsed.setdefault("total_remaining_units", total_units)
     parsed["meta"] = {"provider": "gemini", "model": candidate, "request_id": request_id}
     return parsed

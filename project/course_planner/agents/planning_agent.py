@@ -232,8 +232,9 @@ def _build_schedule_block(
         lines.append("=== COURSES CONFIRMED IN NEXT-TERM SCHEDULE ===")
         lines.append(
             "You MUST only recommend courses from the list below. "
-            "Every recommended course code MUST appear here exactly. "
-            "Do NOT invent courses that are not in this list."
+            "Copy each course code CHARACTER-FOR-CHARACTER — do not alter, "
+            "abbreviate, or substitute any code. "
+            "Do NOT invent or guess codes that are not in this list."
         )
         for item in offered:
             code = item.get("course", "?")
@@ -245,7 +246,8 @@ def _build_schedule_block(
         lines.append(
             "\n=== NOT OFFERED NEXT TERM — DO NOT RECOMMEND ===\n"
             "The following required courses are NOT available next term. "
-            "Do NOT include them in your plan under any circumstances:\n  "
+            "Do NOT include them in your plan under any circumstances. "
+            "Do NOT substitute a similar-sounding or numbered course in their place:\n  "
             + ", ".join(not_offered)
         )
 
@@ -255,19 +257,83 @@ def _build_schedule_block(
     return "\n".join(lines) + "\n\n", offered_keys
 
 
-def _filter_to_schedule(
-    recommended: list[dict], schedule_index: dict
-) -> list[dict]:
-    """Remove any LLM-invented courses that don't exist in the next-term schedule at all."""
-    if not schedule_index:
-        return recommended
-    out = []
+def _is_code_in_required(code: str, required_codes: set[str]) -> bool:
+    """True if code (or its lab-pair variant) is a real student requirement."""
+    norm = code.strip().upper()
+    return (
+        norm in required_codes
+        or (norm.endswith("L") and norm[:-1] in required_codes)
+        or (norm + "L") in required_codes
+    )
+
+
+def _is_code_in_schedule(code: str, schedule_index: dict) -> bool:
+    """True if the course code exists in the published next-term schedule."""
+    return any(k in schedule_index for k in planned_section_keys(code))
+
+
+def _partition_recommended(
+    recommended: list[dict],
+    schedule_index: dict,
+    required_codes: set[str] | None,
+) -> tuple[list[dict], list[dict]]:
+    """Split recommendations into (valid, rejected).
+
+    A course is valid when:
+      1. It is a real student requirement (if required_codes whitelist available).
+      2. It appears in the live next-term schedule index.
+
+    Rejected items carry a ``_rejection_reason`` field for the feedback prompt.
+    """
+    valid: list[dict] = []
+    rejected: list[dict] = []
     for item in recommended:
         code = (item.get("course") or "").strip()
-        keys = planned_section_keys(code)
-        if any(k in schedule_index for k in keys):
-            out.append(item)
-    return out
+        if required_codes is not None and not _is_code_in_required(code, required_codes):
+            rejected.append({**item, "_rejection_reason": "not_a_real_requirement"})
+        elif schedule_index and not _is_code_in_schedule(code, schedule_index):
+            rejected.append({**item, "_rejection_reason": "not_in_next_term_schedule"})
+        else:
+            valid.append(item)
+    return valid, rejected
+
+
+def _build_gap_fill_prompt(
+    rejected: list[dict],
+    valid_so_far: list[dict],
+    offered_block: str,
+    user_preference: str,
+) -> str:
+    """Build a targeted prompt that tells the LLM exactly which courses were
+    hallucinated and asks it to replace each one with a real alternative."""
+    rejected_lines = "\n".join(
+        f"  - {item.get('course', '?')} "
+        f"(category: {item.get('category', '?')}, "
+        f"units: {item.get('units', '?')}) "
+        f"→ reason rejected: {item.get('_rejection_reason', 'unknown')}"
+        for item in rejected
+    )
+    already_valid = ", ".join(
+        item.get("course", "?") for item in valid_so_far
+    ) or "none"
+    return f"""=== CORRECTION REQUIRED ===
+Your previous plan included courses that do not exist in the next-term schedule
+or are not real student requirements. They have been removed:
+
+{rejected_lines}
+
+Courses already confirmed valid (do NOT repeat these): {already_valid}
+
+{offered_block}
+=== CURRENT ASK ===
+{user_preference}
+
+Replace EACH rejected course above with a real alternative drawn only from the
+CONFIRMED NEXT-TERM SCHEDULE list. Output JSON with only the replacement courses
+in `recommended` — one replacement per rejected slot where possible.
+Keep the same category/unit budget as the course you are replacing.
+Do NOT re-invent the rejected codes; do NOT repeat already-valid courses.
+"""
 
 
 def run_planning_agent(
@@ -429,8 +495,53 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
         ) from e
 
     raw_recommended = parsed.get("recommended") or []
-    # Remove any courses the LLM invented that don't exist in the schedule at all
-    raw_recommended = _filter_to_schedule(raw_recommended, schedule_index)
+
+    # ── Build requirement whitelist ──────────────────────────────────────────
+    req_codes: set[str] | None = None
+    if missing_details:
+        req_codes = {
+            str(item.get("course") or "").strip().upper()
+            for item in missing_details
+            if item.get("course")
+        }
+
+    # ── Validate → feedback loop (max 2 correction rounds) ──────────────────
+    # Instead of silently dropping hallucinated courses, we tell the LLM exactly
+    # which codes failed and why, then ask it to produce real replacements.
+    valid_courses, rejected = _partition_recommended(
+        raw_recommended, schedule_index, req_codes
+    )
+    for _round in range(2):
+        if not rejected:
+            break
+        gap_prompt = _build_gap_fill_prompt(
+            rejected, valid_courses, schedule_block, user_preference
+        )
+        try:
+            gap_resp = client.models.generate_content(
+                model=resolved_model or model,
+                contents=gap_prompt,
+                config=types.GenerateContentConfig(
+                    max_output_tokens=4096,
+                    response_mime_type="application/json",
+                    response_schema=PLANNING_SCHEMA,
+                ),
+            )
+            gap_text = (gap_resp.text or "").strip()
+            if gap_text:
+                gap_parsed = _parse_json_from_response(gap_text)
+                replacements = gap_parsed.get("recommended") or []
+                new_valid, still_rejected = _partition_recommended(
+                    replacements, schedule_index, req_codes
+                )
+                valid_courses.extend(new_valid)
+                rejected = still_rejected  # retry only what still fails
+        except Exception:  # noqa: BLE001
+            break  # correction failed — keep what we have
+
+    raw_recommended = valid_courses
+    # ────────────────────────────────────────────────────────────────────────
+
     paired = _pair_lab_corequirements(raw_recommended, missing_details)
     if paired != raw_recommended:
         parsed["recommended"] = paired
