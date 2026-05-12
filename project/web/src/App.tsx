@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { deleteMemory, generateFourYearPlan, getMemory, login as apiLogin, saveMemory } from "./api/client";
+import { deleteMemory, generateFourYearPlan, getMemory, login as apiLogin, register as apiRegister, saveMemory } from "./api/client";
 import { CalendarView } from "./components/CalendarView";
 import { ChatPanel, type ChatUiMessage } from "./components/ChatPanel";
 import { FourYearPlanView } from "./components/FourYearPlanView";
@@ -136,6 +136,24 @@ export default function App() {
     }
   }, []);
 
+  const handleRegister = useCallback(async (username: string, password: string) => {
+    try {
+      const r = await apiRegister(username, password);
+      if (!r.success) return { ok: false as const, error: "Username already taken." };
+      // Auto-login after successful registration
+      return await handleLogin(username, password);
+    } catch (e) {
+      const hint = e instanceof Error ? e.message : "Could not reach the server.";
+      const networkish = hint === "Failed to fetch" || hint.includes("NetworkError") || hint.includes("fetch resource");
+      return {
+        ok: false as const,
+        error: networkish
+          ? "Cannot reach API — start uvicorn on port 8000, restart `npm run dev`, or check firewall."
+          : hint,
+      };
+    }
+  }, [handleLogin]);
+
   const handleSelectSession = useCallback((row: MemorySessionRow) => {
     setLocalOverride(null);
     setActiveSessionId(row.id);
@@ -232,6 +250,7 @@ export default function App() {
       <LeftPanel
         userId={userId}
         onLogin={handleLogin}
+        onRegister={handleRegister}
         sessions={sessions}
         activeSessionId={activeSessionId}
         onSelectSession={handleSelectSession}

@@ -139,3 +139,14 @@ export async function login(username: string, password: string) {
   if (!res.ok) throw new Error(errFromBody(data));
   return data;
 }
+
+export async function register(username: string, password: string) {
+  const res = await fetch(`${API_BASE}/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(errFromBody(data));
+  return data as { success: boolean };
+}
