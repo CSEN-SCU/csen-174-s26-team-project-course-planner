@@ -10,6 +10,8 @@ Public functions:
 - `create_user(username, email, password, *, db_path=None) -> int`
 - `verify_login(username, password, *, db_path=None) -> bool`
 - `get_user_by_username(username, *, db_path=None) -> dict | None`
+- `get_user_by_email(email, *, db_path=None) -> dict | None`
+- `get_or_create_user_for_google(email, google_sub, *, db_path=None) -> dict`
 - `get_credentials_dict(*, db_path=None) -> dict`
 
 Errors:
@@ -20,7 +22,9 @@ Errors:
 
 from __future__ import annotations
 
+import hashlib
 import re
+import secrets
 import sqlite3
 from typing import Optional
 
@@ -112,6 +116,90 @@ def get_user_by_username(
         return dict(row) if row else None
     finally:
         close_conn(conn)
+
+
+def get_user_by_email(
+    email: str,
+    *,
+    db_path: Optional[str] = None,
+) -> Optional[dict]:
+    """Return the user row for this email, or None."""
+    if not email or not isinstance(email, str):
+        return None
+    normalized = email.strip().lower()
+    if not normalized:
+        return None
+    conn = get_conn(db_path)
+    try:
+        row = conn.execute(
+            "SELECT id, username, email, password_hash, created_at FROM users WHERE lower(email) = ?",
+            (normalized,),
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        close_conn(conn)
+
+
+def _google_username_from_sub(google_sub: str) -> str:
+    """Build a username that satisfies ``_USERNAME_RE`` from Google's ``sub``.
+
+    Strategy: keep the alphanumeric portion of ``sub``, prefix ``g_``,
+    truncate at 32 chars, and fall back to a sha256-prefixed token for
+    pathological inputs (empty, all-symbols). The resulting string is
+    guaranteed to match ``_USERNAME_RE`` by construction.
+    """
+    cleaned = "".join(c for c in (google_sub or "") if c.isalnum())
+    if not cleaned:
+        cleaned = hashlib.sha256((google_sub or "").encode("utf-8")).hexdigest()[:24]
+    base = f"g_{cleaned}"
+    if len(base) > 32:
+        digest = hashlib.sha256(cleaned.encode("utf-8")).hexdigest()[:24]
+        base = f"g_{digest}"
+    if len(base) < 3:
+        base = "g_x"
+    assert _USERNAME_RE.match(base), f"generated username {base!r} violates pattern"
+    return base
+
+
+def get_or_create_user_for_google(
+    email: str,
+    google_sub: str,
+    *,
+    db_path: Optional[str] = None,
+) -> dict:
+    """Find user by email or create one for Google sign-in.
+
+    Idempotent and TOCTOU-safe: if another callback races us and inserts
+    the same email between our ``get_user_by_email`` and ``create_user``,
+    we re-read the row instead of bubbling :class:`UserAlreadyExistsError`
+    up to the user.
+    """
+    if not _EMAIL_RE.match((email or "").strip()):
+        raise ValueError("Google account email is missing or invalid.")
+    normalized_email = email.strip().lower()
+
+    existing = get_user_by_email(normalized_email, db_path=db_path)
+    if existing is not None:
+        return existing
+
+    username = _google_username_from_sub(google_sub)
+    if get_user_by_username(username, db_path=db_path) is not None:
+        digest = hashlib.sha256(f"{google_sub}:{normalized_email}".encode()).hexdigest()[:28]
+        username = f"g_{digest}"[:32]
+
+    random_pw = secrets.token_urlsafe(48)
+    try:
+        create_user(username, normalized_email, random_pw, db_path=db_path)
+    except UserAlreadyExistsError:
+        # Concurrent callback inserted the same email or username; re-read.
+        existing = get_user_by_email(normalized_email, db_path=db_path)
+        if existing is not None:
+            return existing
+        raise
+    user = get_user_by_username(username, db_path=db_path)
+    if user is None:
+        raise RuntimeError("User was created but could not be reloaded.")
+    return user
 
 
 def verify_login(

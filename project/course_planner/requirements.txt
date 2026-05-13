@@ -1,4 +1,6 @@
 google-genai
+google-auth
+google-auth-oauthlib
 streamlit
 python-dotenv
 openpyxl

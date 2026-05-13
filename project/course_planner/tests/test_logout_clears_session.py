@@ -9,8 +9,6 @@ the keys the real app sets in main.py.
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 import pytest
 
 
@@ -36,6 +34,11 @@ def test_clear_user_scoped_session_removes_user_state(stub_session_state):
     stub_session_state.update({
         "user_id": 42,
         "username": "alice",
+        "authentication_status": True,
+        "name": "Alice Q. User",
+        "email": "alice@example.com",
+        "_oauth_state": "csrf-token-xyz",
+        "_oauth_nonce": "replay-token-abc",
         "missing_details": [{"course": "COEN 146"}],
         "parsed_rows": [{"requirement": "X", "status": "Satisfied"}],
         "transcript_progress_snapshot": {"course_codes": []},
@@ -52,6 +55,11 @@ def test_clear_user_scoped_session_removes_user_state(stub_session_state):
     for leaked in (
         "user_id",
         "username",
+        "authentication_status",
+        "name",
+        "email",
+        "_oauth_state",
+        "_oauth_nonce",
         "missing_details",
         "parsed_rows",
         "transcript_progress_snapshot",

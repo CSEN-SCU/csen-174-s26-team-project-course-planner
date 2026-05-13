@@ -9,7 +9,9 @@ This module is the only place that touches `st.session_state` for auth.
 
 from __future__ import annotations
 
+import logging
 import os
+import secrets
 from typing import Optional
 
 import streamlit as st
@@ -17,6 +19,13 @@ import streamlit_authenticator as stauth
 
 from auth import users_db
 from db.migrate import migrate
+
+try:
+    from auth import google_oauth as _google_oauth
+except ImportError:  # pragma: no cover - exercised only when google-auth wheels missing
+    _google_oauth = None  # type: ignore[assignment]
+
+logger = logging.getLogger(__name__)
 
 COOKIE_NAME = "scu_planner_session"
 COOKIE_EXPIRY_DAYS = 7
@@ -29,9 +38,25 @@ COOKIE_EXPIRY_DAYS = 7
 # it everywhere within `streamlit_auth`.
 _AUTH_SESSION_KEY = "_scu_authenticator"
 
+# Single source of truth for the session keys streamlit-authenticator
+# writes. If the library renames any of these in a future version, the
+# fix is here, not scattered across helpers.
+_AUTHENTICATOR_SESSION_KEYS: tuple[str, ...] = (
+    "authentication_status",
+    "username",
+    "name",
+    "email",
+)
+
+# OAuth-specific session keys, all freshly minted per sign-in attempt.
+_OAUTH_SESSION_KEYS: tuple[str, ...] = (
+    "_oauth_state",
+    "_oauth_nonce",
+)
+
 # These keys are written by the planner main flow and must be cleared on
 # logout so user A cannot leak state into user B's next session.
-_USER_SCOPED_SESSION_KEYS = (
+_USER_SCOPED_SESSION_KEYS: tuple[str, ...] = (
     "missing_details",
     "parsed_rows",
     "transcript_progress_snapshot",
@@ -41,9 +66,10 @@ _USER_SCOPED_SESSION_KEYS = (
     "course_schedule_map",
     "calendar_replace_verify",
     "user_id",
-    "username",
     "planning_user_preference",
     "last_planning_message",
+    *_AUTHENTICATOR_SESSION_KEYS,
+    *_OAUTH_SESSION_KEYS,
 )
 
 
@@ -99,6 +125,137 @@ def clear_user_scoped_session() -> None:
             del st.session_state[key]
 
 
+def _clear_oauth_query_params() -> None:
+    """Remove OAuth-related parameters from the URL after a callback.
+
+    Targets Google's documented redirect params plus error/error_description
+    so a denied or expired auth doesn't leave noise in the address bar.
+    """
+    for key in ("code", "state", "scope", "authuser", "hd", "prompt",
+                "error", "error_description", "error_uri"):
+        if key in st.query_params:
+            del st.query_params[key]
+
+
+def _clear_oauth_session_keys() -> None:
+    """Drop the per-attempt state/nonce. Safe to call anytime."""
+    for key in _OAUTH_SESSION_KEYS:
+        st.session_state.pop(key, None)
+
+
+def _apply_authenticated_session(user: dict, *, display_name: str = "") -> None:
+    """Mirror streamlit-authenticator session keys plus ``user_id``.
+
+    Internal: only call this immediately after we have verified the
+    identity via either a password check or a Google ID token.
+    """
+    st.session_state["authentication_status"] = True
+    st.session_state["username"] = user["username"]
+    st.session_state["name"] = display_name or user["username"]
+    st.session_state["email"] = str(user.get("email") or "")
+    st.session_state["user_id"] = int(user["id"])
+
+
+def _sync_user_if_authenticated_in_session() -> Optional[dict]:
+    """If session_state reflects a logged-in user, validate against DB and return user row."""
+    if st.session_state.get("authentication_status") is not True:
+        return None
+    username = st.session_state.get("username")
+    if not username:
+        return None
+    user = users_db.get_user_by_username(username)
+    if user is None:
+        return None
+    st.session_state["user_id"] = int(user["id"])
+    return user
+
+
+def _mint_oauth_challenge() -> tuple[str, str]:
+    """Generate a fresh (state, nonce) pair and stash them in session_state.
+
+    Both values are 256-bit URL-safe tokens. They are tied to a single
+    sign-in attempt and are wiped on success, failure, or logout.
+    """
+    state = secrets.token_urlsafe(32)
+    nonce = secrets.token_urlsafe(32)
+    st.session_state["_oauth_state"] = state
+    st.session_state["_oauth_nonce"] = nonce
+    return state, nonce
+
+
+def _handle_google_error_redirect() -> bool:
+    """If Google redirected with ``?error=...``, surface it and clean up.
+
+    Returns ``True`` if it handled an error (caller should not try to
+    process a code in the same run), ``False`` otherwise.
+    """
+    err = st.query_params.get("error")
+    if not err:
+        return False
+    description = st.query_params.get("error_description") or ""
+    if err == "access_denied":
+        msg = "Google sign-in was cancelled."
+    else:
+        # Don't echo Google's full error_description into the UI verbatim
+        # in production — log it instead and show a stable message.
+        msg = "Google sign-in failed. Please try again."
+    logger.warning("Google OAuth redirect error: %s %s", err, description)
+    _clear_oauth_session_keys()
+    _clear_oauth_query_params()
+    st.error(msg)
+    return True
+
+
+def _try_complete_google_oauth_callback() -> None:
+    """Handle ``?code=&state=`` (or ``?error=``) on the redirect; reruns on success."""
+    if _google_oauth is None or not _google_oauth.google_oauth_configured():
+        return
+
+    if _handle_google_error_redirect():
+        return
+
+    code = st.query_params.get("code")
+    state_qp = st.query_params.get("state")
+    if not code or not state_qp:
+        return
+
+    saved_state = st.session_state.get("_oauth_state")
+    saved_nonce = st.session_state.get("_oauth_nonce")
+    if not saved_state:
+        st.error("OAuth session expired. Try **Continue with Google** again.")
+        _clear_oauth_session_keys()
+        _clear_oauth_query_params()
+        return
+
+    try:
+        raw = _google_oauth.exchange_code_for_id_token(
+            saved_state, state_qp, code, expected_nonce=saved_nonce
+        )
+        claims = _google_oauth.validate_sign_in_claims(raw)
+        user = users_db.get_or_create_user_for_google(
+            str(claims["email"]),
+            str(claims["sub"]),
+        )
+        display_name = _google_oauth.display_name_from_claims(claims)
+        _apply_authenticated_session(user, display_name=display_name)
+    except (_google_oauth.OAuthStateError, _google_oauth.OAuthClaimsError) as exc:
+        # Safe to show: these are user-facing policy errors we wrote ourselves.
+        logger.warning("Google OAuth claim/state rejected: %s", exc)
+        st.error(str(exc))
+    except Exception:
+        # Anything else (network, library, signature, expired token, DB) is
+        # logged with a stack but not shown to the user.
+        logger.exception("Google OAuth callback failed")
+        st.error("Google sign-in failed. Please try again.")
+    finally:
+        _clear_oauth_session_keys()
+        _clear_oauth_query_params()
+        _invalidate_authenticator()
+
+    if st.session_state.get("authentication_status") is True:
+        st.rerun()
+
+
 def _render_register_tab() -> None:
     st.subheader("Create an account")
     with st.form("scu_planner_register"):
@@ -125,6 +282,32 @@ def _render_register_tab() -> None:
         st.success("Account created. Switch to the Login tab to sign in.")
 
 
+def _render_google_signin_button() -> None:
+    """Render the ``Continue with Google`` link button with a fresh challenge.
+
+    A fresh ``state`` and ``nonce`` are minted on every render so a single
+    authorize URL is only ever valid for one attempt. The library
+    raises :class:`google_oauth.OAuthConfigError` if env is misconfigured;
+    we log and silently skip so the page still renders the password form.
+    """
+    if _google_oauth is None or not _google_oauth.google_oauth_configured():
+        return
+    try:
+        state, nonce = _mint_oauth_challenge()
+        auth_url = _google_oauth.build_authorization_url(state, nonce)
+    except Exception:
+        logger.exception("Failed to build Google authorization URL")
+        st.warning("Google sign-in is temporarily unavailable.")
+        return
+    st.markdown("**Sign in with Google**")
+    try:
+        st.link_button("Continue with Google", auth_url, width="stretch")
+    except TypeError:
+        # Streamlit < 1.36: link_button has no `width` kwarg.
+        st.link_button("Continue with Google", auth_url)
+    st.divider()
+
+
 def require_login() -> Optional[dict]:
     """Render login/register UI and return the current user dict or None.
 
@@ -136,11 +319,21 @@ def require_login() -> Optional[dict]:
     """
     migrate()
 
+    _try_complete_google_oauth_callback()
+
+    # Google-only sessions never get streamlit-authenticator cookies; resolve
+    # them before ``login()`` so that call does not clear session_state.
+    user_early = _sync_user_if_authenticated_in_session()
+    if user_early is not None:
+        _get_authenticator()
+        return user_early
+
     authenticator = _get_authenticator()
 
     login_tab, register_tab = st.tabs(["Login", "Register"])
 
     with login_tab:
+        _render_google_signin_button()
         try:
             authenticator.login(location="main")
         except stauth.LoginError as exc:
@@ -158,14 +351,11 @@ def require_login() -> Optional[dict]:
             _render_register_tab()
         return None
 
-    # Authenticated: keep st.session_state['user_id'] in sync so the rest of
-    # the app can scope all data by user_id.
     username = st.session_state.get("username")
     if not username:
         return None
     user = users_db.get_user_by_username(username)
     if user is None:
-        # User was deleted while their cookie was still valid.
         authenticator.logout(location="unrendered")
         clear_user_scoped_session()
         return None
@@ -189,9 +379,7 @@ def logout_button(authenticator: Optional[stauth.Authenticate] = None) -> None:
             try:
                 auth.logout(location="unrendered")
             except Exception:
-                # Logout helpers in some auth lib versions raise if no session.
-                pass
+                logger.debug("authenticator.logout raised on a stale session", exc_info=True)
         clear_user_scoped_session()
-        # Drop the cached Authenticate so the next run starts cleanly.
         _invalidate_authenticator()
         st.rerun()

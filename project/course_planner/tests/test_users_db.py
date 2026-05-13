@@ -90,3 +90,25 @@ def test_get_credentials_dict_shape_matches_streamlit_authenticator(db_path):
     assert alice["email"] == "alice@example.com"
     assert alice["password"].startswith("$2")
     assert "correct horse battery" not in alice["password"]
+
+
+def test_get_user_by_email_case_insensitive(db_path):
+    users_db.create_user("alice", "alice@example.com", "correct horse battery", db_path=db_path)
+    row = users_db.get_user_by_email("Alice@Example.com", db_path=db_path)
+    assert row is not None
+    assert row["username"] == "alice"
+
+
+def test_get_user_by_email_unknown_returns_none(db_path):
+    assert users_db.get_user_by_email("nobody@example.com", db_path=db_path) is None
+
+
+def test_get_or_create_user_for_google_creates_then_returns_same(db_path):
+    u1 = users_db.get_or_create_user_for_google(
+        "newuser@example.com", "google-sub-12345", db_path=db_path
+    )
+    u2 = users_db.get_or_create_user_for_google(
+        "NewUser@Example.com", "google-sub-12345", db_path=db_path
+    )
+    assert u1["id"] == u2["id"]
+    assert u1["email"] == "newuser@example.com"
