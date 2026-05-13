@@ -10,7 +10,7 @@ from typing import Any
 from google.genai import types
 
 from agents.gemini_client import get_genai_client
-from utils.scu_course_schedule_xlsx import load_schedule_section_index, planned_section_keys
+from utils.scu_course_schedule_xlsx import load_category_course_index, load_schedule_section_index, planned_section_keys
 
 DEFAULT_MODEL = "gemini-2.5-flash"
 FALLBACK_MODELS = ("gemini-2.5-flash-lite", "gemini-1.5-flash")
@@ -288,8 +288,64 @@ def _resolve_item_codes(item: dict) -> list[str]:
     return []
 
 
+_OPEN_REQ_STRIP_PREFIXES = (
+    "Core: ENGR: ", "Core: CSE: ", "Core: COEN: ", "Core: CSEN: ",
+    "Core: ARTS: ", "Core: BUS: ", "Core: COMM: ", "Core: ",
+)
+_OPEN_REQ_PAREN_RE = re.compile(r"\s*\([^)]*\)\s*")
+
+
+def _normalize_open_req_text(req_text: str) -> str:
+    """Strip 'Core: ENGR: ' prefixes and parenthetical details from a requirement string.
+
+    'Core: ENGR: RTC 3'  →  'rtc 3'
+    'Core: ENGR: Experiential Learning for Social Justice'  →  'experiential learning for social justice'
+    'Core: ENGR: Arts (ENGL 181 & …)'  →  'arts'
+    """
+    text = req_text.strip()
+    for prefix in _OPEN_REQ_STRIP_PREFIXES:
+        if text.startswith(prefix):
+            text = text[len(prefix):]
+            break
+    text = _OPEN_REQ_PAREN_RE.sub(" ", text).strip()
+    return text.lower()
+
+
+def _resolve_open_requirement(
+    req_text: str,
+    category_index: dict[str, list[str]],
+    schedule_index: dict,
+) -> list[str]:
+    """Return course codes (in schedule) that satisfy an open Core/GE requirement.
+
+    Uses the category→course index built from Course Tags in the schedule xlsx.
+    Falls back to substring matching when there is no exact key hit.
+    """
+    if not category_index or not req_text:
+        return []
+    norm = _normalize_open_req_text(req_text)
+    if not norm:
+        return []
+
+    # Exact lookup first
+    candidates = list(category_index.get(norm, []))
+
+    # Substring fallback: try any tag that contains the normalised text
+    if not candidates:
+        for key, courses in category_index.items():
+            if norm in key or key in norm:
+                for c in courses:
+                    if c not in candidates:
+                        candidates.append(c)
+
+    # Filter to courses actually offered next term
+    return [c for c in candidates if any(k in schedule_index for k in planned_section_keys(c))]
+
+
 def _build_schedule_block(
-    missing_details: list[dict], schedule_index: dict
+    missing_details: list[dict],
+    schedule_index: dict,
+    category_index: dict | None = None,
 ) -> tuple[str, set[tuple[str, str]]]:
     """
     Return a prompt block listing which required courses are offered next term,
@@ -305,9 +361,22 @@ def _build_schedule_block(
     for item in missing_details:
         codes = _resolve_item_codes(item)
         if not codes:
-            # requirement has no parseable course code (e.g. open-ended Core categories)
-            label = (item.get("category") or item.get("requirement") or "unknown")[:60]
-            not_offered.append(f"[open requirement: {label}]")
+            # Open-ended Core/GE requirement: try the category→course index
+            req_text = (item.get("category") or item.get("requirement") or "")
+            open_courses: list[str] = []
+            if category_index:
+                open_courses = _resolve_open_requirement(req_text, category_index, schedule_index)
+            if open_courses:
+                # Each candidate course satisfies this open requirement
+                for c in open_courses:
+                    enriched = {**item, "course": c}
+                    offered.append(enriched)
+                    for k in planned_section_keys(c):
+                        if k in schedule_index:
+                            offered_keys.add(k)
+            else:
+                label = req_text[:60] or "unknown"
+                not_offered.append(f"[open requirement: {label}]")
             continue
         found: set[tuple[str, str]] = set()
         for code in codes:
@@ -463,7 +532,8 @@ def run_planning_agent(
     model = os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
 
     schedule_index = load_schedule_section_index()
-    schedule_block, offered_keys = _build_schedule_block(missing_details, schedule_index)
+    category_index = load_category_course_index()
+    schedule_block, offered_keys = _build_schedule_block(missing_details, schedule_index, category_index)
 
     memory_block = _build_memory_block(memory_snippets)
     prev_block = _summarize_previous_plan(previous_plan)
@@ -625,6 +695,17 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
                         resolved.add(f"{subj} {num}L")
                     else:
                         resolved.add(f"{subj} {num[:-1]}")  # base without L
+        # Also whitelist courses that satisfy open Core/GE requirements
+        # (e.g. SCTR 128 satisfies "RTC 3" even though it has no explicit course code)
+        if category_index:
+            for item in missing_details:
+                if not _resolve_item_codes(item):
+                    req_text = item.get("category") or item.get("requirement") or ""
+                    for c in _resolve_open_requirement(req_text, category_index, schedule_index):
+                        resolved.add(c.upper())
+                        for subj, num in planned_section_keys(c):
+                            resolved.add(f"{subj} {num}")
+                            resolved.add(f"{subj} {num}L" if not num.endswith("L") else f"{subj} {num[:-1]}")
         req_codes = resolved if resolved else None  # None = skip whitelist (open Core)
 
     # ── Validate → feedback loop (max 2 correction rounds) ──────────────────

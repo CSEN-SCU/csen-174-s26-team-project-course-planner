@@ -48,6 +48,7 @@ _DAYS_HEADERS   = {"days", "day", "meeting days", "meeting day", "mtg days", "mt
 _START_HEADERS  = {"mtg start", "meeting start", "start time", "start", "begin time", "begin"}
 _END_HEADERS    = {"mtg end", "meeting end", "end time", "end"}
 _TIMES_HEADERS  = {"times", "meeting times", "time", "meeting time", "mtg time", "meeting patterns", "meeting pattern", "mtg patterns", "patterns"}
+_TAGS_HEADERS   = {"course tags", "tags", "categories", "category", "course categories"}
 
 
 # ── helpers ─────────────────────────────────────────────────────────────────
@@ -463,6 +464,110 @@ def load_all_course_sections(
         wb.close()
 
     return result
+
+
+def _parse_course_tag_codes(tags_cell: Any) -> list[str]:
+    """Extract normalised tag strings from a 'Course Tags' cell.
+
+    Each line is one tag in the format:
+        "Tag Group :: Short Code | Long Description"
+
+    We return both the short code and the long description so callers
+    can match against either.  Example input:
+        "Core Explorations :: RTC 3 | Religion, Theology and Culture 3\\n\\n
+         Core Integrations :: ELSJ | Experiential Learning for Social Justice"
+    → ["RTC 3", "Religion, Theology and Culture 3",
+       "ELSJ", "Experiential Learning for Social Justice"]
+    """
+    if not tags_cell:
+        return []
+    results: list[str] = []
+    for line in str(tags_cell).split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        # Part after "::" (or the whole line if no "::")
+        part = line.split("::", 1)[1].strip() if "::" in line else line
+        # Split short code from long description
+        if "|" in part:
+            short, long = part.split("|", 1)
+            short = short.strip()
+            long = long.strip()
+            if short:
+                results.append(short)
+            if long:
+                results.append(long)
+        elif part:
+            results.append(part)
+    return results
+
+
+def load_category_course_index(path: Path | None = None) -> dict[str, list[str]]:
+    """Build a reverse mapping: normalised_tag_text → [course_code, ...].
+
+    Keys are lower-cased tag texts (both short codes like "RTC 3" and long
+    descriptions like "Religion, Theology and Culture 3").
+
+    Used in the planning agent to find courses that satisfy open Core / GE
+    requirements that have no explicit course code in the Workday transcript
+    (e.g. "Core: ENGR: RTC 3", "Core: ENGR: Experiential Learning for Social Justice").
+    """
+    p = _find_schedule_path(path)
+    if p is None:
+        return {}
+
+    index: dict[str, list[str]] = {}
+    wb = load_workbook(p, read_only=True, data_only=True)
+    try:
+        ws = wb.active
+        it = ws.iter_rows(values_only=True)
+        header_row = next(it, None)
+        if not header_row:
+            return {}
+        h = [str(c).strip() if c is not None else "" for c in header_row]
+
+        try:
+            idx_sec = h.index("Course Section")
+        except ValueError:
+            return {}
+        idx_tags = _find_col(h, _TAGS_HEADERS)
+        if idx_tags is None:
+            return {}
+
+        def _get(row: tuple, idx: int | None) -> Any:
+            if idx is None or idx >= len(row):
+                return None
+            return row[idx]
+
+        for row in it:
+            if not row or idx_sec >= len(row):
+                continue
+            key = _parse_section_subject_number(row[idx_sec])
+            if not key:
+                continue
+            subj, num = key
+            course_code = f"{subj} {num}"
+
+            for tag in _parse_course_tag_codes(_get(row, idx_tags)):
+                norm = tag.strip().lower()
+                if not norm:
+                    continue
+                bucket = index.setdefault(norm, [])
+                if course_code not in bucket:
+                    bucket.append(course_code)
+                # Add CSEN ↔ COEN alias
+                if subj == "CSEN":
+                    alt = f"COEN {num}"
+                    if alt not in bucket:
+                        bucket.append(alt)
+                elif subj == "COEN":
+                    alt = f"CSEN {num}"
+                    if alt not in bucket:
+                        bucket.append(alt)
+    finally:
+        wb.close()
+
+    return index
 
 
 def all_sections_for_course(
