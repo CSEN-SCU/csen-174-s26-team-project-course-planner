@@ -3,6 +3,8 @@ uvicorn
 python-multipart
 python-dotenv
 google-genai
+google-auth
+google-auth-oauthlib
 openpyxl
 bcrypt
 sqlite-vec

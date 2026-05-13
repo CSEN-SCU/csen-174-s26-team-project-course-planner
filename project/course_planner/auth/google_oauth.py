@@ -95,20 +95,30 @@ def _client_config() -> dict[str, Any]:
 
 
 def _new_flow() -> Flow:
+    # Disable the library's PKCE auto-generation. We provide our own
+    # deterministic, stateless code_verifier so the authorize URL and
+    # the token exchange (built from a fresh Flow on the callback) agree
+    # on the same verifier without server-side state.
     return Flow.from_client_config(
         _client_config(),
         scopes=_OAUTH_SCOPES,
         redirect_uri=get_redirect_uri(),
+        autogenerate_code_verifier=False,
     )
 
 
-def build_authorization_url(state: str, nonce: str) -> str:
+def build_authorization_url(
+    state: str,
+    nonce: str,
+    *,
+    code_verifier: Optional[str] = None,
+) -> str:
     """Return Google's authorization URL bound to (``state``, ``nonce``).
 
-    Both values must be high-entropy, single-use, and stored in
-    ``st.session_state`` until the redirect comes back. The caller is
-    responsible for regenerating them after every successful or failed
-    exchange so the URL is not replayable.
+    If ``code_verifier`` is provided, PKCE (S256) is enabled and the
+    matching ``code_challenge`` is appended to the URL. The same
+    verifier must later be passed to
+    :func:`exchange_code_for_id_token`.
 
     ``access_type='online'`` is intentional: we do not want refresh
     tokens since this flow is identity-only.
@@ -116,6 +126,8 @@ def build_authorization_url(state: str, nonce: str) -> str:
     if not state or not nonce:
         raise OAuthStateError("state and nonce must be non-empty.")
     flow = _new_flow()
+    if code_verifier:
+        flow.code_verifier = code_verifier
     url, _ = flow.authorization_url(
         state=state,
         nonce=nonce,
@@ -131,14 +143,14 @@ def exchange_code_for_id_token(
     code: str,
     *,
     expected_nonce: Optional[str] = None,
+    code_verifier: Optional[str] = None,
 ) -> dict[str, Any]:
     """Exchange an authorization ``code`` for verified ID token claims.
 
-    Raises :class:`OAuthStateError` if state/nonce don't match, and
-    :class:`OAuthClaimsError` if the token is malformed. The Google
-    library raises its own errors for signature/expiry/audience problems;
-    callers should treat any exception here as a hard failure and force
-    the user back through the consent screen with a fresh state/nonce.
+    If ``code_verifier`` is provided, it is sent with the token request
+    so Google can validate the PKCE binding. Raises
+    :class:`OAuthStateError` on state/nonce mismatch and
+    :class:`OAuthClaimsError` on malformed tokens.
     """
     if not expected_state or not query_state:
         raise OAuthStateError("Missing OAuth state. Try signing in again.")
@@ -148,6 +160,8 @@ def exchange_code_for_id_token(
         raise OAuthStateError("Missing authorization code from Google.")
 
     flow = _new_flow()
+    if code_verifier:
+        flow.code_verifier = code_verifier
     flow.fetch_token(code=code)
     creds = flow.credentials
     raw_id = getattr(creds, "id_token", None)

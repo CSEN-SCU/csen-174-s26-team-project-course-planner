@@ -19,6 +19,8 @@ export type LeftPanelProps = {
   onSelectSession: (row: MemorySessionRow) => void;
   onDeleteSession?: (id: string) => void;
   onNewPlan: () => void;
+  /** Error from out-of-band auth flows (e.g. Google OAuth callback). */
+  externalAuthError?: string | null;
 };
 
 export function LeftPanel({
@@ -30,6 +32,7 @@ export function LeftPanel({
   onSelectSession,
   onDeleteSession,
   onNewPlan,
+  externalAuthError,
 }: LeftPanelProps) {
   const [tab, setTab] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("");
@@ -141,8 +144,32 @@ export function LeftPanel({
             </button>
           </div>
 
+          {externalAuthError && (
+            <p className="mb-2 rounded border border-red-200 bg-red-50 px-2 py-1.5 text-xs text-red-700">
+              {externalAuthError}
+            </p>
+          )}
+
           {tab === "login" ? (
-            <form onSubmit={submitLogin} className="space-y-2">
+            <div className="space-y-3">
+              <a
+                href="/api/auth/google/start"
+                className="flex w-full items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-700 shadow-sm transition hover:bg-neutral-50"
+              >
+                <svg width="16" height="16" viewBox="0 0 18 18" aria-hidden>
+                  <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.71-1.58 2.68-3.9 2.68-6.62z"/>
+                  <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.34A9 9 0 0 0 9 18z"/>
+                  <path fill="#FBBC05" d="M3.97 10.72A5.4 5.4 0 0 1 3.68 9c0-.6.1-1.18.29-1.72V4.94H.96A9 9 0 0 0 0 9c0 1.45.35 2.82.96 4.06l3.01-2.34z"/>
+                  <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A9 9 0 0 0 9 0 9 9 0 0 0 .96 4.94l3.01 2.34C4.68 5.16 6.66 3.58 9 3.58z"/>
+                </svg>
+                Continue with Google
+              </a>
+              <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-neutral-400">
+                <span className="h-px flex-1 bg-neutral-200" />
+                <span>or</span>
+                <span className="h-px flex-1 bg-neutral-200" />
+              </div>
+              <form onSubmit={submitLogin} className="space-y-2">
               <input
                 type="text"
                 autoComplete="username"
@@ -167,7 +194,8 @@ export function LeftPanel({
                 {busy ? "…" : "Log in"}
               </button>
               {error && <p className="text-xs text-red-600">{error}</p>}
-            </form>
+              </form>
+            </div>
           ) : (
             <form onSubmit={submitRegister} className="space-y-2">
               <input

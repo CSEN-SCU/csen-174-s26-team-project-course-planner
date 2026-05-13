@@ -11,13 +11,13 @@ from __future__ import annotations
 
 import logging
 import os
-import secrets
+import time
 from typing import Optional
 
 import streamlit as st
 import streamlit_authenticator as stauth
 
-from auth import users_db
+from auth import oauth_state, users_db
 from db.migrate import migrate
 
 try:
@@ -48,11 +48,9 @@ _AUTHENTICATOR_SESSION_KEYS: tuple[str, ...] = (
     "email",
 )
 
-# OAuth-specific session keys, all freshly minted per sign-in attempt.
-_OAUTH_SESSION_KEYS: tuple[str, ...] = (
-    "_oauth_state",
-    "_oauth_nonce",
-)
+# OAuth state and nonce are now stateless (HMAC-signed; recovered from the
+# returned ``state`` query param). No session_state lifecycle to manage.
+_OAUTH_SESSION_KEYS: tuple[str, ...] = ()
 
 # These keys are written by the planner main flow and must be cleared on
 # logout so user A cannot leak state into user B's next session.
@@ -137,12 +135,6 @@ def _clear_oauth_query_params() -> None:
             del st.query_params[key]
 
 
-def _clear_oauth_session_keys() -> None:
-    """Drop the per-attempt state/nonce. Safe to call anytime."""
-    for key in _OAUTH_SESSION_KEYS:
-        st.session_state.pop(key, None)
-
-
 def _apply_authenticated_session(user: dict, *, display_name: str = "") -> None:
     """Mirror streamlit-authenticator session keys plus ``user_id``.
 
@@ -170,17 +162,19 @@ def _sync_user_if_authenticated_in_session() -> Optional[dict]:
     return user
 
 
-def _mint_oauth_challenge() -> tuple[str, str]:
-    """Generate a fresh (state, nonce) pair and stash them in session_state.
+def _oauth_signing_key() -> bytes:
+    """Signing key for OAuth state tokens; reuses the cookie secret."""
+    return _cookie_key().encode("utf-8")
 
-    Both values are 256-bit URL-safe tokens. They are tied to a single
-    sign-in attempt and are wiped on success, failure, or logout.
-    """
-    state = secrets.token_urlsafe(32)
-    nonce = secrets.token_urlsafe(32)
-    st.session_state["_oauth_state"] = state
-    st.session_state["_oauth_nonce"] = nonce
-    return state, nonce
+
+def _mint_oauth_challenge() -> tuple[str, str, str]:
+    """Thin wrapper around :func:`oauth_state.mint_oauth_challenge`."""
+    return oauth_state.mint_oauth_challenge(_oauth_signing_key())
+
+
+def _verify_oauth_state_and_derive_secrets(state: str) -> tuple[str, str]:
+    """Thin wrapper around :func:`oauth_state.verify_state_and_derive_secrets`."""
+    return oauth_state.verify_state_and_derive_secrets(state, _oauth_signing_key())
 
 
 def _handle_google_error_redirect() -> bool:
@@ -200,14 +194,19 @@ def _handle_google_error_redirect() -> bool:
         # in production — log it instead and show a stable message.
         msg = "Google sign-in failed. Please try again."
     logger.warning("Google OAuth redirect error: %s %s", err, description)
-    _clear_oauth_session_keys()
     _clear_oauth_query_params()
     st.error(msg)
     return True
 
 
 def _try_complete_google_oauth_callback() -> None:
-    """Handle ``?code=&state=`` (or ``?error=``) on the redirect; reruns on success."""
+    """Handle ``?code=&state=`` (or ``?error=``) on the redirect; reruns on success.
+
+    Stateless: ``state`` is an HMAC-signed token that travels round-trip
+    through Google. We verify the signature and re-derive the expected
+    ``nonce`` rather than depending on ``st.session_state``, which
+    Streamlit wipes during external navigation.
+    """
     if _google_oauth is None or not _google_oauth.google_oauth_configured():
         return
 
@@ -219,17 +218,14 @@ def _try_complete_google_oauth_callback() -> None:
     if not code or not state_qp:
         return
 
-    saved_state = st.session_state.get("_oauth_state")
-    saved_nonce = st.session_state.get("_oauth_nonce")
-    if not saved_state:
-        st.error("OAuth session expired. Try **Continue with Google** again.")
-        _clear_oauth_session_keys()
-        _clear_oauth_query_params()
-        return
-
     try:
+        expected_nonce, code_verifier = _verify_oauth_state_and_derive_secrets(state_qp)
         raw = _google_oauth.exchange_code_for_id_token(
-            saved_state, state_qp, code, expected_nonce=saved_nonce
+            state_qp,
+            state_qp,
+            code,
+            expected_nonce=expected_nonce,
+            code_verifier=code_verifier,
         )
         claims = _google_oauth.validate_sign_in_claims(raw)
         user = users_db.get_or_create_user_for_google(
@@ -238,7 +234,8 @@ def _try_complete_google_oauth_callback() -> None:
         )
         display_name = _google_oauth.display_name_from_claims(claims)
         _apply_authenticated_session(user, display_name=display_name)
-    except (_google_oauth.OAuthStateError, _google_oauth.OAuthClaimsError) as exc:
+        logger.info("Google OAuth sign-in succeeded for %s", claims.get("email"))
+    except (_google_oauth.OAuthStateError, _google_oauth.OAuthClaimsError, ValueError) as exc:
         # Safe to show: these are user-facing policy errors we wrote ourselves.
         logger.warning("Google OAuth claim/state rejected: %s", exc)
         st.error(str(exc))
@@ -248,7 +245,6 @@ def _try_complete_google_oauth_callback() -> None:
         logger.exception("Google OAuth callback failed")
         st.error("Google sign-in failed. Please try again.")
     finally:
-        _clear_oauth_session_keys()
         _clear_oauth_query_params()
         _invalidate_authenticator()
 
@@ -293,8 +289,10 @@ def _render_google_signin_button() -> None:
     if _google_oauth is None or not _google_oauth.google_oauth_configured():
         return
     try:
-        state, nonce = _mint_oauth_challenge()
-        auth_url = _google_oauth.build_authorization_url(state, nonce)
+        state, nonce, code_verifier = _mint_oauth_challenge()
+        auth_url = _google_oauth.build_authorization_url(
+            state, nonce, code_verifier=code_verifier
+        )
     except Exception:
         logger.exception("Failed to build Google authorization URL")
         st.warning("Google sign-in is temporarily unavailable.")

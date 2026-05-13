@@ -138,6 +138,17 @@ def test_build_authorization_url_includes_state_and_nonce(oauth_env):
     assert "nonce=nonce-abc" in url
     assert "response_type=code" in url
     assert "client_id=cid.apps.googleusercontent.com" in url
+    assert "code_challenge" not in url  # PKCE off when no verifier supplied
+
+
+def test_build_authorization_url_pkce(oauth_env):
+    from auth import google_oauth
+
+    url = google_oauth.build_authorization_url(
+        "state-xyz", "nonce-abc", code_verifier="v" * 64
+    )
+    assert "code_challenge=" in url
+    assert "code_challenge_method=S256" in url
 
 
 def test_display_name_from_claims_prefers_name():

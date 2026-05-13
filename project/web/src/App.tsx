@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { deleteMemory, generateFourYearPlan, getMemory, login as apiLogin, register as apiRegister, saveMemory } from "./api/client";
+import { deleteMemory, exchangeGoogleOauth, generateFourYearPlan, getMemory, login as apiLogin, register as apiRegister, saveMemory } from "./api/client";
 import { CalendarView } from "./components/CalendarView";
 import { ChatPanel, type ChatUiMessage } from "./components/ChatPanel";
 import { FourYearPlanView } from "./components/FourYearPlanView";
@@ -30,6 +30,42 @@ export default function App() {
   const [fourYearPlan, setFourYearPlan] = useState<FourYearPlan | null>(null);
   const [fourYearGenerating, setFourYearGenerating] = useState(false);
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
+  const [googleAuthError, setGoogleAuthError] = useState<string | null>(null);
+
+  // Consume Google OAuth handoff token on first load (single-use).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("google_oauth");
+    const err = params.get("google_oauth_error");
+
+    if (!token && !err) return;
+
+    // Always clear the URL so a reload doesn't replay the handoff.
+    params.delete("google_oauth");
+    params.delete("google_oauth_error");
+    const q = params.toString();
+    window.history.replaceState({}, document.title, q ? `?${q}` : window.location.pathname);
+
+    if (err) {
+      setGoogleAuthError(
+        err === "access_denied" ? "Google sign-in was cancelled." : "Google sign-in failed.",
+      );
+      return;
+    }
+    if (!token) return;
+    void exchangeGoogleOauth(token)
+      .then((r) => {
+        if (r.success && r.user_id) {
+          setUserId(String(r.user_id));
+          setGoogleAuthError(null);
+        } else {
+          setGoogleAuthError("Google sign-in failed. Please try again.");
+        }
+      })
+      .catch(() => {
+        setGoogleAuthError("Google sign-in failed. Please try again.");
+      });
+  }, []);
 
   // Load academic progress + past plan snapshots on login
   useEffect(() => {
@@ -258,6 +294,7 @@ export default function App() {
         onSelectSession={handleSelectSession}
         onDeleteSession={handleDeleteSession}
         onNewPlan={handleNewPlan}
+        externalAuthError={googleAuthError}
       />
 
       {/* Main view area with tab toggle */}
