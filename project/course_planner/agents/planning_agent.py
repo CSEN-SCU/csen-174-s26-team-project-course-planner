@@ -357,20 +357,23 @@ def _build_schedule_block(
     offered: list[dict] = []
     not_offered: list[str] = []
     offered_keys: set[tuple[str, str]] = set()
+    # Track open-req courses to merge labels when the same course satisfies
+    # multiple open requirements (e.g. SCTR 128 → RTC 3 + ELSJ + Applied Ethics)
+    open_req_course_labels: dict[str, list[str]] = {}
+    open_req_courses_added: set[str] = set()
 
     for item in missing_details:
         codes = _resolve_item_codes(item)
         if not codes:
             # Open-ended Core/GE requirement: try the category→course index
             req_text = (item.get("category") or item.get("requirement") or "")
+            req_label = _normalize_open_req_text(req_text) or req_text[:40]
             open_courses: list[str] = []
             if category_index:
                 open_courses = _resolve_open_requirement(req_text, category_index, schedule_index)
             if open_courses:
-                # Each candidate course satisfies this open requirement
                 for c in open_courses:
-                    enriched = {**item, "course": c}
-                    offered.append(enriched)
+                    open_req_course_labels.setdefault(c, []).append(req_label)
                     for k in planned_section_keys(c):
                         if k in schedule_index:
                             offered_keys.add(k)
@@ -390,22 +393,35 @@ def _build_schedule_block(
         else:
             not_offered.extend(codes)
 
+    # Add open-requirement courses (deduplicated, with merged labels so the LLM
+    # can see which courses are double/triple-tagged across multiple requirements)
+    open_req_offered: list[dict] = []
+    for course_code, req_labels in open_req_course_labels.items():
+        combined_label = " + ".join(req_labels) if len(req_labels) > 1 else req_labels[0]
+        open_req_offered.append({"course": course_code, "category": combined_label, "units": None})
+    # Sort so multi-requirement (double-tagged) courses appear first
+    open_req_offered.sort(key=lambda x: -len((x.get("category") or "").split(" + ")))
+
     lines: list[str] = []
 
-    if offered:
+    all_offered = offered + open_req_offered
+    if all_offered:
         lines.append("=== COURSES CONFIRMED IN NEXT-TERM SCHEDULE ===")
         lines.append(
             "You MUST only recommend courses from the list below. "
             "Copy each course code CHARACTER-FOR-CHARACTER — do not alter, "
             "abbreviate, or substitute any code. "
-            "Do NOT invent or guess codes that are not in this list."
+            "Do NOT invent or guess codes that are not in this list.\n"
+            "★ Courses marked with multiple requirements satisfy more than one "
+            "Core/GE requirement simultaneously — prefer these (double-tagged)."
         )
-        for item in offered:
+        for item in all_offered:
             code = item.get("course", "?")
             cat = (item.get("category") or item.get("requirement") or "").strip()
             units = item.get("units")
             unit_str = f"{units}u" if units not in (None, "", "?") else "see catalog"
-            lines.append(f"  {code} ({cat}, {unit_str})")
+            multi = " ★" if " + " in cat else ""
+            lines.append(f"  {code} ({cat}, {unit_str}){multi}")
 
     if not_offered:
         lines.append(
