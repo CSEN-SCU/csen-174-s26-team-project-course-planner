@@ -57,7 +57,16 @@ def _compaction_summary_max_chars() -> int:
 
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
-ALLOWED_KINDS = ("preference", "plan_outcome", "note", "academic_progress")
+ALLOWED_KINDS = ("preference", "plan_outcome", "note", "academic_progress", "parsed_rows")
+
+# Singleton kinds: only one entry per user; writing a new one replaces the old.
+# Used for large structured payloads that always supersede older versions
+# (transcript snapshots) so the file doesn't accumulate stale copies.
+_SINGLETON_KINDS = frozenset(("academic_progress", "parsed_rows"))
+
+# Never include these kinds in the text-summarization compaction batches —
+# their JSON structure must remain intact so the frontend can parse them.
+_NEVER_COMPACT_KINDS = frozenset(("academic_progress", "parsed_rows", "plan_outcome"))
 
 _BLOCK_RE = re.compile(
     r"^<<<MEMORY (.+?)>>>\n(.*?)<<<END_MEMORY>>>\s*",
@@ -279,7 +288,11 @@ def _compact_items(uid: int, items: list[dict[str, Any]]) -> tuple[list[dict[str
             protect_n = min(protect_cfg, max(0, len(authored) - 1))
             by_id_desc = sorted(authored, key=lambda x: int(x["id"]), reverse=True)
             protected_ids = {int(it["id"]) for it in by_id_desc[:protect_n]}
-        eligible = [it for it in owned if int(it["id"]) not in protected_ids]
+        eligible = [
+            it for it in owned
+            if int(it["id"]) not in protected_ids
+            and str(it.get("kind") or "") not in _NEVER_COMPACT_KINDS
+        ]
         eligible.sort(key=lambda x: int(x["id"]))
         if len(eligible) < 2:
             break
@@ -431,6 +444,13 @@ def write(
     prefix_before_tr, tr_tail = _split_transcript_tail(raw)
     body = _strip_preamble(prefix_before_tr)
     items = _parse_blocks(body)
+    # Singleton kinds: drop any existing entry of the same kind for this user
+    # so the new one fully replaces it (no accumulation, no compaction loss).
+    if kind in _SINGLETON_KINDS:
+        items = [
+            it for it in items
+            if not (int(it["user_id"]) == uid and str(it["kind"]) == kind)
+        ]
     next_id = max((it["id"] for it in items), default=0) + 1
     created = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     block = _serialize_block(next_id, uid, kind, created, meta, content.strip())
