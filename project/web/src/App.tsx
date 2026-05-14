@@ -311,7 +311,7 @@ export default function App() {
       />
 
       {/* Main view area with tab toggle */}
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {/* Tab bar */}
         <div className="flex shrink-0 border-b border-neutral-200 bg-white px-3 pt-1">
           <button
