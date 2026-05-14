@@ -18,7 +18,8 @@ from pathlib import Path
 
 import pytest
 
-_APP_ROOT = Path(__file__).resolve().parents[1]  # project/course_planner/
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]  # project/
+_APP_ROOT = _PROJECT_ROOT / "course_planner"
 if str(_APP_ROOT) not in sys.path:
     sys.path.insert(0, str(_APP_ROOT))
 

@@ -14,7 +14,7 @@ const prismaMock = {
   $transaction: vi.fn(async (ops: Array<Promise<unknown>>) => Promise.all(ops))
 };
 
-vi.mock("../../../bridges/api/db/client.js", () => ({ prisma: prismaMock }));
+vi.mock("../../../course_planner/bridges/api/db/client.js", () => ({ prisma: prismaMock }));
 
 describe("db/test utilities (unit)", () => {
   // As a developer, I can reset the database through Prisma without touching a real DB in unit tests.
@@ -23,7 +23,7 @@ describe("db/test utilities (unit)", () => {
 
     // Action
     // @ts-expect-error - test-only module is resolved at runtime by Vitest
-    const { resetDatabase } = (await import("../../../bridges/api/db/testUtils.js")) as unknown as {
+    const { resetDatabase } = (await import("../../../course_planner/bridges/api/db/testUtils.js")) as unknown as {
       resetDatabase: () => Promise<void>;
     };
     await resetDatabase();

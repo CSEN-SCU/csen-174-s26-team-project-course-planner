@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import request from "supertest";
-import { createApp } from "../../../bridges/api/app.js";
+import { createApp } from "../../../course_planner/bridges/api/app.js";
 
 // TDD: course requirement backend — list required courses for a major (RED until implemented).
 

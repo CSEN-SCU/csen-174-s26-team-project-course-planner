@@ -1,6 +1,6 @@
 # How to run tests
 
-All tests live under `project/course_planner/tests/`. They are wired into two
+All tests live under `project/tests/`. They are wired into two
 Vitest entry points so they can run from either side of the codebase:
 
 - **Frontend / full suite** — `project/web/package.json` (jsdom env, runs every
@@ -14,7 +14,7 @@ Both runners load `project/vitest.config.ts` (web) or
 ## Test layout
 
 ```
-project/course_planner/tests/
+project/tests/
 ├── api/                       backend-style tests (supertest, Prisma mocks)
 │   ├── ai_generated/sprint1/  Jiasheng's AI-generated auth tests
 │   ├── courses/               Joey's course-requirements API tests
@@ -31,8 +31,9 @@ have to reach across folders directly.
 
 ```bash
 # First time, or after dependency changes:
+cd project && npm ci
 cd project/web && npm install
-cd ../api && npm install
+cd project/api && pip install -r requirements.txt   # if you work on the FastAPI app
 ```
 
 ## Scripts
@@ -44,8 +45,8 @@ Run from `project/web` (covers every test, jsdom):
 | `npm run test` | Full suite (`tests/**/*.test.ts` + `*.test.tsx`) |
 | `npm run test:ismael` | Files under `tests/ismael/` |
 | `npm run test:jason` | Files under `tests/jason/` |
-| `npm run test:joey` | Files whose path contains `joey` (filename prefix) |
-| `npm run test:jiasheng` | Files whose path contains `jiasheng` |
+| `npm run test:joey` | Files under `tests/api/` (Joey’s API + DB tests) |
+| `npm run test:jiasheng` | Files under `tests/api/ai_generated/sprint1/` |
 
 Run from `project/api` (covers the API tests only, node env):
 
@@ -53,13 +54,12 @@ Run from `project/api` (covers the API tests only, node env):
 |--------|--------------|
 | `npm test` | All `tests/**/*.test.ts` and `tests/api/**/*.test.tsx` via the api Vitest config |
 
-`project/course_planner/package.json` mirrors the per-owner scripts so the same
-commands also work from this folder:
+`project/package.json` holds the Vitest stack; run `npm install` once from `project/`, then:
 
 ```bash
-cd project/course_planner
-npm run test           # uses ../vitest.config.ts via the web node_modules
-npm run test:jason     # etc.
+cd project
+npm test              # full Vitest suite
+npm run test:pytest   # Python tests (requires pytest + course_planner on disk for imports)
 ```
 
 ## Adding tests

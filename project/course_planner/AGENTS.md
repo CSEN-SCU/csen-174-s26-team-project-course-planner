@@ -8,7 +8,16 @@ streamlit run main.py
 
 ## Run tests
 ```bash
-cd project/course_planner
+cd project
+npm ci
+npm test
+```
+
+Vitest config: `project/vitest.config.ts`; tests live in `project/tests/`.
+
+Python (Streamlit / agents):
+```bash
+cd project
 python -m pytest tests/
 ```
 

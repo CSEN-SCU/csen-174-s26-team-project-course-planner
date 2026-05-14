@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { getAiProvider } from "../../bridges/api/ai/scheduleAi";
+import { getAiProvider } from "../../course_planner/bridges/api/ai/scheduleAi";
 
 describe("Jason AI provider fallback", () => {
   test("returns fallback when GEMINI_API_KEY is missing", () => {

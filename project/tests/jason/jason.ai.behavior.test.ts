@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { generateSchedulePlans } from "../../bridges/api/ai/scheduleAi";
+import { generateSchedulePlans } from "../../course_planner/bridges/api/ai/scheduleAi";
 
-vi.mock("../../bridges/api/services/courseService.js", () => ({
+vi.mock("../../course_planner/bridges/api/services/courseService.js", () => ({
   getEligibleCourseResults: vi.fn(async () => [{ code: "CSE 130", name: "Programming Languages" }])
 }));
 

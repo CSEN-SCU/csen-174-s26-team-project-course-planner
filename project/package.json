@@ -1,13 +1,17 @@
 {
-  "name": "course-planner",
+  "name": "scu-course-planner-project",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20.12.0"
+  },
   "scripts": {
-    "test": "NODE_PATH=./node_modules vitest run --config ../vitest.config.ts",
-    "test:ismael": "NODE_PATH=./node_modules vitest run --config ../vitest.config.ts ./tests/ismael",
-    "test:jason": "NODE_PATH=./node_modules vitest run --config ../vitest.config.ts ./tests/jason",
-    "test:joey": "NODE_PATH=./node_modules vitest run --config ../vitest.config.ts joey",
-    "test:jiasheng": "NODE_PATH=./node_modules vitest run --config ../vitest.config.ts jiasheng"
+    "test": "vitest run",
+    "test:ismael": "vitest run tests/ismael",
+    "test:jason": "vitest run tests/jason",
+    "test:joey": "vitest run tests/api",
+    "test:jiasheng": "vitest run tests/api/ai_generated/sprint1",
+    "test:pytest": "python -m pytest tests/"
   },
   "devDependencies": {
     "@prisma/client": "^6.6.0",
@@ -20,7 +24,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "jsdom": "^27.0.1",
+    "jsdom": "^26.1.0",
     "supertest": "^7.2.2",
     "typescript": "^5.6.3",
     "vitest": "^3.2.4",
@@ -29,4 +33,3 @@
     "zod": "^3.24.2"
   }
 }
-

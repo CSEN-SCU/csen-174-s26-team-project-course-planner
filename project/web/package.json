@@ -7,11 +7,11 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "NODE_PATH=./node_modules vitest run --config ../vitest.config.ts",
-    "test:ismael": "NODE_PATH=./node_modules vitest run --config ../vitest.config.ts ../course_planner/tests/ismael",
-    "test:jason": "NODE_PATH=./node_modules vitest run --config ../vitest.config.ts ../course_planner/tests/jason",
-    "test:joey": "NODE_PATH=./node_modules vitest run --config ../vitest.config.ts joey",
-    "test:jiasheng": "NODE_PATH=./node_modules vitest run --config ../vitest.config.ts jiasheng"
+    "test": "npm --prefix .. run test",
+    "test:ismael": "npm --prefix .. run test:ismael",
+    "test:jason": "npm --prefix .. run test:jason",
+    "test:joey": "npm --prefix .. run test:joey",
+    "test:jiasheng": "npm --prefix .. run test:jiasheng"
   },
   "dependencies": {
     "react": "^18.3.1",

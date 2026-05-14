@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "npm --prefix .. test",
+    "test": "npm --prefix .. run test",
     "test:ismael": "npm --prefix .. run test:ismael",
     "test:jason": "npm --prefix .. run test:jason",
     "test:joey": "npm --prefix .. run test:joey",

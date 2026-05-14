@@ -5,7 +5,7 @@ describe("auth/password verification", () => {
   // As a student, login fails safely if the stored password record is corrupted, instead of crashing the server.
   test("returns false for malformed stored password strings", async () => {
     // Arrange
-    const { verifyPassword } = (await import("../../../../bridges/api/auth/password.js")) as unknown as {
+    const { verifyPassword } = (await import("../../../../course_planner/bridges/api/auth/password.js")) as unknown as {
       verifyPassword: (pw: string, stored: string) => boolean;
     };
 

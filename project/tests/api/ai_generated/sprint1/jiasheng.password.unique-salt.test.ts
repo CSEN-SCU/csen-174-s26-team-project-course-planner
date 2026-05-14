@@ -6,7 +6,7 @@ describe("auth/password hashing", () => {
   test("produces different hashes for the same password via unique salts", async () => {
     // Arrange
     const password = "same-password";
-    const { hashPassword } = (await import("../../../../bridges/api/auth/password.js")) as unknown as {
+    const { hashPassword } = (await import("../../../../course_planner/bridges/api/auth/password.js")) as unknown as {
       hashPassword: (pw: string) => string;
     };
 

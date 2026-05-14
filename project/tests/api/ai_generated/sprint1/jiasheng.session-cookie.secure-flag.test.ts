@@ -6,7 +6,7 @@ describe("auth/session cookie flags", () => {
   test("sets secure=true only in production", async () => {
     // Arrange
     const originalEnv = process.env.NODE_ENV;
-    const { createSessionCookie } = (await import("../../../../bridges/api/auth/session.js")) as unknown as {
+    const { createSessionCookie } = (await import("../../../../course_planner/bridges/api/auth/session.js")) as unknown as {
       createSessionCookie: (input: { studentKey: string }) => { options: { secure?: boolean; httpOnly?: boolean; sameSite?: unknown } };
     };
 
