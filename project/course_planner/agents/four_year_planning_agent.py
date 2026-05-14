@@ -130,12 +130,14 @@ def run_four_year_plan_agent(
     # ("CSEN/COEN 195/L") from category-tag-shaped strings ("RTC 3", "ELSJ").
     real_subjects = {subj for (subj, _) in schedule_index.keys()}
 
-    open_req_courses: dict[str, list[str]] = {}  # course → list of requirement labels it satisfies
+    # Two parallel maps:
+    #   open_req_by_label   :  requirement-label → [candidate course codes]
+    #   open_req_courses    :  course code → list of requirement labels it covers
+    # The first drives the prompt block (grouped by requirement); the second
+    # is fed to the hallucination whitelist later.
+    open_req_by_label: dict[str, list[str]] = {}
+    open_req_courses: dict[str, list[str]] = {}
     for item in missing_details:
-        # Skip if the extracted code has a real SCU subject prefix — that
-        # means it's a specific course requirement (even if next-term not
-        # offering it like CSEN 195). "Core: ENGR: RTC 3" extracts "RTC 3"
-        # but RTC isn't a real subject, so it falls through to open-req.
         codes = _resolve_item_codes(item)
         if codes and any(c.split()[0] in real_subjects for c in codes):
             continue
@@ -144,31 +146,40 @@ def run_four_year_plan_agent(
         if not candidates:
             continue
         label = _normalize_open_req_text(req_text) or req_text[:40]
+        open_req_by_label[label] = candidates
         for c in candidates:
             open_req_courses.setdefault(c, []).append(label)
 
+    # Find double-tagged courses (satisfy >= 2 open requirements).
+    double_tagged = sorted(
+        ((c, labels) for c, labels in open_req_courses.items() if len(labels) > 1),
+        key=lambda kv: (-len(kv[1]), kv[0]),
+    )
+
     open_req_block = ""
-    if open_req_courses:
+    if open_req_by_label:
         lines = [
-            "=== COURSES SATISFYING OPEN CORE/GE REQUIREMENTS ===",
-            "The remaining requirements above include open Core/GE categories",
-            "(RTC 3, ELSJ, Advanced Writing, Arts, etc.) that have no specific",
-            "course code. The following courses are CONFIRMED to satisfy them",
-            "and ARE available in next-term schedule. You MUST pick courses",
-            "from this list — do NOT invent placeholder names like",
-            "'Core - RTC 3' or 'Open Elective'.",
-            "★ marks courses that satisfy MULTIPLE requirements simultaneously",
-            "(double-tagged) — prefer these to graduate faster.",
+            "=== CANDIDATE COURSES FOR OPEN CORE/GE REQUIREMENTS ===",
+            "Some items in REMAINING REQUIREMENTS above have no specific course",
+            "code (e.g. 'Core: ENGR: RTC 3', 'Core: ENGR: Advanced Writing').",
+            "For EACH such open requirement, you MUST pick exactly ONE course",
+            "from its candidate list below and schedule it like any other course.",
+            "These candidates are IN ADDITION TO — not a replacement for — the",
+            "specific major / lab courses already listed in REMAINING REQUIREMENTS",
+            "(e.g. CSEN 122, CSEN 194/L, ECEN 153/L). NEVER drop those.",
+            "",
         ]
-        # Sort by # of requirements (double-tagged first)
-        sorted_courses = sorted(
-            open_req_courses.items(),
-            key=lambda kv: (-len(kv[1]), kv[0]),
-        )
-        for course, labels in sorted_courses:
-            tag = " ★" if len(labels) > 1 else ""
-            joined = " + ".join(labels)
-            lines.append(f"  {course} (satisfies: {joined}){tag}")
+        if double_tagged:
+            lines.append("★ DOUBLE-TAGGED (cover multiple open requirements at once — prefer these):")
+            for course, labels in double_tagged[:8]:
+                lines.append(f"  {course}  →  {' + '.join(labels)}")
+            lines.append("")
+        # Per-requirement candidate lists, capped to keep the prompt compact.
+        lines.append("Per-requirement candidates (pick ONE per requirement):")
+        for label, candidates in open_req_by_label.items():
+            shown = candidates[:6]
+            extra = f"  (… {len(candidates) - len(shown)} more)" if len(candidates) > len(shown) else ""
+            lines.append(f"  • {label}: {', '.join(shown)}{extra}")
         open_req_block = "\n".join(lines) + "\n\n"
 
     pref_block = f"\nStudent preferences / constraints:\n{preferences.strip()}\n" if preferences and preferences.strip() else ""
@@ -184,23 +195,29 @@ REMAINING REQUIREMENTS ({len(missing_details)} courses, {total_units} total unit
 
 {open_req_block}{pref_block}
 RULES:
-1. Distribute ALL courses above across as many quarters as needed, INCLUDING
-   every open Core/GE requirement. For each open requirement, pick ONE
-   concrete course from the "COURSES SATISFYING OPEN CORE/GE REQUIREMENTS"
-   block above and place it in some quarter. Never leave a Core requirement
-   unscheduled, and never emit a placeholder name like "Core - RTC 3".
-2. PREFER double-tagged courses (marked with ★) — picking one such course
-   resolves several open requirements at once and shortens the plan.
-3. Target 12–16 units per quarter; never exceed 20.
-4. Respect typical prerequisites: introductory/numbered-lower courses before advanced ones.
-5. Group lecture + lab pairs (e.g. CSEN 194 + CSEN 194L) in the SAME quarter.
-6. If a course is only offered in certain quarters (Fall/Spring), note that in reason.
-7. Each course must appear in EXACTLY ONE quarter — no duplicates, no omissions.
-8. Use only the term names from the NEXT TERMS list above.
-9. graduation_term = the last term in your plan.
-10. total_remaining_units must be the sum of `units` across all courses you output.
-11. advice: 1-3 sentence overview of the plan strategy (max 400 chars).
-12. reason per course: ≤60 chars, explain why it belongs in that quarter.
+1. The plan MUST cover EVERY item in REMAINING REQUIREMENTS — both the
+   specific major / lab courses (CSEN 122, CSEN 194/L, CSEN 195/L,
+   CSEN 196/L, ECEN 153/L, etc.) AND the open Core/GE categories.
+   Dropping any major requirement is a critical failure.
+2. For each OPEN Core/GE item (no specific code), pick exactly ONE
+   concrete course from its candidate list in the CANDIDATE COURSES block
+   below. If a course is double-tagged (★), prefer it because one slot
+   then covers multiple open requirements.
+3. Never emit placeholder names like "Core - RTC 3", "Open Elective", or
+   "Educational Enrichment" — use a real course code.
+4. Target 12–16 units per quarter; never exceed 20.
+5. Respect typical prerequisites: introductory/numbered-lower courses before advanced ones.
+6. Group lecture + lab pairs (e.g. CSEN 194 + CSEN 194L) in the SAME quarter.
+7. CSEN 194 / CSEN 195 / CSEN 196 are a 3-quarter Senior Design sequence —
+   schedule them in three CONSECUTIVE quarters (one per quarter) with their
+   labs, and place them late in the plan (final year).
+8. If a course is only offered in certain quarters (Fall/Spring), note that in reason.
+9. Each course must appear in EXACTLY ONE quarter — no duplicates, no omissions.
+10. Use only the term names from the NEXT TERMS list above.
+11. graduation_term = the last term in your plan.
+12. total_remaining_units must be the sum of `units` across all courses you output.
+13. advice: 1-3 sentence overview of the plan strategy (max 400 chars).
+14. reason per course: ≤60 chars, explain why it belongs in that quarter.
 
 Output JSON matching the schema exactly.
 """
