@@ -55,13 +55,19 @@ function categoryChipClass(category: string): string {
 
 function parseTermKey(period: string): string | null {
   const p = period.trim();
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+
+  // "Fall 2023 Quarter" / "Winter 2024 Quarter" / "Spring 2025 Quarter"
+  // (SCU Workday's actual format — single calendar year + 'Quarter' suffix)
+  const m0 = p.match(/^(Fall|Winter|Spring)\s+(\d{4})\s+Quarter$/i);
+  if (m0) return `${cap(m0[1])} ${m0[2]}`;
 
   // "2022-2023 Fall Quarter" → "Fall 2022"
   // "2022-2023 Winter Quarter" → "Winter 2023"
   // "2022-2023 Spring Quarter" → "Spring 2023"
   const m1 = p.match(/^(\d{4})-(\d{4})\s+(Fall|Winter|Spring)\s+Quarter$/i);
   if (m1) {
-    const season = m1[3].charAt(0).toUpperCase() + m1[3].slice(1).toLowerCase();
+    const season = cap(m1[3]);
     const startYear = parseInt(m1[1], 10);
     const calYear = season === "Fall" ? startYear : startYear + 1;
     return `${season} ${calYear}`;
@@ -69,17 +75,11 @@ function parseTermKey(period: string): string | null {
 
   // "Fall 2022-2023" → "Fall 2022"
   const m2 = p.match(/^(Fall|Winter|Spring)\s+(\d{4})-\d{4}$/i);
-  if (m2) {
-    const season = m2[1].charAt(0).toUpperCase() + m2[1].slice(1).toLowerCase();
-    return `${season} ${m2[2]}`;
-  }
+  if (m2) return `${cap(m2[1])} ${m2[2]}`;
 
   // "Fall 2022" (bare)
   const m3 = p.match(/^(Fall|Winter|Spring)\s+(\d{4})$/i);
-  if (m3) {
-    const season = m3[1].charAt(0).toUpperCase() + m3[1].slice(1).toLowerCase();
-    return `${season} ${m3[2]}`;
-  }
+  if (m3) return `${cap(m3[1])} ${m3[2]}`;
 
   return null;
 }
