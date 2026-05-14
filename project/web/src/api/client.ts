@@ -6,6 +6,15 @@ const API_BASE =
   (import.meta.env.VITE_API_BASE as string | undefined)?.trim() ||
   (import.meta.env.DEV ? "/api" : "http://localhost:8000/api");
 
+/**
+ * Top-level navigation URL for starting Google OAuth.
+ * Must point at the API origin (not the static-site origin) so the
+ * deployed frontend reaches FastAPI's /auth/google/start instead of 404-ing.
+ */
+export function googleSignInUrl(): string {
+  return `${API_BASE}/auth/google/start`;
+}
+
 function errFromBody(data: unknown): string {
   if (!data || typeof data !== "object") return "Request failed";
   const d = (data as Record<string, unknown>).detail;

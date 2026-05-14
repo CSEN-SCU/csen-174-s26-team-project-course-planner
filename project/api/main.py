@@ -27,13 +27,30 @@ from routers import auth, four_year_plan, memory, plan, upload, voice, workday
 
 app = FastAPI(title="SCU Course Planner API")
 
+
+def _cors_allowed_origins() -> list[str]:
+    """Build the CORS allow-list from env so prod hosts can be added without code changes.
+
+    - Always include Vite dev origins (browsers treat localhost and 127.0.0.1 as distinct).
+    - Include FRONTEND_BASE_URL (single prod origin used elsewhere for redirects).
+    - Include any extras in CORS_ALLOWED_ORIGINS (comma-separated).
+    """
+    origins = {"http://localhost:5173", "http://127.0.0.1:5173"}
+    frontend = (os.getenv("FRONTEND_BASE_URL") or "").strip().rstrip("/")
+    if frontend:
+        origins.add(frontend)
+    extras = (os.getenv("CORS_ALLOWED_ORIGINS") or "").strip()
+    if extras:
+        for o in extras.split(","):
+            o = o.strip().rstrip("/")
+            if o:
+                origins.add(o)
+    return sorted(origins)
+
+
 app.add_middleware(
     CORSMiddleware,
-    # Browsers treat localhost and 127.0.0.1 as different origins — allow both for Vite dev.
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=_cors_allowed_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

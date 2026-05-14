@@ -1,4 +1,5 @@
 import { FormEvent, useState } from "react";
+import { googleSignInUrl } from "../api/client";
 
 export type MemorySessionRow = {
   id: string;
@@ -153,7 +154,7 @@ export function LeftPanel({
           {tab === "login" ? (
             <div className="space-y-3">
               <a
-                href="/api/auth/google/start"
+                href={googleSignInUrl()}
                 className="flex w-full items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-700 shadow-sm transition hover:bg-neutral-50"
               >
                 <svg width="16" height="16" viewBox="0 0 18 18" aria-hidden>
