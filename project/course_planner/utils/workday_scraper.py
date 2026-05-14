@@ -61,16 +61,43 @@ def _on_workday(page: Page) -> bool:
     return _WORKDAY_BASE in page.url.lower() and not _on_sso_page(page)
 
 
-def _wait_for_login(page: Page, cb: Callable[[str], None]) -> None:
-    """Block until the browser is on a Workday page (not SSO)."""
+def _active_workday_page(initial: Page) -> Page | None:
+    """Return whichever page in the browser context is currently on a
+    Workday (non-SSO) URL — checking *all* tabs, not just the first one.
+
+    SSO flows occasionally open the post-login Workday tab in a new
+    window, leaving the initial Playwright ``page`` stranded on a
+    Shibboleth URL forever.  Walking ``context.pages`` lets us follow
+    the user wherever the redirect chain lands them.
+    """
+    try:
+        for p in initial.context.pages:
+            if _on_workday(p):
+                return p
+    except Exception:  # noqa: BLE001
+        pass
+    return initial if _on_workday(initial) else None
+
+
+def _wait_for_login(page: Page, cb: Callable[[str], None]) -> Page:
+    """Block until SOME page in the browser context is on a Workday URL.
+
+    Returns the page that is now on Workday — which may be a different
+    tab from the one we initially opened if SSO redirected to a new
+    window. Subsequent navigation/export uses the returned page.
+    """
     cb("browser_open")
     deadline = time.monotonic() + LOGIN_TIMEOUT_MS / 1000
     while time.monotonic() < deadline:
-        if _on_workday(page):
-            return
+        found = _active_workday_page(page)
+        if found is not None:
+            return found
         time.sleep(1.5)
     raise TimeoutError(
-        "Login timed out after 5 minutes — please try again and complete SSO promptly."
+        "Login timed out after 5 minutes — please try again and complete SSO promptly. "
+        "If a Workday tab appears already logged in but the planner keeps spinning, "
+        "Playwright may have lost the redirect; upload your Academic Progress xlsx "
+        "manually using the 📎 button as a fallback."
     )
 
 
@@ -91,14 +118,64 @@ def _wait_for_workday_content(page: Page) -> None:
     page.wait_for_timeout(RENDER_WAIT_MS)
 
 
+_ACADEMIC_PROGRESS_HEADINGS = (
+    "view my academic progress",
+    "academic progress",
+    "my academic progress",
+)
+
+
+def _on_academic_progress_page(page: Page) -> bool:
+    """Heuristic: does the visible heading mention Academic Progress?
+
+    We check the page title + the first H1 because Workday task IDs
+    aren't stable across tenants/years — a URL that used to be
+    Academic Progress for one cohort might now be View My Active Holds
+    for another, so URL-matching alone is not enough.
+    """
+    try:
+        title = (page.title() or "").lower()
+        if any(h in title for h in _ACADEMIC_PROGRESS_HEADINGS):
+            return True
+        # H1 / page heading
+        heading = page.evaluate(
+            "() => (document.querySelector('h1, [role=\"heading\"]') || {}).textContent || ''"
+        )
+        return any(h in str(heading).lower() for h in _ACADEMIC_PROGRESS_HEADINGS)
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def _ensure_on_task(page: Page, task_url: str, cb: Callable[[str], None]) -> None:
-    """After login, make sure we're on the Academic Progress task page."""
+    """After login, make sure we're on the Academic Progress task page.
+
+    Raises ``RuntimeError`` if we end up on a clearly different Workday
+    page (e.g. "View My Active Holds") so the user gets a clear message
+    rather than an opaque "no export button" failure 30 seconds later.
+    """
     task_path = task_url.split("/scu/", 1)[-1].split("?")[0].lower()
     if task_path not in page.url.lower():
         cb("navigating")
         page.goto(task_url, timeout=NAV_TIMEOUT_MS, wait_until="domcontentloaded")
     cb("searching")
     _wait_for_workday_content(page)
+
+    if not _on_academic_progress_page(page):
+        actual = ""
+        try:
+            actual = (page.title() or "").strip()
+        except Exception:  # noqa: BLE001
+            pass
+        raise RuntimeError(
+            "Workday loaded but the page does not look like 'View My Academic "
+            "Progress'"
+            + (f" — current page title is {actual!r}." if actual else ".")
+            + "\nThe SCU_WORKDAY_URL in your .env may point at the wrong task ID. "
+            "Open Workday → search 'View My Academic Progress' → copy that page's "
+            "URL into SCU_WORKDAY_URL, restart the API, and retry. "
+            "As a workaround, export the xlsx from that page manually and upload "
+            "it with the 📎 button."
+        )
 
 
 # ── Excel export ──────────────────────────────────────────────────────────────
@@ -251,11 +328,22 @@ def scrape_workday_sync(
                 cb("navigating")
                 page.goto(task_url, timeout=30_000, wait_until="domcontentloaded")
 
-                # Wait for student to complete SSO / MFA
-                _wait_for_login(page, cb)
+                # Wait for student to complete SSO / MFA.  SSO can land
+                # the post-login session in a different tab from the one
+                # we opened — _wait_for_login returns whichever tab is
+                # actually on Workday, and we operate on that going
+                # forward.
+                page = _wait_for_login(page, cb)
+                try:
+                    page.bring_to_front()
+                except Exception:  # noqa: BLE001
+                    pass
                 cb("logged_in")
 
-                # Navigate to task page if SSO landed elsewhere
+                # Navigate to task page if SSO landed elsewhere; raises
+                # with a clear message if Workday loads a non-Academic-
+                # Progress page (e.g. SCU's URL silently became
+                # View My Active Holds).
                 _ensure_on_task(page, task_url, cb)
                 cb("report_open")
 

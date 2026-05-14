@@ -434,13 +434,20 @@ export function ChatPanel({
               <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-blue-500 animate-pulse" />
             )}
             <span className="flex-1 truncate">{workdayStatus.label}</span>
-            {!workdayStatus.syncing && (
-              <button
-                type="button"
-                onClick={() => setWorkdayStatus({ syncing: false, label: "", phase: "idle" })}
-                className="shrink-0 text-neutral-400 hover:text-neutral-600"
-              >✕</button>
-            )}
+            <button
+              type="button"
+              onClick={() => {
+                if (workdayPollRef.current) {
+                  clearInterval(workdayPollRef.current);
+                  workdayPollRef.current = null;
+                }
+                setWorkdayStatus({ syncing: false, label: "", phase: "idle" });
+              }}
+              className="shrink-0 rounded px-1.5 py-0.5 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800"
+              title={workdayStatus.syncing ? "Cancel sync" : "Dismiss"}
+            >
+              {workdayStatus.syncing ? "Cancel" : "✕"}
+            </button>
           </div>
         )}
 
