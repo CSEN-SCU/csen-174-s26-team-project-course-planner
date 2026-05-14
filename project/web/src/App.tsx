@@ -94,6 +94,19 @@ export default function App() {
           } catch { /* ignore */ }
         }
 
+        // Restore parsed transcript rows (full course history for the 4-year plan)
+        const parsedRowItems = mems
+          .filter((m) => m.kind === "parsed_rows")
+          .sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")));
+        if (parsedRowItems.length > 0) {
+          try {
+            const rows = JSON.parse(String(parsedRowItems[0].content ?? "[]")) as ParsedRow[];
+            if (Array.isArray(rows) && rows.length > 0) {
+              setParsedRows(rows);
+            }
+          } catch { /* ignore */ }
+        }
+
         // Restore past plan snapshots
         const planMems = mems
           .filter((m) => m.kind === "plan_outcome")

@@ -71,6 +71,10 @@ def _run_scrape(job_id: str, user_id: str, workday_url: str | None) -> None:
                 memory_write(user_id, "academic_progress", json.dumps(missing_details))
             except Exception:
                 pass
+            try:
+                memory_write(user_id, "parsed_rows", json.dumps(parsed_rows))
+            except Exception:
+                pass
 
         _set_job(
             job_id,
