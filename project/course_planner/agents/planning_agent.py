@@ -10,7 +10,14 @@ from typing import Any
 from google.genai import types
 
 from agents.gemini_client import get_genai_client
-from utils.scu_course_schedule_xlsx import load_category_course_index, load_schedule_section_index, planned_section_keys
+from utils.scu_course_schedule_xlsx import (
+    course_title_for,
+    detect_time_conflicts,
+    load_category_course_index,
+    load_course_titles_index,
+    load_schedule_section_index,
+    planned_section_keys,
+)
 
 DEFAULT_MODEL = "gemini-2.5-flash"
 FALLBACK_MODELS = ("gemini-2.5-flash-lite", "gemini-1.5-flash")
@@ -463,6 +470,8 @@ def _partition_recommended(
     A course is valid when:
       1. It is a real student requirement (if required_codes whitelist available).
       2. It appears in the live next-term schedule index.
+      3. It does NOT time-conflict with another already-valid course on the
+         same weekday + overlapping start/end window.
 
     Rejected items carry a ``_rejection_reason`` field for the feedback prompt.
     """
@@ -472,10 +481,26 @@ def _partition_recommended(
         code = (item.get("course") or "").strip()
         if required_codes is not None and not _is_code_in_required(code, required_codes):
             rejected.append({**item, "_rejection_reason": "not_a_real_requirement"})
-        elif schedule_index and not _is_code_in_schedule(code, schedule_index):
+            continue
+        if schedule_index and not _is_code_in_schedule(code, schedule_index):
             rejected.append({**item, "_rejection_reason": "not_in_next_term_schedule"})
-        else:
-            valid.append(item)
+            continue
+        # Time-conflict check against already-accepted courses.
+        if schedule_index:
+            tentative_codes = [v.get("course", "") for v in valid] + [code]
+            conflicts = detect_time_conflicts(tentative_codes, schedule_index)
+            new_idx = len(tentative_codes) - 1
+            conflict_with = next(
+                (a for (a, b) in conflicts if b == new_idx), None
+            )
+            if conflict_with is not None:
+                other = valid[conflict_with].get("course", "?")
+                rejected.append({
+                    **item,
+                    "_rejection_reason": f"time_conflict_with_{other}",
+                })
+                continue
+        valid.append(item)
     return valid, rejected
 
 
@@ -765,6 +790,21 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
     if paired != raw_recommended:
         parsed["recommended"] = paired
         parsed["total_units"] = _recompute_total_units(paired)
+
+    # ── Title override: trust the schedule xlsx over the LLM ─────────────────
+    # The LLM occasionally hallucinates course names (e.g. labelling
+    # CSEN 122L "Data Structures and Algorithms Lab" when the catalog
+    # says "Computer Architecture Laboratory"). The schedule xlsx is
+    # the authoritative title source, so we override per-recommendation.
+    titles_index = load_course_titles_index()
+    if titles_index:
+        for item in parsed.get("recommended") or []:
+            if not isinstance(item, dict):
+                continue
+            code = (item.get("course") or "").strip()
+            real_title = course_title_for(code, titles_index)
+            if real_title:
+                item["title"] = real_title
 
     eff_model = resolved_model or model
     parsed["meta"] = {

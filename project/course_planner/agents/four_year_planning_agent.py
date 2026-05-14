@@ -12,7 +12,13 @@ from google.genai import types
 
 from agents.gemini_client import get_genai_client
 from agents.planning_agent import _normalize_open_req_text, _resolve_item_codes, _resolve_open_requirement
-from utils.scu_course_schedule_xlsx import load_category_course_index, load_schedule_section_index, planned_section_keys
+from utils.scu_course_schedule_xlsx import (
+    course_title_for,
+    load_category_course_index,
+    load_course_titles_index,
+    load_schedule_section_index,
+    planned_section_keys,
+)
 
 DEFAULT_MODEL = "gemini-2.5-flash"
 FALLBACK_MODELS = ("gemini-2.5-flash-lite", "gemini-1.5-flash")
@@ -389,6 +395,18 @@ Output JSON matching the schema exactly.
             )
         quarter["courses"] = filtered
         quarter["total_units"] = sum(int(c.get("units") or 0) for c in filtered)
+
+    # ── Title override: schedule xlsx is the authoritative title source ──
+    titles_index = load_course_titles_index()
+    if titles_index:
+        for quarter in parsed.get("quarters") or []:
+            for c in quarter.get("courses") or []:
+                if not isinstance(c, dict):
+                    continue
+                code = (c.get("course") or "").strip()
+                real_title = course_title_for(code, titles_index)
+                if real_title:
+                    c["title"] = real_title
 
     # ────────────────────────────────────────────────────────────────────────
     parsed.setdefault("total_remaining_units", total_units)

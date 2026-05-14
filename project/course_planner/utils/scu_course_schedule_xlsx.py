@@ -570,6 +570,114 @@ def load_category_course_index(path: Path | None = None) -> dict[str, list[str]]
     return index
 
 
+def load_course_titles_index(path: Path | None = None) -> dict[tuple[str, str], str]:
+    """Build a (subject, number) → canonical course title index.
+
+    Reads the 'Course Section' column of the schedule xlsx, which has the
+    form ``"CSEN 122-1 - Computer Architecture (-)"``, and returns the
+    portion after ``" - "`` (stripped of trailing parenthetical tags like
+    ``"(-)"`` or ``"(In Progress)"``).
+
+    Used to OVERRIDE the title field on courses recommended by the LLM,
+    so we don't ship hallucinated names to the UI (e.g. an LLM labelling
+    CSEN 122L as "Data Structures and Algorithms Lab" — the schedule
+    truth is "Computer Architecture Laboratory").
+    """
+    p = _find_schedule_path(path)
+    if p is None:
+        return {}
+    index: dict[tuple[str, str], str] = {}
+    wb = load_workbook(p, read_only=True, data_only=True)
+    try:
+        ws = wb.active
+        it = ws.iter_rows(values_only=True)
+        header = next(it, None)
+        if not header:
+            return {}
+        for row in it:
+            if not row or not row[0]:
+                continue
+            key = _parse_section_subject_number(row[0])
+            if not key:
+                continue
+            cell = str(row[0])
+            _, _, tail = cell.partition(" - ")
+            if not tail:
+                continue
+            # Strip trailing "(...)" tags such as "(-)", "(In Progress)"
+            title = re.sub(r"\s*\([^)]*\)\s*$", "", tail).strip()
+            if not title:
+                continue
+            if key not in index:
+                index[key] = title
+        # Mirror CSEN ↔ COEN and ECEN ↔ ELEN so either alias resolves
+        for (subj, num) in list(index.keys()):
+            if subj == "CSEN":
+                index.setdefault(("COEN", num), index[(subj, num)])
+            elif subj == "COEN":
+                index.setdefault(("CSEN", num), index[(subj, num)])
+            elif subj == "ECEN":
+                index.setdefault(("ELEN", num), index[(subj, num)])
+            elif subj == "ELEN":
+                index.setdefault(("ECEN", num), index[(subj, num)])
+    finally:
+        wb.close()
+    return index
+
+
+def course_title_for(course_code: str, titles_index: dict[tuple[str, str], str]) -> str | None:
+    """Return canonical title for ``course_code``, trying CSEN/COEN aliases."""
+    if not titles_index:
+        return None
+    for key in planned_section_keys(course_code):
+        title = titles_index.get(key)
+        if title:
+            return title
+    return None
+
+
+def detect_time_conflicts(
+    courses: list[str],
+    schedule_index: dict[tuple[str, str], dict[str, Any]],
+) -> list[tuple[int, int]]:
+    """Find pairs of course codes whose meeting times overlap on a shared day.
+
+    Returns a list of ``(idx_a, idx_b)`` index pairs into ``courses`` where
+    ``idx_a < idx_b``. A pair conflicts if the two courses share at least
+    one weekday and their ``[start, end)`` minute windows overlap.
+
+    Courses with unknown meeting times (no entry in ``schedule_index`` or
+    no posted time) cannot conflict and are skipped.
+    """
+    def _slot(code: str) -> tuple[set[int], int, int] | None:
+        for k in planned_section_keys(code):
+            entry = schedule_index.get(k)
+            if not entry:
+                continue
+            days = entry.get("meeting_days") or []
+            s = entry.get("meeting_start_min")
+            e = entry.get("meeting_end_min")
+            if days and s is not None and e is not None and s < e:
+                return (set(days), int(s), int(e))
+        return None
+
+    slots = [_slot(c) for c in courses]
+    conflicts: list[tuple[int, int]] = []
+    for i, a in enumerate(slots):
+        if a is None:
+            continue
+        for j in range(i + 1, len(slots)):
+            b = slots[j]
+            if b is None:
+                continue
+            shared_days = a[0] & b[0]
+            if not shared_days:
+                continue
+            if a[1] < b[2] and b[1] < a[2]:
+                conflicts.append((i, j))
+    return conflicts
+
+
 def all_sections_for_course(
     course_code: str,
     sections_index: "dict[tuple[str, str], list[dict[str, Any]]]",
