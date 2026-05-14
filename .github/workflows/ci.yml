@@ -15,18 +15,16 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "20.19"
           cache: "npm"
-          cache-dependency-path: |
-            project/course_planner/package-lock.json
-            project/course_planner/tests/package-lock.json
+          cache-dependency-path: project/package-lock.json
 
-      - name: Install course_planner dependencies
-        working-directory: project/course_planner
+      - name: Install Node dependencies (Vitest + bridge test stack)
+        working-directory: project
         run: npm ci
 
-      - name: Run course_planner tests (project/course_planner/tests)
-        working-directory: project/course_planner/tests
+      - name: Run project test suite (Vitest under project/tests)
+        working-directory: project
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ secrets.GEMINI_MODEL }}
