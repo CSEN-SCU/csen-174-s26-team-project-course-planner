@@ -218,6 +218,15 @@ RULES:
 12. total_remaining_units must be the sum of `units` across all courses you output.
 13. advice: 1-3 sentence overview of the plan strategy (max 400 chars).
 14. reason per course: ≤60 chars, explain why it belongs in that quarter.
+15. category field MUST identify which requirement the course satisfies.
+    For courses pulled from the open-Core candidate list, use the SPECIFIC
+    requirement name, e.g.:
+      • "Core: RTC 3"          (for SCTR 128, THTR 110, ...)
+      • "Core: ELSJ"           (for ANTH 3, CHST 106, ...)
+      • "Core: Advanced Writing" (for COMM 130, ENGL 101, ...)
+      • "Core: Arts"
+    Never use the bare label "Core" — the student must be able to see
+    which specific Core requirement each course is checking off.
 
 Output JSON matching the schema exactly.
 """

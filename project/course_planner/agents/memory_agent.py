@@ -40,7 +40,10 @@ from db.migrate import EMBEDDING_DIM
 DEFAULT_TOP_K = int(os.environ.get("MEMORY_TOP_K", "4"))
 GEMINI_EMBED_MODEL = os.environ.get("MEMORY_EMBED_MODEL", "text-embedding-004")
 def _compaction_trigger_bytes() -> int:
-    return int(os.environ.get("MEMORY_COMPACTION_TRIGGER_BYTES", "65536"))
+    # Bumped from 64KB → 512KB.  A single parsed_rows JSON for a typical
+    # SCU transcript is 30–80KB, which used to push the file over the old
+    # 64KB threshold and trigger destructive shrinking of structured data.
+    return int(os.environ.get("MEMORY_COMPACTION_TRIGGER_BYTES", "524288"))
 
 
 def _compaction_batch() -> int:
@@ -332,7 +335,14 @@ def _utf8_safe_prefix(enc: bytes, max_bytes: int) -> bytes:
 def _shrink_until_under_budget(
     items: list[dict[str, Any]], trigger: int
 ) -> tuple[list[dict[str, Any]], bool]:
-    """Trim the longest UTF-8 bodies until total is at or below ``trigger``."""
+    """Trim the longest UTF-8 bodies until total is at or below ``trigger``.
+
+    Entries whose kind is in ``_NEVER_COMPACT_KINDS`` (academic_progress,
+    parsed_rows, plan_outcome) are NEVER truncated — their content is
+    structured JSON that must remain parseable for the frontend.  If only
+    protected entries remain and they still exceed the budget, the file is
+    left oversized rather than corrupting the data.
+    """
     if _total_body_bytes(items) <= trigger:
         return items, False
     out = []
@@ -350,7 +360,14 @@ def _shrink_until_under_budget(
             break
         if not out:
             break
-        idx = max(range(len(out)), key=lambda i: len((out[i].get("content") or "").encode("utf-8")))
+        # Only shrinkable (non-protected) entries are eligible
+        eligible_idx = [
+            i for i in range(len(out))
+            if str(out[i].get("kind") or "") not in _NEVER_COMPACT_KINDS
+        ]
+        if not eligible_idx:
+            break  # Nothing left to safely trim — file stays oversized
+        idx = max(eligible_idx, key=lambda i: len((out[i].get("content") or "").encode("utf-8")))
         enc = (out[idx].get("content") or "").encode("utf-8")
         if len(enc) <= 1:
             break
