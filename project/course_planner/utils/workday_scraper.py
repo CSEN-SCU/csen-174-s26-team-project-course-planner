@@ -146,36 +146,117 @@ def _on_academic_progress_page(page: Page) -> bool:
         return False
 
 
+_SEARCH_QUERY = "View My Academic Progress"
+
+
+def _try_search_for_report(page: Page) -> bool:
+    """Use Workday's top search bar to navigate to Academic Progress.
+
+    Returns True if we landed on the right report, False otherwise.
+
+    Used as a fallback when the configured ``SCU_WORKDAY_URL`` task ID
+    is stale — Workday task IDs change between cohorts but the page
+    title is searchable by name.
+    """
+    # Workday's universal search uses these data-automation-ids.  We try
+    # several variants because the UI has had multiple refreshes.
+    search_box_selectors = [
+        '[data-automation-id="globalSearchBox"]',
+        '[data-automation-id="searchBox"]',
+        '[data-automation-id="GLOBAL_SEARCH_BOX"]',
+        'input[aria-label*="Search" i]',
+        'input[placeholder*="Search" i]',
+    ]
+    box = None
+    for sel in search_box_selectors:
+        try:
+            page.wait_for_selector(sel, timeout=4_000, state="visible")
+            box = page.locator(sel).first
+            box.click()
+            break
+        except Exception:  # noqa: BLE001
+            box = None
+            continue
+    if box is None:
+        return False
+
+    try:
+        box.fill(_SEARCH_QUERY)
+        page.wait_for_timeout(1_500)  # let suggestion dropdown render
+        # Click the first matching suggestion / "View My Academic Progress" link
+        suggestion_selectors = [
+            f'text="{_SEARCH_QUERY}"',
+            'text="View My Academic Progress"',
+            'a:has-text("View My Academic Progress")',
+            '[data-automation-id="searchResults"] a',
+        ]
+        for sel in suggestion_selectors:
+            try:
+                page.locator(sel).first.click(timeout=3_000)
+                _wait_for_workday_content(page)
+                if _on_academic_progress_page(page):
+                    return True
+            except Exception:  # noqa: BLE001
+                continue
+        # Last resort: press Enter and hope it lands on the right page
+        page.keyboard.press("Enter")
+        _wait_for_workday_content(page)
+        return _on_academic_progress_page(page)
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def _ensure_on_task(page: Page, task_url: str, cb: Callable[[str], None]) -> None:
     """After login, make sure we're on the Academic Progress task page.
 
-    Raises ``RuntimeError`` if we end up on a clearly different Workday
-    page (e.g. "View My Active Holds") so the user gets a clear message
-    rather than an opaque "no export button" failure 30 seconds later.
+    Strategy:
+      1. If we're already on Academic Progress (the configured URL was right
+         and Workday loaded it), done.
+      2. Otherwise try the configured ``task_url`` directly. If the title
+         matches, done.
+      3. Otherwise (task ID stale → wrong page) fall back to typing the
+         report name into Workday's global search bar.
+      4. If none of the above lands on Academic Progress, raise with an
+         actionable error pointing at the manual-upload fallback.
     """
     task_path = task_url.split("/scu/", 1)[-1].split("?")[0].lower()
-    if task_path not in page.url.lower():
-        cb("navigating")
-        page.goto(task_url, timeout=NAV_TIMEOUT_MS, wait_until="domcontentloaded")
+
+    # Step 1: already there?
     cb("searching")
     _wait_for_workday_content(page)
+    if _on_academic_progress_page(page):
+        return
 
-    if not _on_academic_progress_page(page):
-        actual = ""
+    # Step 2: try the configured task URL
+    if task_path not in page.url.lower():
+        cb("navigating")
         try:
-            actual = (page.title() or "").strip()
+            page.goto(task_url, timeout=NAV_TIMEOUT_MS, wait_until="domcontentloaded")
+            _wait_for_workday_content(page)
         except Exception:  # noqa: BLE001
             pass
-        raise RuntimeError(
-            "Workday loaded but the page does not look like 'View My Academic "
-            "Progress'"
-            + (f" — current page title is {actual!r}." if actual else ".")
-            + "\nThe SCU_WORKDAY_URL in your .env may point at the wrong task ID. "
-            "Open Workday → search 'View My Academic Progress' → copy that page's "
-            "URL into SCU_WORKDAY_URL, restart the API, and retry. "
-            "As a workaround, export the xlsx from that page manually and upload "
-            "it with the 📎 button."
-        )
+        if _on_academic_progress_page(page):
+            return
+
+    # Step 3: search fallback
+    if _try_search_for_report(page):
+        return
+
+    # Step 4: give up with a clear message
+    actual = ""
+    try:
+        actual = (page.title() or "").strip()
+    except Exception:  # noqa: BLE001
+        pass
+    raise RuntimeError(
+        "Could not reach 'View My Academic Progress' in Workday"
+        + (f" — currently on {actual!r}." if actual else ".")
+        + "\nThe SCU_WORKDAY_URL in .env may point at the wrong task ID and the "
+        "search fallback also failed.  Workaround: open Workday → search "
+        "'View My Academic Progress' → click the Excel export icon (the green "
+        "spreadsheet icon, top-right of the report) → upload the .xlsx using the "
+        "📎 button in the chat panel."
+    )
 
 
 # ── Excel export ──────────────────────────────────────────────────────────────
