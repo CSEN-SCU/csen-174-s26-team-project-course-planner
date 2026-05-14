@@ -11,6 +11,8 @@ from typing import Any
 from google.genai import types
 
 from agents.gemini_client import get_genai_client
+from agents.planning_agent import _normalize_open_req_text, _resolve_item_codes, _resolve_open_requirement
+from utils.scu_course_schedule_xlsx import load_category_course_index, load_schedule_section_index, planned_section_keys
 
 DEFAULT_MODEL = "gemini-2.5-flash"
 FALLBACK_MODELS = ("gemini-2.5-flash-lite", "gemini-1.5-flash")
@@ -115,6 +117,60 @@ def run_four_year_plan_agent(
         if isinstance(item.get("units"), (int, float, str))
     )
 
+    # Build a candidate-course block for OPEN Core/GE requirements that have
+    # no explicit course code in the Workday transcript (e.g. "Core: ENGR:
+    # RTC 3", "Core: ENGR: Experiential Learning for Social Justice"). Each
+    # candidate course can satisfy that requirement, and double-tagged courses
+    # are marked with ★ so the LLM preferentially picks them.
+    category_index = load_category_course_index()
+    schedule_index = load_schedule_section_index()
+
+    # Real SCU course subject prefixes (CSEN, COEN, MATH, ENGL, ...) seen
+    # in the schedule xlsx — used to distinguish actual course requirements
+    # ("CSEN/COEN 195/L") from category-tag-shaped strings ("RTC 3", "ELSJ").
+    real_subjects = {subj for (subj, _) in schedule_index.keys()}
+
+    open_req_courses: dict[str, list[str]] = {}  # course → list of requirement labels it satisfies
+    for item in missing_details:
+        # Skip if the extracted code has a real SCU subject prefix — that
+        # means it's a specific course requirement (even if next-term not
+        # offering it like CSEN 195). "Core: ENGR: RTC 3" extracts "RTC 3"
+        # but RTC isn't a real subject, so it falls through to open-req.
+        codes = _resolve_item_codes(item)
+        if codes and any(c.split()[0] in real_subjects for c in codes):
+            continue
+        req_text = (item.get("requirement") or item.get("category") or "")
+        candidates = _resolve_open_requirement(req_text, category_index, schedule_index)
+        if not candidates:
+            continue
+        label = _normalize_open_req_text(req_text) or req_text[:40]
+        for c in candidates:
+            open_req_courses.setdefault(c, []).append(label)
+
+    open_req_block = ""
+    if open_req_courses:
+        lines = [
+            "=== COURSES SATISFYING OPEN CORE/GE REQUIREMENTS ===",
+            "The remaining requirements above include open Core/GE categories",
+            "(RTC 3, ELSJ, Advanced Writing, Arts, etc.) that have no specific",
+            "course code. The following courses are CONFIRMED to satisfy them",
+            "and ARE available in next-term schedule. You MUST pick courses",
+            "from this list — do NOT invent placeholder names like",
+            "'Core - RTC 3' or 'Open Elective'.",
+            "★ marks courses that satisfy MULTIPLE requirements simultaneously",
+            "(double-tagged) — prefer these to graduate faster.",
+        ]
+        # Sort by # of requirements (double-tagged first)
+        sorted_courses = sorted(
+            open_req_courses.items(),
+            key=lambda kv: (-len(kv[1]), kv[0]),
+        )
+        for course, labels in sorted_courses:
+            tag = " ★" if len(labels) > 1 else ""
+            joined = " + ".join(labels)
+            lines.append(f"  {course} (satisfies: {joined}){tag}")
+        open_req_block = "\n".join(lines) + "\n\n"
+
     pref_block = f"\nStudent preferences / constraints:\n{preferences.strip()}\n" if preferences and preferences.strip() else ""
 
     prompt = f"""You are an SCU academic advisor building a MULTI-QUARTER graduation plan.
@@ -125,19 +181,26 @@ NEXT TERMS (in order): {", ".join(term_list)}
 
 REMAINING REQUIREMENTS ({len(missing_details)} courses, {total_units} total units):
 {json.dumps(missing_details, ensure_ascii=False, indent=2)}
-{pref_block}
+
+{open_req_block}{pref_block}
 RULES:
-1. Distribute ALL courses above across as many quarters as needed.
-2. Target 12–16 units per quarter; never exceed 20.
-3. Respect typical prerequisites: introductory/numbered-lower courses before advanced ones.
-4. Group lecture + lab pairs (e.g. CSEN 194 + CSEN 194L) in the SAME quarter.
-5. If a course is only offered in certain quarters (Fall/Spring), note that in reason.
-6. Each course must appear in EXACTLY ONE quarter — no duplicates, no omissions.
-7. Use only the term names from the NEXT TERMS list above.
-8. graduation_term = the last term in your plan.
-9. total_remaining_units = {total_units} (sum of all course units above).
-10. advice: 1-3 sentence overview of the plan strategy (max 400 chars).
-11. reason per course: ≤60 chars, explain why it belongs in that quarter.
+1. Distribute ALL courses above across as many quarters as needed, INCLUDING
+   every open Core/GE requirement. For each open requirement, pick ONE
+   concrete course from the "COURSES SATISFYING OPEN CORE/GE REQUIREMENTS"
+   block above and place it in some quarter. Never leave a Core requirement
+   unscheduled, and never emit a placeholder name like "Core - RTC 3".
+2. PREFER double-tagged courses (marked with ★) — picking one such course
+   resolves several open requirements at once and shortens the plan.
+3. Target 12–16 units per quarter; never exceed 20.
+4. Respect typical prerequisites: introductory/numbered-lower courses before advanced ones.
+5. Group lecture + lab pairs (e.g. CSEN 194 + CSEN 194L) in the SAME quarter.
+6. If a course is only offered in certain quarters (Fall/Spring), note that in reason.
+7. Each course must appear in EXACTLY ONE quarter — no duplicates, no omissions.
+8. Use only the term names from the NEXT TERMS list above.
+9. graduation_term = the last term in your plan.
+10. total_remaining_units must be the sum of `units` across all courses you output.
+11. advice: 1-3 sentence overview of the plan strategy (max 400 chars).
+12. reason per course: ≤60 chars, explain why it belongs in that quarter.
 
 Output JSON matching the schema exactly.
 """
@@ -259,6 +322,10 @@ Output JSON matching the schema exactly.
             val = item.get(field)
             if val and isinstance(val, str):
                 required_codes |= _extract_codes_from_text(val)
+    # Third pass: every concrete course we surfaced as an open-requirement
+    # candidate (e.g. SCTR 128 for RTC 3, ENGL 181 for Arts) is valid.
+    for course in open_req_courses:
+        required_codes.add(course.upper())
 
     def _is_valid_course(course_code: str) -> bool:
         # If we couldn't identify any specific codes (e.g. all open-ended
