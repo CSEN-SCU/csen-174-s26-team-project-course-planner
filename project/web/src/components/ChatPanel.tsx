@@ -143,8 +143,10 @@ export function ChatPanel({
 
         if (job.status === "done") {
           clearInterval(workdayPollRef.current!);
-          const md = job.missing_details ?? [];
+          const md = (job.missing_details as unknown[]) ?? [];
+          const pr = (job.parsed_rows as ParsedRow[]) ?? [];
           setMissingDetails(md);
+          setParsedRows?.(pr);
           setFileUploaded(true);
           setMessages((m) => [...m, {
             id: `a-${Date.now()}`,
