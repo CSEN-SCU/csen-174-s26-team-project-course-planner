@@ -18,7 +18,15 @@ export default function App() {
     { id: "m0", role: "assistant", content: WELCOME_TEXT },
   ]);
   const [planSnapshots, setPlanSnapshots] = useState<
-    { id: string; memoryId?: number; title: string; dateLabel: string; recommended: Record<string, unknown>[]; messages?: ChatUiMessage[] }[]
+    {
+      id: string;
+      memoryId?: number;
+      title: string;
+      dateLabel: string;
+      recommended: Record<string, unknown>[];
+      messages?: ChatUiMessage[];
+      fourYearPlan?: FourYearPlan | null;
+    }[]
   >([]);
   const [sessionCalendarRecommended, setSessionCalendarRecommended] =
     useState<Record<string, unknown>[] | null>(null);
@@ -115,6 +123,7 @@ export default function App() {
           try {
             const data = JSON.parse(String(m.content ?? "")) as {
               recommended?: unknown; title?: string; dateLabel?: string; messages?: unknown;
+              fourYearPlan?: unknown;
             };
             if (Array.isArray(data.recommended) && data.recommended.length > 0) {
               return [{
@@ -124,6 +133,7 @@ export default function App() {
                 dateLabel: data.dateLabel ?? String(m.created_at ?? ""),
                 recommended: data.recommended as Record<string, unknown>[],
                 messages: Array.isArray(data.messages) ? data.messages as ChatUiMessage[] : undefined,
+                fourYearPlan: (data.fourYearPlan as FourYearPlan | undefined) ?? null,
               }];
             }
           } catch { /* ignore */ }
@@ -210,15 +220,19 @@ export default function App() {
     setActiveSessionId(row.id);
     if (row.kind === "current") {
       setSessionCalendarRecommended(null);
+      // Keep current fourYearPlan as-is — "Current schedule" reflects the live state
     } else if (row.kind === "snapshot") {
       setSessionCalendarRecommended(row.recommended ?? null);
+      // Restore the 4-year plan tied to this snapshot (null if none was saved)
+      const snap = planSnapshots.find((s) => s.id === row.id);
+      setFourYearPlan(snap?.fourYearPlan ?? null);
       if (row.messages && row.messages.length > 0) {
         setMessages(row.messages as ChatUiMessage[]);
       } else {
         setMessages([{ id: "m-restore", role: "assistant", content: "Viewing a past session. The calendar shows courses from this plan." }]);
       }
     }
-  }, [setMessages]);
+  }, [setMessages, planSnapshots]);
 
   const handlePlanGenerated = useCallback((plan: Record<string, unknown>, msgs: ChatUiMessage[]) => {
     setLocalOverride(null);
@@ -249,6 +263,7 @@ export default function App() {
     setLocalOverride(null);
     setPlanResult(null);
     setSessionCalendarRecommended(null);
+    setFourYearPlan(null);
     setActiveSessionId(null);
     setMessages([{ id: "m0", role: "assistant", content: WELCOME_TEXT }]);
   }, []);
@@ -279,13 +294,58 @@ export default function App() {
         missingDetails,
         userId ?? "anonymous",
       );
-      setFourYearPlan(result as FourYearPlan);
+      const plan = result as FourYearPlan;
+      setFourYearPlan(plan);
+
+      // Attach the new 4-year plan to the active snapshot (or the most recent
+      // snapshot if "Current schedule" is selected) and re-persist that
+      // snapshot's plan_outcome memory entry so it survives a reload.
+      const targetSnap =
+        activeSessionId && activeSessionId !== "current"
+          ? planSnapshots.find((s) => s.id === activeSessionId)
+          : planSnapshots[0];
+
+      if (targetSnap && userId) {
+        const updated = { ...targetSnap, fourYearPlan: plan };
+        setPlanSnapshots((prev) =>
+          prev.map((s) => (s.id === targetSnap.id ? updated : s)),
+        );
+
+        // Replace the old memory entry with one that includes fourYearPlan
+        if (targetSnap.memoryId != null) {
+          await deleteMemory(userId, targetSnap.memoryId).catch(() => {
+            /* non-fatal */
+          });
+        }
+        void saveMemory(
+          userId,
+          "plan_outcome",
+          JSON.stringify({
+            recommended: targetSnap.recommended,
+            title: targetSnap.title,
+            dateLabel: targetSnap.dateLabel,
+            messages: targetSnap.messages,
+            fourYearPlan: plan,
+          }),
+        )
+          .then((r) => {
+            const newId = typeof r?.id === "number" ? r.id : undefined;
+            setPlanSnapshots((prev) =>
+              prev.map((s) =>
+                s.id === targetSnap.id ? { ...s, memoryId: newId } : s,
+              ),
+            );
+          })
+          .catch(() => {
+            /* non-fatal */
+          });
+      }
     } catch (e) {
       console.error("Four-year plan generation failed:", e);
     } finally {
       setFourYearGenerating(false);
     }
-  }, [missingDetails, userId, fourYearGenerating]);
+  }, [missingDetails, userId, fourYearGenerating, activeSessionId, planSnapshots]);
 
   const handleSlotClick = useCallback((dayIndex: number, slotIndex: number) => {
     const dayName = WEEKDAY_LABELS[dayIndex] ?? "Monday";
