@@ -474,7 +474,7 @@ export function FourYearPlanView({
   const sortedYears = [...unifiedYears].sort((a, b) => a.acYear - b.acYear);
 
   return (
-    <main className="flex min-w-0 flex-1 flex-col bg-[#F5F5F5]">
+    <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#F5F5F5]">
       <header className="flex shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-4 py-3 shadow-sm">
         <h1 className="text-sm font-semibold text-[var(--scu-text)]">4-Year Graduation Plan</h1>
         <button

@@ -160,22 +160,18 @@ export default function App() {
     [localOverride, calendarRecommended],
   );
 
+  // Each conversation = one snapshot row. The most recent snapshot IS the
+  // "current" conversation when active — no separate pseudo-row needed.
   const sessions: MemorySessionRow[] = useMemo(() => {
-    const rows: MemorySessionRow[] = [];
-    if (planResult && Array.isArray(planResult.recommended) && planResult.recommended.length > 0) {
-      rows.push({
-        id: "current",
-        title: "Current schedule",
-        dateLabel: "From chat",
-        kind: "current",
-        recommended: planResult.recommended as Record<string, unknown>[],
-      });
-    }
-    for (const snap of planSnapshots) {
-      rows.push({ id: snap.id, title: snap.title, dateLabel: snap.dateLabel, kind: "snapshot", recommended: snap.recommended, messages: snap.messages });
-    }
-    return rows;
-  }, [planResult, planSnapshots]);
+    return planSnapshots.map((snap) => ({
+      id: snap.id,
+      title: snap.title,
+      dateLabel: snap.dateLabel,
+      kind: "snapshot" as const,
+      recommended: snap.recommended,
+      messages: snap.messages,
+    }));
+  }, [planSnapshots]);
 
   const handleLogin = useCallback(async (username: string, password: string) => {
     try {
@@ -218,45 +214,93 @@ export default function App() {
   const handleSelectSession = useCallback((row: MemorySessionRow) => {
     setLocalOverride(null);
     setActiveSessionId(row.id);
-    if (row.kind === "current") {
-      setSessionCalendarRecommended(null);
-      // Keep current fourYearPlan as-is — "Current schedule" reflects the live state
-    } else if (row.kind === "snapshot") {
-      setSessionCalendarRecommended(row.recommended ?? null);
-      // Restore the 4-year plan tied to this snapshot (null if none was saved)
-      const snap = planSnapshots.find((s) => s.id === row.id);
-      setFourYearPlan(snap?.fourYearPlan ?? null);
-      if (row.messages && row.messages.length > 0) {
-        setMessages(row.messages as ChatUiMessage[]);
-      } else {
-        setMessages([{ id: "m-restore", role: "assistant", content: "Viewing a past session. The calendar shows courses from this plan." }]);
-      }
+    setSessionCalendarRecommended(row.recommended ?? null);
+    // Mirror the snapshot into planResult so chat follow-ups treat it as
+    // the previous_plan baseline rather than appending to a stale conversation.
+    setPlanResult({ recommended: row.recommended ?? [] });
+    const snap = planSnapshots.find((s) => s.id === row.id);
+    setFourYearPlan(snap?.fourYearPlan ?? null);
+    if (row.messages && row.messages.length > 0) {
+      setMessages(row.messages as ChatUiMessage[]);
+    } else {
+      setMessages([{ id: "m-restore", role: "assistant", content: "Viewing a past session. The calendar shows courses from this plan." }]);
     }
   }, [setMessages, planSnapshots]);
 
   const handlePlanGenerated = useCallback((plan: Record<string, unknown>, msgs: ChatUiMessage[]) => {
     setLocalOverride(null);
     setSessionCalendarRecommended(null);
-    setActiveSessionId("current");
     const recs = (plan.recommended as Record<string, unknown>[]) ?? [];
-    if (recs.length > 0) {
-      const d = new Date().toLocaleDateString();
-      const title = `Plan · ${recs.length} courses`;
+    if (recs.length === 0) return;
+
+    const d = new Date().toLocaleDateString();
+    const title = `Plan · ${recs.length} courses`;
+
+    // If there's an active conversation, UPDATE that snapshot in place
+    // (same conversation, multiple turns). Otherwise CREATE a new one.
+    const existing = activeSessionId
+      ? planSnapshots.find((s) => s.id === activeSessionId)
+      : null;
+
+    if (existing) {
+      const updated = {
+        ...existing,
+        title,
+        dateLabel: d,
+        recommended: recs,
+        messages: msgs,
+      };
+      setPlanSnapshots((prev) =>
+        prev.map((s) => (s.id === existing.id ? updated : s)),
+      );
+
+      if (userId && existing.memoryId != null) {
+        // Replace the memory row so storage matches state
+        void deleteMemory(userId, existing.memoryId).catch(() => {});
+        void saveMemory(
+          userId,
+          "plan_outcome",
+          JSON.stringify({
+            recommended: recs,
+            title,
+            dateLabel: d,
+            messages: msgs,
+            fourYearPlan: existing.fourYearPlan ?? null,
+          }),
+        )
+          .then((r) => {
+            const newId = typeof r?.id === "number" ? r.id : undefined;
+            setPlanSnapshots((prev) =>
+              prev.map((s) =>
+                s.id === existing.id ? { ...s, memoryId: newId } : s,
+              ),
+            );
+          })
+          .catch(() => {});
+      }
+    } else {
       const snapId = `snap-${Date.now()}`;
+      setActiveSessionId(snapId);
+      setPlanSnapshots((prev) => [
+        { id: snapId, title, dateLabel: d, recommended: recs, messages: msgs },
+        ...prev,
+      ]);
       if (userId) {
-        void saveMemory(userId, "plan_outcome", JSON.stringify({ recommended: recs, title, dateLabel: d, messages: msgs }))
+        void saveMemory(
+          userId,
+          "plan_outcome",
+          JSON.stringify({ recommended: recs, title, dateLabel: d, messages: msgs }),
+        )
           .then((r) => {
             const memoryId = typeof r?.id === "number" ? r.id : undefined;
-            setPlanSnapshots((prev) => [{ id: snapId, memoryId, title, dateLabel: d, recommended: recs, messages: msgs }, ...prev]);
+            setPlanSnapshots((prev) =>
+              prev.map((s) => (s.id === snapId ? { ...s, memoryId } : s)),
+            );
           })
-          .catch(() => {
-            setPlanSnapshots((prev) => [{ id: snapId, title, dateLabel: d, recommended: recs, messages: msgs }, ...prev]);
-          });
-      } else {
-        setPlanSnapshots((prev) => [{ id: snapId, title, dateLabel: d, recommended: recs, messages: msgs }, ...prev]);
+          .catch(() => {});
       }
     }
-  }, [userId]);
+  }, [userId, activeSessionId, planSnapshots]);
 
   const handleNewPlan = useCallback(() => {
     // Keep missingDetails, fileUploaded, planSnapshots — only reset current chat
@@ -297,13 +341,11 @@ export default function App() {
       const plan = result as FourYearPlan;
       setFourYearPlan(plan);
 
-      // Attach the new 4-year plan to the active snapshot (or the most recent
-      // snapshot if "Current schedule" is selected) and re-persist that
-      // snapshot's plan_outcome memory entry so it survives a reload.
-      const targetSnap =
-        activeSessionId && activeSessionId !== "current"
-          ? planSnapshots.find((s) => s.id === activeSessionId)
-          : planSnapshots[0];
+      // Attach the new 4-year plan to the active conversation. If no
+      // conversation is active yet, fall back to the most recent snapshot.
+      const targetSnap = activeSessionId
+        ? planSnapshots.find((s) => s.id === activeSessionId)
+        : planSnapshots[0];
 
       if (targetSnap && userId) {
         const updated = { ...targetSnap, fourYearPlan: plan };
