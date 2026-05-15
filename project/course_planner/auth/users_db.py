@@ -10,6 +10,7 @@ Public functions:
 - `create_user(username, email, password, *, db_path=None) -> int`
 - `verify_login(username, password, *, db_path=None) -> bool`
 - `get_user_by_username(username, *, db_path=None) -> dict | None`
+- `get_user_by_id(user_id, *, db_path=None) -> dict | None`
 - `get_user_by_email(email, *, db_path=None) -> dict | None`
 - `get_or_create_user_for_google(email, google_sub, *, db_path=None) -> dict`
 - `get_credentials_dict(*, db_path=None) -> dict`
@@ -112,6 +113,34 @@ def get_user_by_username(
         row = conn.execute(
             "SELECT id, username, email, password_hash, created_at FROM users WHERE username = ?",
             (username,),
+        ).fetchone()
+        return dict(row) if row else None
+    finally:
+        close_conn(conn)
+
+
+def get_user_by_id(
+    user_id,
+    *,
+    db_path: Optional[str] = None,
+) -> Optional[dict]:
+    """Return the user row for this id, or None if no such user exists.
+
+    Accepts any int-coercible value; non-numeric or non-positive input
+    yields None rather than raising — the caller can then map "missing
+    or invalid" to a single 401 response without leaking which case hit.
+    """
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None
+    if uid <= 0:
+        return None
+    conn = get_conn(db_path)
+    try:
+        row = conn.execute(
+            "SELECT id, username, email, password_hash, created_at FROM users WHERE id = ?",
+            (uid,),
         ).fetchone()
         return dict(row) if row else None
     finally:
