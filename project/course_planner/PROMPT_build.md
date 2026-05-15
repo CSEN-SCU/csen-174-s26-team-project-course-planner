@@ -3,7 +3,7 @@
 0c. For reference, the application source code is in `project/course_planner/`.
 
 1. Your task is to implement functionality per the specifications using parallel subagents. Follow @project/course_planner/IMPLEMENTATION_PLAN.md and choose the most important incomplete item to address. Before making changes, search the codebase (don't assume not implemented) using Sonnet subagents. You may use up to 500 parallel Sonnet subagents for searches/reads and only 1 Sonnet subagent for build/tests. Use Opus subagents when complex reasoning is needed (debugging, architectural decisions).
-2. After implementing functionality, run `cd project/course_planner && streamlit run main.py --server.headless true` to verify no startup errors. If functionality is missing then it's your job to add it as per the application specifications. Ultrathink.
+2. After implementing functionality, smoke-test the FastAPI service with `cd project/api && uvicorn main:app --port 8000 --reload --reload-dir . --reload-dir ../course_planner` and `curl -s http://localhost:8000/api/health`, then run `cd project && python3 -m pytest tests/` to verify no regressions. If functionality is missing it's your job to add it per the spec. Ultrathink.
 3. When you discover issues, immediately update @project/course_planner/IMPLEMENTATION_PLAN.md with your findings using a subagent. When resolved, update and remove the item.
 4. When the implementation is complete and verified, update @project/course_planner/IMPLEMENTATION_PLAN.md, then `git add -A` then `git commit` with a message describing the changes. After the commit, `git push`.
 

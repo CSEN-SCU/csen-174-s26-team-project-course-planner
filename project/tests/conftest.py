@@ -1,8 +1,8 @@
 """Pytest config: import as if running from `project/course_planner/`.
 
-The Streamlit app is launched with `cwd=project/course_planner`, which
-makes `agents`, `auth`, `db`, and `utils` top-level imports. Tests mirror
-that path setup so test code can `from auth import users_db` etc.
+The FastAPI service runs with `project/course_planner/` on `sys.path`,
+making `agents`, `auth`, `db`, and `utils` top-level imports. Tests
+mirror that path setup so test code can `from auth import users_db` etc.
 
 Each test gets a fresh tempfile-backed SQLite database that:
 

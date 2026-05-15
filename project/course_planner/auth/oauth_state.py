@@ -1,8 +1,9 @@
-"""Stateless OAuth state/nonce/PKCE helpers, shared by Streamlit + FastAPI.
+"""Stateless OAuth state/nonce/PKCE helpers for the FastAPI auth router.
 
 The browser navigates away to Google and back during sign-in. Anything
-stored in a Streamlit ``session_state`` or a per-process FastAPI dict
-will not survive that round-trip reliably. Instead we derive everything
+stored in a per-process FastAPI dict will not survive that round-trip
+reliably (the worker that handles the callback may differ). We derive
+everything
 the callback needs from the ``state`` query parameter itself, using
 HMAC over a server-side signing key.
 

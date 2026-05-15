@@ -1,11 +1,9 @@
 google-genai
 google-auth
 google-auth-oauthlib
-streamlit
 python-dotenv
 openpyxl
 ratemyprofessors-client
-streamlit-authenticator
 sqlite-vec
 bcrypt
 pytest

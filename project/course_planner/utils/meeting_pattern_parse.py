@@ -1,7 +1,7 @@
 """Parse SCU-style Meeting Patterns strings (days + bar + time range).
 
-Single source of truth for calendar placement and time captions; keeps behavior
-testable without importing the Streamlit entrypoint.
+Single source of truth for calendar placement and time captions; pure
+function so tests don't need to import the FastAPI app.
 """
 
 from __future__ import annotations

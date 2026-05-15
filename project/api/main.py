@@ -10,7 +10,7 @@ sys.path.insert(0, _COURSE_PLANNER)
 
 from dotenv import load_dotenv
 
-# Same env file as Streamlit (`course_planner/.env`) so GEMINI_API_KEY is picked up by agents.
+# Load `course_planner/.env` first so shared keys (GEMINI_API_KEY, etc.) are picked up by agents.
 _env_cp = os.path.join(_COURSE_PLANNER, ".env")
 if os.path.isfile(_env_cp):
     load_dotenv(_env_cp)

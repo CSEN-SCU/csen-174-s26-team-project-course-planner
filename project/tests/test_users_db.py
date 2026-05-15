@@ -8,10 +8,8 @@ Behaviour pinned by these tests:
   recoverable from the row.
 - verify_login returns True for the correct password, False for wrong
   passwords and unknown usernames.
-- get_credentials_dict only exposes username/email/hash, not raw passwords,
-  in the shape streamlit-authenticator expects.
 
-Run with: cd project/course_planner && pytest tests/test_users_db.py -v
+Run with: cd project && pytest tests/test_users_db.py -v
 """
 
 from __future__ import annotations
@@ -75,21 +73,6 @@ def test_short_password_rejected(db_path):
 def test_invalid_email_rejected(db_path):
     with pytest.raises(ValueError):
         users_db.create_user("alice", "not-an-email", "correct horse battery", db_path=db_path)
-
-
-def test_get_credentials_dict_shape_matches_streamlit_authenticator(db_path):
-    users_db.create_user("alice", "alice@example.com", "correct horse battery", db_path=db_path)
-    users_db.create_user("bob", "bob@example.com", "even longer password", db_path=db_path)
-
-    creds = users_db.get_credentials_dict(db_path=db_path)
-
-    assert set(creds.keys()) == {"usernames"}
-    assert set(creds["usernames"].keys()) == {"alice", "bob"}
-    alice = creds["usernames"]["alice"]
-    assert set(alice.keys()) == {"name", "email", "password"}
-    assert alice["email"] == "alice@example.com"
-    assert alice["password"].startswith("$2")
-    assert "correct horse battery" not in alice["password"]
 
 
 def test_get_user_by_email_case_insensitive(db_path):

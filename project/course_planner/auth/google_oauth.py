@@ -1,4 +1,4 @@
-"""Google OAuth 2.0 (authorization code) helpers for Streamlit sign-in.
+"""Google OAuth 2.0 (authorization code) helpers for the FastAPI sign-in flow.
 
 Confidential web client + server-side ID token verification. Does not use
 the deprecated ``platform.js`` / ``gapi.auth2`` browser library. Never

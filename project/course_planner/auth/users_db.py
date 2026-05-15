@@ -1,9 +1,9 @@
 """User CRUD and credentials helpers.
 
 Passwords are hashed with bcrypt (cost >= 12). The module exposes a small
-surface so that `streamlit_authenticator.Authenticate` can be fed a
-credentials dict pulled from SQLite, while tests can drive the same
-functions directly.
+surface for account creation, login verification, and optional bulk
+credential export for tooling. The FastAPI router (``api/routers/auth.py``)
+is the primary caller; tests can drive these functions directly.
 
 Public functions:
 
@@ -13,7 +13,6 @@ Public functions:
 - `get_user_by_id(user_id, *, db_path=None) -> dict | None`
 - `get_user_by_email(email, *, db_path=None) -> dict | None`
 - `get_or_create_user_for_google(email, google_sub, *, db_path=None) -> dict`
-- `get_credentials_dict(*, db_path=None) -> dict`
 
 Errors:
 
@@ -244,31 +243,3 @@ def verify_login(
         bcrypt.checkpw(b"x", _DUMMY_HASH)
         return False
     return _verify_password(password, user["password_hash"])
-
-
-def get_credentials_dict(*, db_path: Optional[str] = None) -> dict:
-    """Build the credentials dict expected by `streamlit_authenticator`.
-
-    Each user becomes:
-        {
-          'name':     <username>,
-          'email':    <email>,
-          'password': <bcrypt hash>,
-        }
-    The library accepts pre-hashed bcrypt strings.
-    """
-    conn = get_conn(db_path)
-    try:
-        rows = conn.execute(
-            "SELECT username, email, password_hash FROM users"
-        ).fetchall()
-    finally:
-        close_conn(conn)
-    usernames: dict[str, dict] = {}
-    for row in rows:
-        usernames[row["username"]] = {
-            "name": row["username"],
-            "email": row["email"],
-            "password": row["password_hash"],
-        }
-    return {"usernames": usernames}

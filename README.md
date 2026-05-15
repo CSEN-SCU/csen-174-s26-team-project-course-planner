@@ -8,68 +8,86 @@
 
 ---
 
-## Streamlit app (`project/course_planner/`)
+## SCU Course Planner
 
-Python + Streamlit prototype. Students **sign in**, upload SCU **View My Academic Progress** (`.xlsx`), describe preferences in natural language, and get a **recommended next-quarter schedule** with **RateMyProfessor** enrichment and a **weekly calendar** preview (when **Find Course Sections** `.xlsx` is present).
+A web app for Santa Clara University students. Upload SCU **View My
+Academic Progress** (`.xlsx`) or sync directly from Workday, describe
+preferences in natural language, and get a **recommended next-quarter
+schedule** and **multi-quarter graduation plan** with **RateMyProfessor**
+enrichment and a **weekly calendar** preview (when **Find Course
+Sections** `.xlsx` is present). Per-user **long-term memory** (RAG)
+and **follow-up chat replies** support iterative planning across
+sessions.
 
-Per-user **long-term memory** (retrieval-augmented prompts) and **follow-up chat replies** help iterative planning across sessions.
+Two services compose the app:
+
+| Path | Stack | Role |
+|------|-------|------|
+| [`project/api/`](project/api/) | FastAPI + Python agents | REST API for auth, transcript upload, plan generation, four-year plan, Workday sync, memory CRUD |
+| [`project/web/`](project/web/) | React + Vite + Tailwind | SPA: login + chat + calendar + 4-year grid |
+| [`project/course_planner/`](project/course_planner/) | Python package | Shared **agents**, **SQLite + sqlite-vec**, **auth/users_db**, and **xlsx parsers** used by the FastAPI service |
 
 ### Current implementation
 
 | Area | Module | What it does |
 |------|--------|----------------|
-| Auth | `project/course_planner/auth/streamlit_auth.py`, `auth/users_db.py` | Login / register via **streamlit-authenticator**; passwords stored with **bcrypt** in SQLite |
+| Auth | `project/api/routers/auth.py`, `project/course_planner/auth/users_db.py`, `auth/google_oauth.py` | Username/password (bcrypt + SQLite) plus Google OAuth |
 | Database | `project/course_planner/db/connection.py`, `db/migrate.py`, `db/schema.sql` | SQLite at `project/course_planner/data/app.db` (gitignored): `users`, `memory_items`, **sqlite-vec** `memory_vec` for embeddings |
 | Memory (RAG) | `project/course_planner/agents/memory_agent.py` | **Gemini `text-embedding-004`** (fallback hash vectors if no API key); `write` / `retrieve` / list / delete — **scoped by `user_id`** |
 | Orchestration | `project/course_planner/agents/orchestrator.py` | `plan_for_user`: retrieve memory → **planning_agent** → write summary; **PII redaction** on retrieved snippets before the LLM |
-| Planning | `project/course_planner/agents/planning_agent.py` | **Gemini** structured JSON: `recommended`, `total_units`, `advice`, **`assistant_reply`**. **Lecture+lab pairs** (e.g. CSEN 194 + CSEN 194L) when both appear in the gap; retries / fallback models; **`meta` / `warnings` / per-course `alternatives`** |
-| Requirement parsing | `project/course_planner/main.py` → `utils/academic_progress_xlsx.py` | Parses DegreeWorks export locally; builds `missing_details` |
+| Planning | `project/course_planner/agents/planning_agent.py` | **Gemini** structured JSON: `recommended`, `total_units`, `advice`, **`assistant_reply`**. **Lecture+lab pairs** (e.g. CSEN 194 + CSEN 194L) when both appear in the gap; retries / fallback models; **`meta` / `warnings` / per-course `alternatives`**. Prompt-injection sanitiser on user text |
+| Four-year plan | `project/course_planner/agents/four_year_planning_agent.py` | Multi-quarter graduation grid; surfaces open Core/GE candidates via Course-Tags index; typed `EmptyPlanError` / `InconsistentPlanError` |
+| Requirement parsing | `project/course_planner/utils/academic_progress_xlsx.py` | Parses DegreeWorks export; builds `missing_details` and `parsed_rows` |
+| Workday sync | `project/api/routers/workday.py`, `project/course_planner/utils/workday_scraper.py` | Playwright-driven export with search-bar fallback; URL allowlist + error scrubbing |
 | Professor ratings | `project/course_planner/agents/professor_agent.py` | RateMyProfessor GraphQL (parallel); aligns to Find Course instructors when possible |
-| Calendar | `project/course_planner/main.py` | Mon–Fri columns from **Meeting Patterns** in Find Course Sections `.xlsx` |
-| UI | `project/course_planner/main.py` | Login gate; sidebar **My memory**; chat bubbles for user message + **`assistant_reply`** |
+| Rate limiting | `project/api/middleware/rate_limit.py` | Per-IP, per-user, per-user-concurrency token bucket on `/api/plan`, `/api/four-year-plan`, `/api/workday/sync` |
+| Calendar + 4-year UI | `project/web/src/components/CalendarView.tsx`, `FourYearPlanView.tsx` | Mon–Fri weekly grid plus 4-year graduation grid overlaying completed transcript history with AI recommendations |
 
 ### Tests
 
-From the repository root (with the repo `.venv`):
+From `project/`:
 
 ```bash
-cd project/course_planner
-../../.venv/bin/python -m pytest tests/
+cd project
+python3 -m pytest tests/
 ```
 
 ### Architecture (high level)
 
 ```
-Academic Progress (.xlsx)
+Academic Progress (.xlsx)  ──or──>  Workday (Playwright sync)
         ↓
-Requirement Parser (local)
+Requirement Parser → missing_details + parsed_rows
+        ↓
+[FastAPI /api/plan or /api/four-year-plan]
         ↓
 Orchestrator.plan_for_user  ←  SQLite memory (retrieve / write)
         ↓
-Planning Agent (Gemini)     ←  preferences + gap + memory snippets + optional previous plan
-        ↓  (post-process: lecture/lab co-reqs when partner still in gap)
-Professor Agent (RMP)
-        ↓
-Calendar UI (Streamlit)
+Planning Agent (Gemini)     ←  preferences + gap + memory + previous_plan
+        ↓  (post-process: lab pairing, title override, conflict check)
+Professor Agent (RMP) → React frontend (calendar / 4-year grid)
 ```
-
-**Roadmap / optional**
-
-| Piece | Status | Notes |
-|-------|--------|-------|
-| Requirement Agent (LLM PDF) | Implemented, not wired to main UI | `agents/requirement_agent.py` |
-| Email Agent | Planned | Human-in-the-loop draft to instructor |
 
 ### Run locally
 
+Backend:
+
 ```bash
-cd project/course_planner
-pip install -r requirements.txt
-cp .env.example .env   # set GEMINI_API_KEY (or GOOGLE_API_KEY)
-streamlit run main.py
+cd project/api
+pip install -r requirements.txt -r ../course_planner/requirements.txt
+cp .env.example .env   # set GEMINI_API_KEY, GOOGLE_CLIENT_ID/SECRET, etc.
+uvicorn main:app --reload --port 8000 \
+  --reload-dir . \
+  --reload-dir ../course_planner
 ```
 
-Open the URL Streamlit prints (default **http://localhost:8501**).
+Frontend:
+
+```bash
+cd project/web
+npm install
+npm run dev          # opens http://localhost:5173
+```
 
 ### Environment variables
 
@@ -107,7 +125,7 @@ For subjects like **CSEN / COEN / PHYS / CHEM / ELEN / BIOL**, a course and its 
 | [`product-vision.md`](product-vision.md) | Product vision + HMW |
 | [`problem_framing_canvas.md`](problem_framing_canvas.md) | Problem Framing Canvas |
 | [`architecture/architecture.md`](architecture/architecture.md) | C4 diagrams |
-| [`project/api/`](project/api/) | TypeScript Express + Prisma (`bronco-plan-api`) |
+| [`project/api/`](project/api/) | FastAPI service (auth, plan, four-year-plan, Workday sync, memory) |
 | [`project/web/`](project/web/) | React + Vite frontend |
 | [`prototypes/`](prototypes/) | Teammate divergent prototypes |
 

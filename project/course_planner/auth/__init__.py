@@ -1,6 +1,7 @@
-"""Authentication layer: SQLite-backed users + streamlit-authenticator wrapper.
+"""Authentication layer: SQLite-backed users + OAuth helpers.
 
-The submodules use absolute imports (`from auth.users_db import ...`)
-because the Streamlit app runs with cwd = project/course_planner/, so
-`auth`, `db`, `agents`, `utils` are top-level packages on sys.path.
+Submodules use absolute imports (``from auth.users_db import ...``)
+because the FastAPI app runs with ``cwd = project/course_planner/`` on
+``sys.path`` so ``auth``, ``db``, ``agents``, ``utils`` resolve as
+top-level packages.
 """
