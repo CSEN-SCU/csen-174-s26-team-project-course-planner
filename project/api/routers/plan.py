@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from google.genai import types
 from pydantic import BaseModel, Field
 
@@ -11,6 +11,7 @@ from agents.gemini_client import get_genai_client
 from agents.memory_agent import list_for_user
 from agents.planning_agent import run_planning_agent
 from agents.professor_agent import run_professor_agent
+from middleware.rate_limit import limit
 
 router = APIRouter()
 
@@ -93,7 +94,7 @@ class PlanRequest(BaseModel):
     previous_plan: dict[str, Any] | None = None
 
 
-@router.post("", include_in_schema=True)
+@router.post("", include_in_schema=True, dependencies=[Depends(limit("plan"))])
 def create_plan(body: PlanRequest) -> dict[str, Any]:
     memory_snippets: list[str] | None = None
     if body.user_id.strip():

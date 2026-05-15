@@ -20,12 +20,31 @@ if os.path.isfile(_env_api):
 
 from typing import Dict
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
+from middleware.rate_limit import RateLimitExceeded
 from routers import auth, four_year_plan, memory, plan, upload, voice, workday
 
 app = FastAPI(title="SCU Course Planner API")
+
+
+@app.exception_handler(RateLimitExceeded)
+async def _rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    """Return rate-limit denials as a flat JSON body the frontend can switch on.
+
+    Without this handler FastAPI would nest the payload under ``detail`` (its
+    default for ``HTTPException``). The spec calls for a top-level ``error``
+    field so the UI can distinguish 429s from the existing 400/502 errors
+    without parsing.
+    """
+    detail = exc.detail if isinstance(exc.detail, dict) else {"error": "rate_limited"}
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=detail,
+        headers=exc.headers or {},
+    )
 
 
 def _cors_allowed_origins() -> list[str]:

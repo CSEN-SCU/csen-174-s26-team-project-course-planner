@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from agents.four_year_planning_agent import run_four_year_plan_agent
+from middleware.rate_limit import limit
 
 router = APIRouter()
 
@@ -16,7 +17,11 @@ class FourYearPlanRequest(BaseModel):
     preferences: str = ""
 
 
-@router.post("", include_in_schema=True)
+@router.post(
+    "",
+    include_in_schema=True,
+    dependencies=[Depends(limit("four_year_plan"))],
+)
 def create_four_year_plan(body: FourYearPlanRequest) -> dict[str, Any]:
     if not body.missing_details:
         raise HTTPException(

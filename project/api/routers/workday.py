@@ -13,10 +13,11 @@ import threading
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from agents.memory_agent import write as memory_write
+from middleware.rate_limit import limit
 
 router = APIRouter()
 
@@ -56,7 +57,15 @@ _STATUS_LABELS: dict[str, str] = {
 
 def _run_scrape(job_id: str, user_id: str, workday_url: str | None) -> None:
     def cb(status: str) -> None:
-        _set_job(job_id, status=status, label=_STATUS_LABELS.get(status, status))
+        # Diagnostic statuses use the form "<code>::<detail>" — keep the
+        # base code as job.status so the frontend's done/error detection
+        # still works, but expose the detail in the label.
+        if "::" in status:
+            base, _, detail = status.partition("::")
+            label = f"{_STATUS_LABELS.get(base, base)} — at {detail}"
+            _set_job(job_id, status=base, label=label)
+        else:
+            _set_job(job_id, status=status, label=_STATUS_LABELS.get(status, status))
 
     try:
         from utils.workday_scraper import scrape_workday_sync
@@ -99,7 +108,7 @@ class SyncRequest(BaseModel):
     workday_url: str = ""
 
 
-@router.post("/sync")
+@router.post("/sync", dependencies=[Depends(limit("workday_sync"))])
 def start_sync(body: SyncRequest) -> dict[str, str]:
     """Launch a background Playwright scrape and return a job_id to poll."""
     job_id = str(uuid.uuid4())
