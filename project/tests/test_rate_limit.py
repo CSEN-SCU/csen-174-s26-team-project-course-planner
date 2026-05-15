@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 # Make the api package importable without uvicorn
-_API = Path(__file__).resolve().parents[2] / "api"
+_API = Path(__file__).resolve().parents[1] / "api"
 if str(_API) not in sys.path:
     sys.path.insert(0, str(_API))
 
