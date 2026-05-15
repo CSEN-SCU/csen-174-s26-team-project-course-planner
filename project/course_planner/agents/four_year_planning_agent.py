@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 import time
 import uuid
+from collections import OrderedDict
 from datetime import date
+from threading import Lock
 from typing import Any
 
 from google.genai import types
@@ -22,6 +25,100 @@ from utils.scu_course_schedule_xlsx import (
 
 DEFAULT_MODEL = "gemini-2.5-flash"
 FALLBACK_MODELS = ("gemini-2.5-flash-lite", "gemini-1.5-flash")
+
+# Known SCU term name prefixes (case-insensitive). The model is given a list
+# of concrete "<Season> YYYY" terms but for empty quarters we only verify the
+# season prefix here.
+_KNOWN_TERM_PREFIXES = ("fall", "winter", "spring", "summer")
+
+
+class EmptyPlanError(ValueError):
+    """The model produced no usable quarters (transient failure).
+
+    Carries a small structured payload so the HTTP layer can shape the
+    response without re-parsing the message.
+    """
+
+    def __init__(self, message: str, *, detail: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.detail = detail or {}
+
+
+class InconsistentPlanError(ValueError):
+    """Model output disagrees with itself (e.g. units=0 yet there's work left).
+
+    Treated as a transient failure that the caller can retry, distinct from
+    a hard model failure.
+    """
+
+    def __init__(self, message: str, *, detail: dict[str, Any] | None = None) -> None:
+        super().__init__(message)
+        self.detail = detail or {}
+
+
+# ── Idempotent in-memory LRU cache for repeat requests ────────────────────────
+# Keyed by a sha256 of the canonical (missing_details, preferences) tuple.
+# Best-effort only; capped at 64 entries per process.
+
+_PLAN_CACHE_TTL_SECONDS = 300  # 5 minutes
+_PLAN_CACHE_MAX_ENTRIES = 64
+_plan_cache: "OrderedDict[str, tuple[float, dict[str, Any]]]" = OrderedDict()
+_plan_cache_lock = Lock()
+
+
+def _cache_enabled() -> bool:
+    """Cache is on by default. Disable with `PLAN_CACHE_ENABLED=0`."""
+    return os.environ.get("PLAN_CACHE_ENABLED", "1").strip() not in ("0", "false", "False")
+
+
+def compute_plan_cache_key(
+    missing_details: list[dict],
+    preferences: str | None,
+) -> str:
+    """Deterministic sha256 hash over a canonical JSON dump of the inputs."""
+    payload = {
+        "missing_details": missing_details or [],
+        "preferences": (preferences or "").strip(),
+    }
+    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def get_cached_plan(cache_key: str) -> dict[str, Any] | None:
+    """Return a deep-copy of the cached plan if fresh, else None."""
+    if not _cache_enabled():
+        return None
+    now = time.time()
+    with _plan_cache_lock:
+        entry = _plan_cache.get(cache_key)
+        if entry is None:
+            return None
+        ts, value = entry
+        if now - ts > _PLAN_CACHE_TTL_SECONDS:
+            _plan_cache.pop(cache_key, None)
+            return None
+        # Refresh LRU ordering.
+        _plan_cache.move_to_end(cache_key)
+        # Deep-copy via JSON round-trip so callers can't mutate the cache.
+        return json.loads(json.dumps(value))
+
+
+def set_cached_plan(cache_key: str, plan: dict[str, Any]) -> None:
+    """Store a successful plan response, evicting the oldest entry if full."""
+    if not _cache_enabled():
+        return
+    snapshot = json.loads(json.dumps(plan))
+    with _plan_cache_lock:
+        _plan_cache[cache_key] = (time.time(), snapshot)
+        _plan_cache.move_to_end(cache_key)
+        while len(_plan_cache) > _PLAN_CACHE_MAX_ENTRIES:
+            _plan_cache.popitem(last=False)
+
+
+def clear_plan_cache() -> None:
+    """Test helper: drop all cached plans."""
+    with _plan_cache_lock:
+        _plan_cache.clear()
 
 FOUR_YEAR_PLAN_SCHEMA = {
     "type": "OBJECT",
