@@ -24,10 +24,17 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from db.migrate import migrate
 from middleware.rate_limit import RateLimitExceeded
 from routers import auth, four_year_plan, memory, plan, upload, voice, workday
 
 app = FastAPI(title="SCU Course Planner API")
+
+
+@app.on_event("startup")
+def _migrate_database_on_startup() -> None:
+    """Render starts uvicorn directly, so the API must prepare SQLite itself."""
+    migrate()
 
 
 @app.exception_handler(RateLimitExceeded)
