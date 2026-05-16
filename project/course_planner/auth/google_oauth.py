@@ -188,20 +188,28 @@ def _allowed_domain() -> str:
     return _env("GOOGLE_OAUTH_ALLOWED_DOMAIN").lower()
 
 
+def _allowed_emails() -> set[str]:
+    raw = _env("GOOGLE_OAUTH_ALLOWED_EMAILS")
+    return {email.strip().lower() for email in raw.split(",") if email.strip()}
+
+
 def claims_after_domain_check(claims: dict[str, Any]) -> dict[str, Any]:
     """Apply optional ``GOOGLE_OAUTH_ALLOWED_DOMAIN`` (e.g. ``scu.edu``).
 
     Workspace organizations are gated via the ``hd`` claim when present;
     we fall back to the email suffix only for non-Workspace accounts so
     consumer Gmail users can never spoof their way into an org-gated
-    deployment.
+    deployment. ``GOOGLE_OAUTH_ALLOWED_EMAILS`` permits explicit test
+    users without opening the full deployment to non-domain accounts.
     """
     domain = _allowed_domain()
-    if not domain:
-        return claims
     email = (claims.get("email") or "").strip().lower()
     if "@" not in email:
         raise OAuthClaimsError("Google did not return a valid email.")
+    if email in _allowed_emails():
+        return claims
+    if not domain:
+        return claims
     hd = (claims.get("hd") or "").strip().lower()
     if hd:
         if hd != domain:

@@ -121,6 +121,19 @@ def test_claims_after_domain_check_hd_claim_preferred(monkeypatch):
     assert google_oauth.claims_after_domain_check(claims) == claims
 
 
+def test_claims_after_domain_check_allows_explicit_test_user(monkeypatch):
+    from auth import google_oauth
+
+    monkeypatch.setenv("GOOGLE_OAUTH_ALLOWED_DOMAIN", "scu.edu")
+    monkeypatch.setenv(
+        "GOOGLE_OAUTH_ALLOWED_EMAILS",
+        "tester@gmail.com, other@example.com",
+    )
+
+    claims = {"sub": "9", "email": "Tester@Gmail.com", "email_verified": True}
+    assert google_oauth.claims_after_domain_check(claims) == claims
+
+
 def test_build_authorization_url_requires_state_and_nonce(oauth_env):
     from auth import google_oauth
 
