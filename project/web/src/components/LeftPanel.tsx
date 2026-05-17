@@ -1,5 +1,6 @@
 import { FormEvent, useState } from "react";
 import { googleSignInUrl } from "../api/client";
+import { BrandLink } from "./BrandLink";
 
 export type MemorySessionRow = {
   id: string;
@@ -97,14 +98,7 @@ export function LeftPanel({
   return (
     <aside className="flex w-[260px] shrink-0 flex-col border-l-4 border-[var(--scu-red)] bg-[var(--scu-white)] shadow-sm">
       <div className="border-b border-neutral-200 px-4 py-5">
-        <div className="flex items-baseline gap-1">
-          <span className="text-2xl font-bold tracking-tight text-[var(--scu-red)]">
-            SCU
-          </span>
-          <span className="text-sm font-medium text-neutral-500">
-            Course Planner
-          </span>
-        </div>
+        <BrandLink />
       </div>
 
       <div className="px-4 py-4">

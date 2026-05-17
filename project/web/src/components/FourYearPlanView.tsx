@@ -90,7 +90,6 @@ interface CompletedCourse {
   code: string;
   title: string;
   units: number;
-  grade: string;
 }
 
 interface CompletedByTerm {
@@ -128,13 +127,8 @@ function buildCompletedByTerm(rows: ParsedRow[]): CompletedByTerm {
       if (!isNaN(parsed)) units = parsed;
     }
 
-    const grade =
-      row.grade != null && String(row.grade).trim() !== ""
-        ? String(row.grade).trim()
-        : "";
-
     if (!result[termKey]) result[termKey] = [];
-    result[termKey].push({ code: row.course_code, title, units, grade });
+    result[termKey].push({ code: row.course_code, title, units });
   }
 
   return result;
@@ -263,14 +257,7 @@ function CompletedCourseRow({ course }: { course: CompletedCourse }) {
         {course.units > 0 ? `${course.units}u` : "–"}
       </span>
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <p className="text-[11px] font-semibold text-neutral-500 leading-tight">{course.code}</p>
-          {course.grade && (
-            <span className="shrink-0 rounded-full bg-neutral-100 border border-neutral-200 px-1.5 py-px text-[9px] font-bold text-neutral-500">
-              {course.grade}
-            </span>
-          )}
-        </div>
+        <p className="text-[11px] font-semibold text-neutral-500 leading-tight">{course.code}</p>
         {course.title && (
           <p className="truncate text-[10px] text-neutral-400 leading-tight">{course.title}</p>
         )}
@@ -350,7 +337,7 @@ function QuarterCard({ quarter }: { quarter: UnifiedQuarter }) {
         ) : (
           <>
             {completedCourses.map((c) => (
-              <CompletedCourseRow key={`${c.code}-${c.grade}`} course={c} />
+              <CompletedCourseRow key={c.code} course={c} />
             ))}
             {plannedQuarter &&
               plannedQuarter.courses.map((c) => (

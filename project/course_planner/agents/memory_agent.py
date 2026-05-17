@@ -431,6 +431,19 @@ def _maybe_compact_after_write(uid: int) -> None:
         _rewrite_blocks(uid, compacted)
 
 
+def _strip_grades_from_parsed_rows_content(content: str) -> str:
+    """Remove grade fields from parsed_rows JSON before store or API return."""
+    from utils.academic_progress_xlsx import sanitize_parsed_rows
+
+    try:
+        rows = json.loads(content)
+    except json.JSONDecodeError:
+        return content
+    if not isinstance(rows, list):
+        return content
+    return json.dumps(sanitize_parsed_rows(rows), ensure_ascii=False)
+
+
 def _cosine_distance(a: list[float], b: list[float]) -> float:
     dot = sum(x * y for x, y in zip(a, b))
     na = math.sqrt(sum(x * x for x in a))
@@ -456,6 +469,10 @@ def write(
     if not content or not content.strip():
         raise ValueError("memory_agent: content cannot be empty")
 
+    body = content.strip()
+    if kind == "parsed_rows":
+        body = _strip_grades_from_parsed_rows_content(body)
+
     path = _user_file(uid)
     raw = _read_raw(path)
     prefix_before_tr, tr_tail = _split_transcript_tail(raw)
@@ -470,7 +487,7 @@ def write(
         ]
     next_id = max((it["id"] for it in items), default=0) + 1
     created = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    block = _serialize_block(next_id, uid, kind, created, meta, content.strip())
+    block = _serialize_block(next_id, uid, kind, created, meta, body)
     new_core = "".join(
         _serialize_block(
             int(it["id"]),
@@ -521,12 +538,15 @@ def retrieve(
 
     rows: list[dict] = []
     for dist, it in scored[: int(k)]:
+        row_content = str(it["content"] or "")
+        if str(it.get("kind") or "") == "parsed_rows":
+            row_content = _strip_grades_from_parsed_rows_content(row_content)
         rows.append(
             {
                 "id": it["id"],
                 "user_id": it["user_id"],
                 "kind": it["kind"],
-                "content": it["content"],
+                "content": row_content,
                 "meta_json": json.dumps(it["meta"], ensure_ascii=False)
                 if it.get("meta") is not None
                 else None,
@@ -552,12 +572,15 @@ def list_for_user(
     for it in items:
         if int(it["user_id"]) != uid:
             continue
+        row_content = str(it["content"] or "")
+        if str(it.get("kind") or "") == "parsed_rows":
+            row_content = _strip_grades_from_parsed_rows_content(row_content)
         out.append(
             {
                 "id": it["id"],
                 "user_id": uid,
                 "kind": it["kind"],
-                "content": it["content"],
+                "content": row_content,
                 "meta_json": json.dumps(it["meta"], ensure_ascii=False)
                 if it.get("meta") is not None
                 else None,
