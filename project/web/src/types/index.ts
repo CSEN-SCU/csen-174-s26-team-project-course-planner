@@ -73,5 +73,4 @@ export interface ParsedRow {
   course_code: string | null;
   academic_period: string | null;
   units: number | string | null;
-  grade: string | number | null;
 }

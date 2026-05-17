@@ -22,6 +22,17 @@ _CELL_NOISE_RE = (
 )
 
 
+def sanitize_parsed_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return a copy of parsed progress rows with any ``grade`` field removed."""
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        cleaned = {k: v for k, v in row.items() if k != "grade"}
+        out.append(cleaned)
+    return out
+
+
 def registration_to_course_code(cell: str | None) -> str | None:
     """Extract a course code like COEN 10 / CSEN 140L from cells shaped like ``COEN 10 - Introduction …``."""
     if cell is None or not isinstance(cell, str):
@@ -76,7 +87,7 @@ def parse_academic_progress_xlsx(xlsx_bytes: bytes) -> dict[str, Any]:
             registration = row[3] if len(row) > 3 else None
             period = row[4] if len(row) > 4 else None
             units = row[5] if len(row) > 5 else None
-            grade = row[6] if len(row) > 6 else None
+            # Column 7 (grade) is intentionally ignored — never stored or returned.
 
             rq = str(requirement).strip()
             if not rq:
@@ -105,7 +116,6 @@ def parse_academic_progress_xlsx(xlsx_bytes: bytes) -> dict[str, Any]:
                     "course_code": code,
                     "academic_period": period,
                     "units": units,
-                    "grade": grade,
                 }
             )
 

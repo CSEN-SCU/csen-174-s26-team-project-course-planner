@@ -5,6 +5,7 @@ import { ChatPanel, type ChatUiMessage } from "./components/ChatPanel";
 import { FourYearPlanView } from "./components/FourYearPlanView";
 import { LeftPanel, type MemorySessionRow } from "./components/LeftPanel";
 import type { FourYearPlan, ParsedRow } from "./types";
+import { SiteFooter } from "./components/SiteFooter";
 import { CALENDAR_START_HOUR, WEEKDAY_LABELS } from "./types";
 
 const WELCOME_TEXT =
@@ -399,7 +400,8 @@ export default function App() {
   }, []);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[var(--scu-white)]">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--scu-white)]">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
       <LeftPanel
         userId={userId}
         onLogin={handleLogin}
@@ -470,6 +472,8 @@ export default function App() {
         onPrefillConsumed={() => setChatPrefill(null)}
         setParsedRows={setParsedRows}
       />
+      </div>
+      <SiteFooter />
     </div>
   );
 }
