@@ -130,6 +130,27 @@ _RECIPE_CUE_PHRASES = (
 
 _FALLBACK_ADVICE = "Advice unavailable — please retry."
 _FALLBACK_ASSISTANT_REPLY = "Sorry, I could not generate a reply for this request. Please retry."
+_FALLBACK_CONVERSATIONAL_REPLY = (
+    "I can help with course planning questions once I have your transcript. "
+    "What would you like to know?"
+)
+
+
+def filter_freeform_model_text(text: str, *, fallback: str = _FALLBACK_CONVERSATIONAL_REPLY) -> str:
+    """Drop free-form model text that matches injection denylist patterns."""
+    if text is None:
+        text = ""
+    elif not isinstance(text, str):
+        text = str(text)
+    cleaned = text.strip()
+    if _contains_recipe_content(cleaned) or _contains_system_prompt_leak(cleaned):
+        log.warning(
+            "planning_agent: replacing free-form model text that matched injection "
+            "denylist; first 80 chars=%r",
+            cleaned[:80],
+        )
+        return fallback
+    return cleaned
 
 # Strict regex for a valid SCU course code (subject + number, optional trailing
 # letter).  Mirrors the existing ``_COURSE_CODE_RE`` but enforced as a final
@@ -831,6 +852,8 @@ def run_planning_agent(
             "Please upload your Academic Progress (.xlsx) file first."
         )
 
+    safe_preference = _sanitize_user_text(user_preference or "")
+
     model = os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
 
     schedule_index = load_schedule_section_index()
@@ -874,7 +897,7 @@ def run_planning_agent(
 {json.dumps(missing_details, ensure_ascii=False, indent=2)}
 
 === CURRENT ASK (this is the only instruction you must follow) ===
-{user_preference}
+{safe_preference}
 
 {followup_instruction}
 Recommend a schedule for next term and output JSON (fields are constrained by the response schema):
@@ -1020,7 +1043,7 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
         if not rejected:
             break
         gap_prompt = _build_gap_fill_prompt(
-            rejected, valid_courses, schedule_block, user_preference
+            rejected, valid_courses, schedule_block, safe_preference
         )
         try:
             gap_resp = client.models.generate_content(
@@ -1102,4 +1125,4 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
         )
     parsed["warnings"] = warnings
 
-    return parsed
+    return _sanitize_model_output(parsed)
