@@ -36,6 +36,7 @@ from pydantic import BaseModel
 from agents.memory_agent import write as memory_write
 from auth.users_db import get_user_by_id
 from middleware.rate_limit import limit
+from utils.academic_progress_xlsx import sanitize_parsed_rows
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -172,7 +173,7 @@ def _run_scrape(job_id: str, user_id: str, workday_url: str | None) -> None:
         result = scrape_workday_sync(workday_url=workday_url, progress_cb=cb)
 
         missing_details = result.get("missing_details") or []
-        parsed_rows = result.get("parsed_rows") or []
+        parsed_rows = sanitize_parsed_rows(result.get("parsed_rows") or [])
 
         # Persist to memory just like the upload endpoint does
         if user_id:

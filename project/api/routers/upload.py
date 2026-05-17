@@ -5,7 +5,7 @@ import json
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from agents.memory_agent import write as memory_write
-from utils.academic_progress_xlsx import parse_academic_progress_xlsx
+from utils.academic_progress_xlsx import parse_academic_progress_xlsx, sanitize_parsed_rows
 
 router = APIRouter()
 
@@ -29,7 +29,7 @@ async def upload_transcript(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     missing_details = data.get("not_satisfied") or []
-    parsed_rows = data.get("detail_rows") or []
+    parsed_rows = sanitize_parsed_rows(data.get("detail_rows") or [])
 
     uid = user_id.strip()
     if uid:
