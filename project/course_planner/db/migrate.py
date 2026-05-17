@@ -12,7 +12,7 @@ import sqlite3
 from pathlib import Path
 from typing import Optional
 
-from db.connection import close_conn, get_conn
+from db.connection import close_conn, get_conn, load_sqlite_vec_extension
 
 EMBEDDING_DIM = 768
 _SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
@@ -36,7 +36,8 @@ def migrate(db_path: Optional[str] = None) -> None:
     conn = get_conn(db_path)
     try:
         conn.executescript(sql)
-        _ensure_vec_table(conn)
+        if load_sqlite_vec_extension(conn):
+            _ensure_vec_table(conn)
         conn.commit()
     finally:
         close_conn(conn)
