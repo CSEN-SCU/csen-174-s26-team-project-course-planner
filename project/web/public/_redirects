@@ -1,2 +1,2 @@
-# SPA fallback: client routes (e.g. /data-disclosure) are handled in src/Root.tsx
+# Used by Netlify (and similar). Render ignores this file — see RENDER-SPA-ROUTES.md.
 /*    /index.html   200
