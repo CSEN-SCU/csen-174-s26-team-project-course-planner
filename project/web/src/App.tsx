@@ -5,8 +5,6 @@ import {
   exchangeGoogleOauth,
   generateFourYearPlan,
   getMemory,
-  login as apiLogin,
-  register as apiRegister,
   saveMemory,
 } from "./api/client";
 import {
@@ -209,44 +207,6 @@ export default function App() {
       messages: snap.messages,
     }));
   }, [planSnapshots]);
-
-  const handleLogin = useCallback(async (username: string, password: string) => {
-    try {
-      const r = await apiLogin(username, password);
-      if (r.success && r.user_id) {
-        setUserId(String(r.user_id));
-        return { ok: true as const };
-      }
-      return { ok: false as const, error: "Invalid username or password." };
-    } catch (e) {
-      const hint = e instanceof Error ? e.message : "Could not reach the server.";
-      const networkish = hint === "Failed to fetch" || hint.includes("NetworkError") || hint.includes("fetch resource");
-      return {
-        ok: false as const,
-        error: networkish
-          ? "Cannot reach API — start uvicorn on port 8000, restart `npm run dev`, or check firewall."
-          : hint,
-      };
-    }
-  }, []);
-
-  const handleRegister = useCallback(async (username: string, password: string) => {
-    try {
-      const r = await apiRegister(username, password);
-      if (!r.success) return { ok: false as const, error: "Username already taken." };
-      // Auto-login after successful registration
-      return await handleLogin(username, password);
-    } catch (e) {
-      const hint = e instanceof Error ? e.message : "Could not reach the server.";
-      const networkish = hint === "Failed to fetch" || hint.includes("NetworkError") || hint.includes("fetch resource");
-      return {
-        ok: false as const,
-        error: networkish
-          ? "Cannot reach API — start uvicorn on port 8000, restart `npm run dev`, or check firewall."
-          : hint,
-      };
-    }
-  }, [handleLogin]);
 
   const handleSelectSession = useCallback((row: MemorySessionRow) => {
     setLocalOverride(null);
@@ -486,8 +446,6 @@ export default function App() {
       <div className="flex min-h-0 flex-1 overflow-hidden">
       <LeftPanel
         userId={userId}
-        onLogin={handleLogin}
-        onRegister={handleRegister}
         sessions={sessions}
         activeSessionId={activeSessionId}
         onSelectSession={handleSelectSession}
