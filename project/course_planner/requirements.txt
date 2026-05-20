@@ -9,3 +9,7 @@ bcrypt
 pytest
 SpeechRecognition
 playwright
+# Multi-agent planner (agents/multi_agent): LangGraph orchestration +
+# SQLite checkpointer for interrupt / resume.
+langgraph>=1.2,<2
+langgraph-checkpoint-sqlite>=3,<4

@@ -347,7 +347,7 @@ def assembler_node(state: PlanningState) -> dict[str, Any]:
 # ── Graph construction ─────────────────────────────────────────────────────-
 
 
-def build_graph():
+def build_graph(checkpointer: Any = None, interrupt_before: list[str] | None = None):
     """Build and compile the multi-agent StateGraph.
 
     Instructor selection is fanned out via the ``Send`` API: the
@@ -363,6 +363,12 @@ def build_graph():
                                     └─[no courses]──────────────────────┤
                                                                         ▼
                                                                     assembler → END
+
+    ``checkpointer`` (optional) persists state per ``thread_id`` so an
+    interrupted run can resume. ``interrupt_before`` (optional) pauses the
+    graph just before the named nodes — e.g. ``["assembler"]`` to let a
+    human review the draft plan (and the verifier's dropped-course issues)
+    before it is finalized.
     """
     g: StateGraph[PlanningState] = StateGraph(PlanningState)
     g.add_node("planner", planner_node)
@@ -382,7 +388,112 @@ def build_graph():
     # Every parallel instructor_one invocation joins here.
     g.add_edge("instructor_one", "assembler")
     g.add_edge("assembler", END)
-    return g.compile()
+    return g.compile(
+        checkpointer=checkpointer,
+        interrupt_before=interrupt_before or [],
+    )
+
+
+# ── Checkpointer factories ──────────────────────────────────────────────────
+
+
+def make_memory_checkpointer():
+    """In-process checkpointer — state lives in the saver instance. Good for
+    dev/tests and single-process resume; lost on restart."""
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    return InMemorySaver()
+
+
+_CHECKPOINT_DB_DEFAULT = (
+    __import__("pathlib").Path(__file__).resolve().parents[2]
+    / "data"
+    / "plan_checkpoints.db"
+)
+
+
+def make_sqlite_checkpointer(db_path: str | None = None):
+    """Durable checkpointer backed by SQLite — survives process restarts so a
+    plan interrupted for human review can be resumed later / elsewhere.
+
+    Requires the ``langgraph-checkpoint-sqlite`` package. The connection is
+    opened with ``check_same_thread=False`` because the FastAPI worker may
+    resume from a different thread than the one that started the plan.
+    """
+    import sqlite3
+
+    from langgraph.checkpoint.sqlite import SqliteSaver
+
+    path = db_path or str(_CHECKPOINT_DB_DEFAULT)
+    __import__("pathlib").Path(path).parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path, check_same_thread=False)
+    return SqliteSaver(conn)
+
+
+# ── Human-in-the-loop helpers ───────────────────────────────────────────────
+
+
+def _initial_state(
+    missing_details, user_preference, previous_plan, memory_snippets
+) -> PlanningState:
+    return {
+        "missing_details": missing_details,
+        "user_preference": user_preference,
+        "previous_plan": previous_plan,
+        "memory_snippets": memory_snippets or [],
+        "request_id": str(uuid.uuid4()),
+        "verifier_passes": 0,
+    }
+
+
+def start_plan_with_review(
+    missing_details: list[dict[str, Any]],
+    user_preference: str = "",
+    *,
+    thread_id: str,
+    checkpointer: Any,
+    previous_plan: dict[str, Any] | None = None,
+    memory_snippets: list[str] | None = None,
+) -> dict[str, Any]:
+    """Run the graph up to (but not through) ``assembler`` and pause.
+
+    Returns the draft for human review WITHOUT finalizing it: the candidate
+    plan, the verifier's issues (what would be dropped), and the instructor
+    picks. Call :func:`resume_plan` with the same ``thread_id`` +
+    ``checkpointer`` to commit, or :func:`abort_plan` to discard.
+    """
+    graph = build_graph(checkpointer=checkpointer, interrupt_before=["assembler"])
+    config = {"configurable": {"thread_id": thread_id}}
+    graph.invoke(
+        _initial_state(missing_details, user_preference, previous_plan, memory_snippets),
+        config=config,
+    )
+    snap = graph.get_state(config)
+    return {
+        "interrupted": bool(snap.next),  # e.g. ("assembler",) → True
+        "next": list(snap.next),
+        "candidate_plan": snap.values.get("candidate_plan", []),
+        "verifier_issues": snap.values.get("verifier_issues", []),
+        "instructor_assignments": snap.values.get("instructor_assignments", {}),
+    }
+
+
+def resume_plan(*, thread_id: str, checkpointer: Any) -> dict[str, Any]:
+    """Resume an interrupted plan from its checkpoint and finalize it."""
+    graph = build_graph(checkpointer=checkpointer, interrupt_before=["assembler"])
+    config = {"configurable": {"thread_id": thread_id}}
+    final_state = graph.invoke(None, config=config)  # None = resume from checkpoint
+    return final_state.get("final_plan") or {"recommended": [], "total_units": 0}
+
+
+def get_plan_state(*, thread_id: str, checkpointer: Any) -> dict[str, Any]:
+    """Inspect the persisted state for a thread (for debugging / status)."""
+    graph = build_graph(checkpointer=checkpointer, interrupt_before=["assembler"])
+    snap = graph.get_state({"configurable": {"thread_id": thread_id}})
+    return {
+        "next": list(snap.next),
+        "values": dict(snap.values),
+    }
 
 
 # ── Entry point analogous to ``run_planning_agent`` ─────────────────────────
@@ -393,17 +504,23 @@ def run_multi_agent_plan(
     user_preference: str = "",
     previous_plan: dict[str, Any] | None = None,
     memory_snippets: list[str] | None = None,
+    *,
+    thread_id: str | None = None,
+    checkpointer: Any = None,
 ) -> dict[str, Any]:
-    """Public entry point. Same signature as the existing
-    ``run_planning_agent`` so the FastAPI route can swap behind a flag."""
-    initial_state: PlanningState = {
-        "missing_details": missing_details,
-        "user_preference": user_preference,
-        "previous_plan": previous_plan,
-        "memory_snippets": memory_snippets or [],
-        "request_id": str(uuid.uuid4()),
-        "verifier_passes": 0,
-    }
-    graph = build_graph()
-    final_state = graph.invoke(initial_state)
+    """Public entry point. Mirrors ``run_planning_agent`` so the FastAPI
+    route can swap behind a flag.
+
+    Runs to completion (no human-in-the-loop interrupt). Pass a
+    ``checkpointer`` + ``thread_id`` to persist intermediate state so a
+    crashed run can be resumed; without them it runs purely in-memory.
+    For the review-then-approve flow use :func:`start_plan_with_review`
+    + :func:`resume_plan` instead.
+    """
+    graph = build_graph(checkpointer=checkpointer)
+    config = {"configurable": {"thread_id": thread_id}} if thread_id else None
+    final_state = graph.invoke(
+        _initial_state(missing_details, user_preference, previous_plan, memory_snippets),
+        config=config,
+    )
     return final_state.get("final_plan") or {"recommended": [], "total_units": 0}
