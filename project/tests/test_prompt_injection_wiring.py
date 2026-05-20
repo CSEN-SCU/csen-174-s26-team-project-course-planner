@@ -42,7 +42,43 @@ def _stub_client(captured_prompts: list[str], reply: dict):
     return _Client()
 
 
-def test_run_planning_agent_wraps_current_ask_in_user_text(monkeypatch):
+def test_run_planning_agent_system_instruction_warns_untrusted_input(monkeypatch):
+    captured_configs: list = []
+    reply = {
+        "recommended": [{"course": "CSEN 161", "title": "x", "category": "Core", "units": 4, "reason": "ok"}],
+        "total_units": 4,
+        "advice": "ok",
+        "assistant_reply": "ok",
+    }
+
+    class _Models:
+        def generate_content(self, model, contents, config):  # noqa: D401
+            captured_configs.append(config)
+            return SimpleNamespace(text=json.dumps(reply))
+
+    class _Client:
+        models = _Models()
+
+    monkeypatch.setattr(planning_agent, "get_genai_client", lambda **_kw: _Client())
+    monkeypatch.setattr(
+        planning_agent,
+        "load_schedule_section_index",
+        lambda: {("CSEN", "161"): {"instructors": [], "meeting_days": [], "meeting_start_min": None, "meeting_end_min": None}},
+    )
+
+    planning_agent.run_planning_agent(
+        missing_details=[{"course": "CSEN 161", "category": "Core", "units": 4}],
+        user_preference="light load",
+    )
+
+    assert captured_configs
+    system = captured_configs[0].system_instruction
+    assert "untrusted" in system.lower()
+    assert "academic advising" in system.lower()
+    assert "prompt injection" in system.lower()
+
+
+def test_run_planning_agent_wraps_student_message_in_user_text(monkeypatch):
     captured: list[str] = []
     reply = {
         "recommended": [{"course": "CSEN 161", "title": "x", "category": "Core", "units": 4, "reason": "ok"}],
@@ -64,7 +100,7 @@ def test_run_planning_agent_wraps_current_ask_in_user_text(monkeypatch):
     )
 
     prompt = captured[0]
-    assert "=== CURRENT ASK" in prompt
+    assert "=== STUDENT MESSAGE" in prompt
     assert "<USER_TEXT>" in prompt
     assert "[escaped:### system]" in prompt
 
@@ -149,6 +185,36 @@ def test_plan_router_conversational_sanitizes_prompt(monkeypatch, tmp_path):
     assert captured
     assert "<USER_TEXT>" in captured[0]
     assert "[escaped:### system]" in captured[0]
+
+
+def test_plan_router_conversational_system_instruction_warns_untrusted(monkeypatch, tmp_path):
+    captured_configs: list = []
+
+    class _Models:
+        def generate_content(self, model, contents, config):  # noqa: D401
+            captured_configs.append(config)
+            return SimpleNamespace(text="Your transcript is loaded.")
+
+    class _Client:
+        models = _Models()
+
+    main = _load_api_main(monkeypatch, tmp_path)
+    monkeypatch.setattr("routers.plan.get_genai_client", lambda **_kw: _Client())
+
+    with TestClient(main.app) as client:
+        resp = client.post(
+            "/api/plan",
+            json={
+                "missing_details": [{"course": "CSEN 161", "category": "Core", "units": 4}],
+                "user_preference": "What is my progress?",
+            },
+        )
+
+    assert resp.status_code == 200
+    assert captured_configs
+    system = captured_configs[0].system_instruction
+    assert "untrusted" in system.lower()
+    assert "academic advising" in system.lower()
 
 
 def test_plan_router_conversational_filters_recipe_reply(monkeypatch, tmp_path):

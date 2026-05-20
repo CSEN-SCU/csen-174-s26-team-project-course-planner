@@ -20,7 +20,21 @@ from __future__ import annotations
 
 import pytest
 
-from agents.planning_agent import _sanitize_user_text, _USER_TEXT_MAX_LEN
+from agents.planning_agent import (
+    UNTRUSTED_INPUT_SYSTEM_RULES,
+    _sanitize_user_text,
+    _USER_TEXT_MAX_LEN,
+)
+
+
+# ── System rules constant ────────────────────────────────────────────────────
+
+
+def test_untrusted_input_rules_mention_injection_and_advising():
+    lowered = UNTRUSTED_INPUT_SYSTEM_RULES.lower()
+    assert "untrusted" in lowered
+    assert "prompt injection" in lowered
+    assert "academic advising" in lowered
 
 
 # ── Wrapping ─────────────────────────────────────────────────────────────────

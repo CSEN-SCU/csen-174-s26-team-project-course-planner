@@ -72,7 +72,7 @@ def test_previous_plan_is_summarized_into_prompt(monkeypatch):
     assert "CSEN 194" in prompt
     assert "ECEN 153" in prompt
     assert "FOLLOW-UP" in prompt or "follow-up" in prompt.lower()
-    assert "CURRENT ASK" in prompt
+    assert "STUDENT MESSAGE" in prompt
     # assistant_reply round-trips intact
     assert result["assistant_reply"].startswith("Yes,")
 
@@ -137,7 +137,7 @@ def test_reduce_units_followup_prompt_isolates_current_ask(monkeypatch, alice):
 
     - Frame memory as BACKGROUND CONTEXT, not as instructions.
     - Carry the previous 24-unit plan as CURRENT STATE (the diff baseline).
-    - Make CURRENT ASK the only instruction the model is told to honour.
+    - Isolate the latest STUDENT MESSAGE as the untrusted academic request.
     - Tell the model to drop courses to satisfy the unit cap.
 
     Without this framing the model conflates the older 'add 4 units'
@@ -188,15 +188,15 @@ def test_reduce_units_followup_prompt_isolates_current_ask(monkeypatch, alice):
 
     bg_idx = prompt.index("=== BACKGROUND CONTEXT")
     cs_idx = prompt.index("=== CURRENT STATE")
-    ca_idx = prompt.index("=== CURRENT ASK")
+    ca_idx = prompt.index("=== STUDENT MESSAGE")
     assert bg_idx < cs_idx < ca_idx, (
-        "Section ordering must be BACKGROUND -> CURRENT STATE -> CURRENT ASK so "
-        "the model treats history as background and only the ASK as instruction."
+        "Section ordering must be BACKGROUND -> CURRENT STATE -> STUDENT MESSAGE so "
+        "the model treats history as background and only the latest message as the ask."
     )
 
     bg_block = prompt[bg_idx:cs_idx]
     assert "NOT current instructions" in bg_block
-    assert "CURRENT ASK\n        wins" in bg_block or "CURRENT ASK wins" in bg_block
+    assert "STUDENT MESSAGE" in bg_block and "wins" in bg_block
 
     cs_block = prompt[cs_idx:ca_idx]
     assert "total_units = 24" in cs_block
