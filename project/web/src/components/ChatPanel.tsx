@@ -92,6 +92,11 @@ export function ChatPanel({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const dragCounterRef = useRef(0);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const hasUserInput = messages.some((m) => m.role === "user");
+  const canDropFiles = !hasUserInput;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -322,47 +327,97 @@ export function ChatPanel({
     setVoiceStatus("recording");
   }, [isListening, sendText, setMessages]);
 
+  const handleFile = useCallback(
+    (f: File) => {
+      const name = f.name.toLowerCase();
+      if (name.endsWith(".pdf")) {
+        setMessages((m) => [
+          ...m,
+          { id: `a-${Date.now()}`, role: "assistant", content: "PDF analysis coming soon" },
+        ]);
+        return;
+      }
+      if (!name.endsWith(".xlsx") && !name.endsWith(".xlsm")) {
+        setMessages((m) => [
+          ...m,
+          {
+            id: `a-${Date.now()}`,
+            role: "assistant",
+            content: "Please upload an .xlsx Academic Progress export.",
+          },
+        ]);
+        return;
+      }
+
+      if (fileUploaded) {
+        setPendingFile(f);
+        setMessages((m) => [
+          ...m,
+          {
+            id: `a-${Date.now()}`,
+            role: "assistant",
+            content:
+              "You already have academic progress saved. Would you like to update it with the new file? Reply **yes** to update or **no** to keep the current one.",
+          },
+        ]);
+      } else {
+        void processFile(f);
+      }
+    },
+    [fileUploaded, processFile, setMessages],
+  );
+
   const onFilePick = () => fileInputRef.current?.click();
 
   const onFileChange: ChangeEventHandler<HTMLInputElement> = (e) => {
     const f = e.target.files?.[0];
     e.target.value = "";
-    if (!f) return;
-
-    const name = f.name.toLowerCase();
-    if (name.endsWith(".pdf")) {
-      setMessages((m) => [
-        ...m,
-        { id: `a-${Date.now()}`, role: "assistant", content: "PDF analysis coming soon" },
-      ]);
-      return;
-    }
-    if (!name.endsWith(".xlsx") && !name.endsWith(".xlsm")) {
-      setMessages((m) => [
-        ...m,
-        {
-          id: `a-${Date.now()}`,
-          role: "assistant",
-          content: "Please upload an .xlsx Academic Progress export.",
-        },
-      ]);
-      return;
-    }
-
-    if (fileUploaded) {
-      setPendingFile(f);
-      setMessages((m) => [
-        ...m,
-        {
-          id: `a-${Date.now()}`,
-          role: "assistant",
-          content: "You already have academic progress saved. Would you like to update it with the new file? Reply **yes** to update or **no** to keep the current one.",
-        },
-      ]);
-    } else {
-      void processFile(f);
-    }
+    if (f) handleFile(f);
   };
+
+  const onDragEnter = useCallback(
+    (e: React.DragEvent) => {
+      if (!canDropFiles) return;
+      e.preventDefault();
+      dragCounterRef.current += 1;
+      if (e.dataTransfer.types.includes("Files")) setIsDragOver(true);
+    },
+    [canDropFiles],
+  );
+
+  const onDragOver = useCallback(
+    (e: React.DragEvent) => {
+      if (!canDropFiles) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    },
+    [canDropFiles],
+  );
+
+  const onDragLeave = useCallback(
+    (e: React.DragEvent) => {
+      if (!canDropFiles) return;
+      e.preventDefault();
+      dragCounterRef.current -= 1;
+      if (dragCounterRef.current <= 0) {
+        dragCounterRef.current = 0;
+        setIsDragOver(false);
+      }
+    },
+    [canDropFiles],
+  );
+
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      if (!canDropFiles) return;
+      e.preventDefault();
+      dragCounterRef.current = 0;
+      setIsDragOver(false);
+      const f = e.dataTransfer.files?.[0];
+      if (f) handleFile(f);
+    },
+    [canDropFiles, handleFile],
+  );
 
   const micLabel =
     voiceStatus === "recording"
@@ -372,7 +427,24 @@ export function ChatPanel({
       : "Tap to speak";
 
   return (
-    <aside className="flex w-[380px] shrink-0 flex-col border-l border-neutral-200 bg-[var(--scu-white)] shadow-sm">
+    <aside
+      className="relative flex w-[380px] shrink-0 flex-col border-l border-neutral-200 bg-[var(--scu-white)] shadow-sm"
+      onDragEnter={onDragEnter}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
+      {isDragOver && canDropFiles && (
+        <div
+          className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-white/90 px-6 text-center ring-2 ring-inset ring-[var(--scu-red)]"
+          aria-hidden
+        >
+          <PaperclipIcon />
+          <p className="text-sm font-semibold text-[var(--scu-text)]">Drop your Academic Progress file</p>
+          <p className="text-xs text-neutral-500">.xlsx or .xlsm export from Workday</p>
+        </div>
+      )}
+
       <div className="shrink-0 border-b border-neutral-200 px-4 py-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold text-[var(--scu-text)]">SCU Course Planner</h2>
         {fileUploaded && (
@@ -536,7 +608,10 @@ export function ChatPanel({
           </button>
         </div>
         <p className="mt-1.5 text-[10px] text-neutral-400">
-          Upload your transcript manually, or click <WorkdayIcon size={10} /> to sync directly from Workday.
+          {canDropFiles
+            ? "Drag and drop your .xlsx file here, use the paperclip, or click "
+            : "Upload your transcript with the paperclip, or click "}
+          <WorkdayIcon size={10} /> to sync directly from Workday.
         </p>
       </div>
     </aside>
