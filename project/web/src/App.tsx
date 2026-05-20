@@ -1,5 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { deleteMemory, exchangeGoogleOauth, generateFourYearPlan, getMemory, login as apiLogin, register as apiRegister, saveMemory } from "./api/client";
+import {
+  clearGoogleOauthPending,
+  isGoogleOauthPending,
+  persistUserId,
+  readStoredUserId,
+} from "./auth/session";
 import { CalendarView } from "./components/CalendarView";
 import { ChatPanel, type ChatUiMessage } from "./components/ChatPanel";
 import { FourYearPlanView } from "./components/FourYearPlanView";
@@ -12,7 +18,12 @@ const WELCOME_TEXT =
   "Upload your Academic Progress file or describe your preferences to get started.";
 
 export default function App() {
-  const [userId, setUserId] = useState<string | null>(null);
+  const [userId, setUserIdState] = useState<string | null>(() => readStoredUserId());
+  const setUserId = useCallback((id: string | null) => {
+    persistUserId(id);
+    setUserIdState(id);
+  }, []);
+  const [googleAuthPending, setGoogleAuthPending] = useState(() => isGoogleOauthPending());
   const [missingDetails, setMissingDetails] = useState<unknown[]>([]);
   const [planResult, setPlanResult] = useState<Record<string, unknown> | null>(null);
   const [messages, setMessages] = useState<ChatUiMessage[]>([
@@ -41,8 +52,8 @@ export default function App() {
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
   const [googleAuthError, setGoogleAuthError] = useState<string | null>(null);
 
-  // Consume Google OAuth handoff token on first load (single-use).
-  useEffect(() => {
+  // Consume Google OAuth handoff token before paint when possible (single-use).
+  useLayoutEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get("google_oauth");
     const err = params.get("google_oauth_error");
@@ -56,12 +67,20 @@ export default function App() {
     window.history.replaceState({}, document.title, q ? `?${q}` : window.location.pathname);
 
     if (err) {
+      clearGoogleOauthPending();
+      setGoogleAuthPending(false);
       setGoogleAuthError(
         err === "access_denied" ? "Google sign-in was cancelled." : "Google sign-in failed.",
       );
       return;
     }
-    if (!token) return;
+    if (!token) {
+      clearGoogleOauthPending();
+      setGoogleAuthPending(false);
+      return;
+    }
+
+    setGoogleAuthPending(true);
     void exchangeGoogleOauth(token)
       .then((r) => {
         if (r.success && r.user_id) {
@@ -73,8 +92,12 @@ export default function App() {
       })
       .catch(() => {
         setGoogleAuthError("Google sign-in failed. Please try again.");
+      })
+      .finally(() => {
+        clearGoogleOauthPending();
+        setGoogleAuthPending(false);
       });
-  }, []);
+  }, [setUserId]);
 
   // Load academic progress + past plan snapshots on login
   useEffect(() => {
@@ -412,6 +435,7 @@ export default function App() {
         onDeleteSession={handleDeleteSession}
         onNewPlan={handleNewPlan}
         externalAuthError={googleAuthError}
+        authPending={googleAuthPending}
       />
 
       {/* Main view area with tab toggle */}

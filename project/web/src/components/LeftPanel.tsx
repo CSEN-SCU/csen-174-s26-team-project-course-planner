@@ -23,6 +23,8 @@ export type LeftPanelProps = {
   onNewPlan: () => void;
   /** Error from out-of-band auth flows (e.g. Google OAuth callback). */
   externalAuthError?: string | null;
+  /** True while finishing Google sign-in (hide login form to avoid a flash). */
+  authPending?: boolean;
 };
 
 export function LeftPanel({
@@ -35,6 +37,7 @@ export function LeftPanel({
   onDeleteSession,
   onNewPlan,
   externalAuthError,
+  authPending = false,
 }: LeftPanelProps) {
   const [tab, setTab] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("");
@@ -111,7 +114,7 @@ export function LeftPanel({
         </button>
       </div>
 
-      {!userId ? (
+      {!userId && !authPending ? (
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
           {/* Tab toggle */}
           <div className="mb-3 flex rounded-md border border-neutral-200 p-0.5">
@@ -231,6 +234,10 @@ export function LeftPanel({
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+          {authPending && !userId ? (
+            <p className="px-2 py-3 text-sm text-neutral-500">Signing in with Google…</p>
+          ) : (
+          <>
           <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">
             Past sessions
           </p>
@@ -269,6 +276,8 @@ export function LeftPanel({
               );
             })}
           </ul>
+          </>
+          )}
         </div>
       )}
     </aside>
