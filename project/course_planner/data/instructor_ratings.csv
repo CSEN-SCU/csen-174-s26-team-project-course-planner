@@ -1,0 +1,31 @@
+# instructor_ratings.csv — instructor quality data for R5 (best-section picker)
+#
+# PROVENANCE / HONESTY NOTE:
+#   The rows below with source="seed_placeholder" are NON-AUTHORITATIVE
+#   placeholders used only to exercise the ranking mechanism in tests and
+#   dev. They are NOT real RateMyProfessor / SCU course-evaluation data and
+#   MUST NOT be shown to students as factual ratings.
+#
+#   Before this feature ships to users:
+#     1. Replace placeholders with real data (RMP scrape or SCU eval export).
+#     2. Set source to "rmp" | "scu_eval" | "manual" with a date.
+#     3. Any instructor not present here resolves to rating=None
+#        (source="unavailable") and the picker falls back to a stable choice.
+#
+# Columns:
+#   instructor_name          exact name as it appears in the schedule xlsx
+#   rating                   0.0-5.0 overall quality (higher = better)
+#   difficulty               0.0-5.0 (lower = easier); tie-breaker only
+#   would_take_again_pct     0-100
+#   source                   provenance tag
+instructor_name,rating,difficulty,would_take_again_pct,source
+Weijia Shang,3.4,3.6,62,seed_placeholder
+Shoba Krishnan,4.1,2.9,81,seed_placeholder
+Michael Schimpf,4.6,2.2,90,seed_placeholder
+David Coad,4.3,2.5,85,seed_placeholder
+Maura Tarnoff,3.9,3.0,74,seed_placeholder
+Diana Gibson,4.0,2.8,78,seed_placeholder
+Ahmed Amer,4.4,3.1,88,seed_placeholder
+Amelia Fuller,4.5,2.6,92,seed_placeholder
+Yuhong Liu,4.2,3.2,80,seed_placeholder
+Nam Ling,3.7,3.4,69,seed_placeholder

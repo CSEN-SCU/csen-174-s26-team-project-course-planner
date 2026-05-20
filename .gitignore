@@ -35,5 +35,9 @@ project/course_planner/View_My_Academic_Progress.xlsx
 project/course_planner/SCU_Find_Course_Sections.xlsx
 project/course_planner/~$*.xlsx
 
-# Course planner local SQLite database (per-user accounts + memory)
-project/course_planner/data/
+# Course planner local SQLite database (per-user accounts + memory).
+# Ignore the directory CONTENTS (so user data / app.db stay out of git) but
+# allow re-including specific seed/config files below.
+project/course_planner/data/*
+# ...DO track seed/config data checked into the repo (not user data):
+!project/course_planner/data/instructor_ratings.csv

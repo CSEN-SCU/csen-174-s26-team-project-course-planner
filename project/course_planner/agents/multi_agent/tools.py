@@ -23,9 +23,11 @@ from utils.scu_course_schedule_xlsx import (
     all_sections_for_course,
     course_title_for,
     detect_time_conflicts,
+    instructor_rating_for,
     load_all_course_sections,
     load_category_course_index,
     load_course_titles_index,
+    load_instructor_ratings,
     load_schedule_section_index,
     planned_section_keys,
 )
@@ -172,21 +174,18 @@ def tool_get_sections(course_code: str) -> list[dict[str, Any]]:
     return all_sections_for_course(course_code, _all_sections())
 
 
-def tool_get_instructor_rating(instructor_name: str) -> dict[str, Any]:
-    """Return a rating dict for an instructor.
+@lru_cache(maxsize=1)
+def _ratings() -> dict[str, dict[str, Any]]:
+    return load_instructor_ratings()
 
-    Currently returns a stub structure — the real CSV loader is R5 work
-    listed in AGENTS.md. We default to ``rating=None`` so the graph can
-    still run and downstream code can detect "no data" without crashing.
+
+def tool_get_instructor_rating(instructor_name: str) -> dict[str, Any]:
+    """Return a rating dict for an instructor from data/instructor_ratings.csv.
+
+    Falls back to ``rating=None, source="unavailable"`` for instructors we
+    have no data on, so the picker degrades gracefully instead of crashing.
     """
-    # TODO(R5): wire to data/instructor_ratings.csv loader.
-    return {
-        "instructor": instructor_name,
-        "rating": None,
-        "difficulty": None,
-        "would_take_again_pct": None,
-        "source": "unavailable",
-    }
+    return instructor_rating_for(instructor_name, _ratings())
 
 
 def tool_compare_instructors(names: list[str]) -> list[dict[str, Any]]:

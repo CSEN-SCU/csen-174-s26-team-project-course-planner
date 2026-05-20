@@ -41,6 +41,7 @@ from agents.multi_agent.tools import (
     tool_check_in_schedule,
     tool_compare_instructors,
     tool_detect_conflicts,
+    tool_get_instructor_rating,
     tool_get_lab_partner,
     tool_get_open_req_candidates,
     tool_get_sections,
@@ -201,22 +202,63 @@ def verifier_router(state: PlanningState) -> str:
 # ── Node 3: Instructor Selector (one node per recommended course) ───────────
 
 
+def _section_rating(section: dict[str, Any]) -> tuple[float, float]:
+    """Sort key for a section: (best_instructor_rating, -difficulty).
+
+    Higher rating wins; lower difficulty breaks ties. Sections whose
+    instructor has no rating data sort last (rating treated as -1).
+    """
+    best_rating = -1.0
+    best_difficulty = 5.0  # worst, so unknown tie-breaks unfavourably
+    for name in section.get("instructors") or []:
+        rec = tool_get_instructor_rating(name)
+        r = rec.get("rating")
+        d = rec.get("difficulty")
+        if isinstance(r, (int, float)) and r > best_rating:
+            best_rating = float(r)
+            best_difficulty = float(d) if isinstance(d, (int, float)) else 5.0
+    return (best_rating, -best_difficulty)
+
+
 def _select_best_section(sections: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """Pick the section with the best-rated instructor. Falls back to the
-    first section when no rating data is available (current state)."""
+    """Pick the section taught by the highest-rated instructor (R5).
+
+    Ranking: instructor rating desc, then difficulty asc. When NO section
+    has rating data, the order is stable (first section wins) so behaviour
+    is deterministic. Always surfaces a comparison table of the alternatives
+    so the UI can show *why* this section was chosen.
+    """
     if not sections:
         return None
-    # R5 will plug real ratings here. For now: stable choice = first section.
-    best = sections[0]
-    instructors = best.get("instructors") or []
-    comparison = tool_compare_instructors(instructors[:5]) if instructors else []
+
+    ranked = sorted(sections, key=_section_rating, reverse=True)
+    best = ranked[0]
+    best_instructors = best.get("instructors") or []
+    chosen_instructor = best_instructors[0] if best_instructors else None
+
+    # Comparison = the chosen instructor + every other section's lead
+    # instructor, with ratings, so the UI can render a side-by-side table.
+    seen: set[str] = set()
+    comparison: list[dict[str, Any]] = []
+    for sec in ranked:
+        for name in (sec.get("instructors") or [])[:1]:
+            if name and name not in seen:
+                seen.add(name)
+                comparison.append(tool_get_instructor_rating(name))
+
+    chosen_rating = (
+        tool_get_instructor_rating(chosen_instructor) if chosen_instructor else None
+    )
+
     return {
         "section": best.get("section"),
         "meeting_days": best.get("meeting_days"),
         "meeting_start_min": best.get("meeting_start_min"),
         "meeting_end_min": best.get("meeting_end_min"),
-        "instructor": instructors[0] if instructors else None,
-        "alternatives": comparison[1:] if len(comparison) > 1 else [],
+        "instructor": chosen_instructor,
+        "instructor_rating": chosen_rating,
+        # alternatives = comparison minus the chosen instructor (first entry)
+        "alternatives": [c for c in comparison if c.get("instructor") != chosen_instructor],
     }
 
 

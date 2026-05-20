@@ -469,9 +469,11 @@ def write(
     if not content or not content.strip():
         raise ValueError("memory_agent: content cannot be empty")
 
-    body = content.strip()
+    # New entry content (sanitized for parsed_rows). Kept in its OWN variable
+    # — do NOT reuse ``body`` below, which holds the EXISTING file content.
+    new_content = content.strip()
     if kind == "parsed_rows":
-        body = _strip_grades_from_parsed_rows_content(body)
+        new_content = _strip_grades_from_parsed_rows_content(new_content)
 
     path = _user_file(uid)
     raw = _read_raw(path)
@@ -487,7 +489,7 @@ def write(
         ]
     next_id = max((it["id"] for it in items), default=0) + 1
     created = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    block = _serialize_block(next_id, uid, kind, created, meta, body)
+    block = _serialize_block(next_id, uid, kind, created, meta, new_content)
     new_core = "".join(
         _serialize_block(
             int(it["id"]),

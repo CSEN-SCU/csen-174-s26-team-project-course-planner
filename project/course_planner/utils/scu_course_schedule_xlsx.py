@@ -17,7 +17,9 @@ Index entry shape:
 
 from __future__ import annotations
 
+import csv
 import re
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +30,7 @@ _DEFAULT_SCHEDULE_FILES = (
     _COURSE_PLANNER_DIR / "SCU_Find_Course_Sections.xlsx",
     _COURSE_PLANNER_DIR / "scu_find_course.xlsx",
 )
+_INSTRUCTOR_RATINGS_FILE = _COURSE_PLANNER_DIR / "data" / "instructor_ratings.csv"
 
 _SCHEDULE_SUBJECT_TYPOS: dict[str, str] = {"CSEE": "CSEN"}
 
@@ -634,6 +637,77 @@ def course_title_for(course_code: str, titles_index: dict[tuple[str, str], str])
         if title:
             return title
     return None
+
+
+# ── Instructor ratings (R5) ──────────────────────────────────────────────────
+
+
+def _coerce_float(s: str | None) -> float | None:
+    if s is None:
+        return None
+    s = str(s).strip()
+    if not s:
+        return None
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+@lru_cache(maxsize=1)
+def load_instructor_ratings(
+    path: str | None = None,
+) -> dict[str, dict[str, Any]]:
+    """Load ``data/instructor_ratings.csv`` into ``{name: rating_dict}``.
+
+    Lines beginning with ``#`` are treated as comments and skipped (the file
+    carries a provenance header). Names are stored verbatim AND under a
+    lower-cased key so lookups are case-insensitive.
+
+    Returns ``{}`` if the file is absent. Rows with an unparseable rating get
+    ``rating=None`` so the picker can fall back gracefully.
+    """
+    p = Path(path) if path else _INSTRUCTOR_RATINGS_FILE
+    if not p.is_file():
+        return {}
+    out: dict[str, dict[str, Any]] = {}
+    with p.open("r", encoding="utf-8") as fh:
+        lines = [ln for ln in fh if not ln.lstrip().startswith("#")]
+    reader = csv.DictReader(lines)
+    for row in reader:
+        name = (row.get("instructor_name") or "").strip()
+        if not name:
+            continue
+        rec = {
+            "instructor": name,
+            "rating": _coerce_float(row.get("rating")),
+            "difficulty": _coerce_float(row.get("difficulty")),
+            "would_take_again_pct": _coerce_float(row.get("would_take_again_pct")),
+            "source": (row.get("source") or "unknown").strip(),
+        }
+        out[name] = rec
+        out[name.lower()] = rec
+    return out
+
+
+def instructor_rating_for(
+    name: str, ratings: dict[str, dict[str, Any]] | None = None
+) -> dict[str, Any]:
+    """Return the rating record for ``name``; a stub with ``rating=None`` and
+    ``source="unavailable"`` when we have no data for that instructor."""
+    if ratings is None:
+        ratings = load_instructor_ratings()
+    n = (name or "").strip()
+    rec = ratings.get(n) or ratings.get(n.lower())
+    if rec:
+        return dict(rec)
+    return {
+        "instructor": n,
+        "rating": None,
+        "difficulty": None,
+        "would_take_again_pct": None,
+        "source": "unavailable",
+    }
 
 
 def detect_time_conflicts(
