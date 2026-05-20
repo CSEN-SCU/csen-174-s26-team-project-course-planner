@@ -1,4 +1,11 @@
-export function SiteFooter() {
+export type SiteFooterProps = {
+  userId?: string | null;
+  onDeleteUserData?: () => void;
+};
+
+export function SiteFooter({ userId, onDeleteUserData }: SiteFooterProps = {}) {
+  const showDelete = Boolean(userId && onDeleteUserData);
+
   return (
     <footer className="shrink-0 border-t border-neutral-200 bg-white py-2.5 text-center">
       <nav
@@ -20,6 +27,20 @@ export function SiteFooter() {
         >
           Academic Progress Export Tutorial
         </a>
+        {showDelete && (
+          <>
+            <span className="text-xs text-neutral-300" aria-hidden>
+              |
+            </span>
+            <button
+              type="button"
+              onClick={onDeleteUserData}
+              className="text-xs font-medium text-neutral-500 underline-offset-2 transition hover:text-[var(--scu-red)] hover:underline"
+            >
+              Delete User Data
+            </button>
+          </>
+        )}
       </nav>
     </footer>
   );

@@ -7,6 +7,7 @@ Public surface (every function is scoped to a single ``user_id``):
 - ``list_for_user(user_id)`` -> list[dict]
 - ``delete(user_id, item_id)`` -> bool
 - ``delete_all_for_user(user_id)`` -> int
+- ``purge_user_storage(user_id)`` -> bool
 - ``embed(text)`` -> list[float]
 
 Each user file lives under ``COURSE_PLANNER_MEMORY_DIR`` (default
@@ -641,6 +642,21 @@ def delete_all_for_user(
     suffix = ("\n\n" + tr_tail) if tr_tail else ""
     _write_atomic(path, _FILE_PREAMBLE.rstrip("\n") + suffix)
     return n
+
+
+def purge_user_storage(
+    user_id,
+    *,
+    db_path: Optional[str] = None,
+) -> bool:
+    """Remove the user's memory file entirely (plans, transcript, preferences)."""
+    del db_path
+    uid = _validate_user_id(user_id)
+    path = _user_file(uid)
+    if not path.is_file():
+        return False
+    path.unlink()
+    return True
 
 
 def save_last_transcript_snapshot(user_id, snapshot: dict[str, Any]) -> None:

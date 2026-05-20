@@ -174,3 +174,13 @@ export async function exchangeGoogleOauth(token: string) {
   if (!res.ok) throw new Error(errFromBody(data));
   return data as { success: boolean; user_id: string };
 }
+
+/** Permanently delete the user's account and all stored memory (plans, transcript, etc.). */
+export async function deleteAllUserData(userId: string) {
+  const res = await fetch(`${API_BASE}/auth/user/${encodeURIComponent(userId)}/data`, {
+    method: "DELETE",
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(errFromBody(data));
+  return data as { success: boolean };
+}

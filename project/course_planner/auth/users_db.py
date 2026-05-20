@@ -13,6 +13,7 @@ Public functions:
 - `get_user_by_id(user_id, *, db_path=None) -> dict | None`
 - `get_user_by_email(email, *, db_path=None) -> dict | None`
 - `get_or_create_user_for_google(email, google_sub, *, db_path=None) -> dict`
+- `delete_user_by_id(user_id, *, db_path=None) -> bool`
 
 Errors:
 
@@ -228,6 +229,27 @@ def get_or_create_user_for_google(
     if user is None:
         raise RuntimeError("User was created but could not be reloaded.")
     return user
+
+
+def delete_user_by_id(
+    user_id,
+    *,
+    db_path: Optional[str] = None,
+) -> bool:
+    """Delete the user row from SQLite. Returns False if id is invalid or missing."""
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return False
+    if uid <= 0:
+        return False
+    conn = get_conn(db_path)
+    try:
+        cur = conn.execute("DELETE FROM users WHERE id = ?", (uid,))
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        close_conn(conn)
 
 
 def verify_login(

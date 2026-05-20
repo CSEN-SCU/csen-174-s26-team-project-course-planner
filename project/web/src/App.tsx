@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
-import { deleteMemory, exchangeGoogleOauth, generateFourYearPlan, getMemory, login as apiLogin, register as apiRegister, saveMemory } from "./api/client";
+import {
+  deleteAllUserData,
+  deleteMemory,
+  exchangeGoogleOauth,
+  generateFourYearPlan,
+  getMemory,
+  login as apiLogin,
+  register as apiRegister,
+  saveMemory,
+} from "./api/client";
 import {
   clearGoogleOauthPending,
   isGoogleOauthPending,
@@ -11,6 +20,7 @@ import { ChatPanel, type ChatUiMessage } from "./components/ChatPanel";
 import { FourYearPlanView } from "./components/FourYearPlanView";
 import { LeftPanel, type MemorySessionRow } from "./components/LeftPanel";
 import type { FourYearPlan, ParsedRow } from "./types";
+import { DeleteUserDataConfirm } from "./components/DeleteUserDataConfirm";
 import { SiteFooter } from "./components/SiteFooter";
 import { CALENDAR_START_HOUR, WEEKDAY_LABELS } from "./types";
 
@@ -51,6 +61,9 @@ export default function App() {
   const [fourYearGenerating, setFourYearGenerating] = useState(false);
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
   const [googleAuthError, setGoogleAuthError] = useState<string | null>(null);
+  const [deleteDataOpen, setDeleteDataOpen] = useState(false);
+  const [deleteDataBusy, setDeleteDataBusy] = useState(false);
+  const [deleteDataError, setDeleteDataError] = useState<string | null>(null);
 
   // Consume Google OAuth handoff token before paint when possible (single-use).
   useLayoutEffect(() => {
@@ -413,6 +426,40 @@ export default function App() {
     }
   }, [missingDetails, userId, fourYearGenerating, activeSessionId, planSnapshots]);
 
+  const resetAfterAccountDeleted = useCallback(() => {
+    setUserId(null);
+    setMissingDetails([]);
+    setPlanResult(null);
+    setMessages([{ id: "m0", role: "assistant", content: WELCOME_TEXT }]);
+    setPlanSnapshots([]);
+    setSessionCalendarRecommended(null);
+    setActiveSessionId(null);
+    setFileUploaded(false);
+    setLocalOverride(null);
+    setChatPrefill(null);
+    setViewMode("calendar");
+    setFourYearPlan(null);
+    setFourYearGenerating(false);
+    setParsedRows([]);
+    setGoogleAuthError(null);
+  }, [setUserId]);
+
+  const handleConfirmDeleteUserData = useCallback(async () => {
+    if (!userId) return;
+    setDeleteDataBusy(true);
+    setDeleteDataError(null);
+    try {
+      await deleteAllUserData(userId);
+      setDeleteDataOpen(false);
+      resetAfterAccountDeleted();
+    } catch (e) {
+      const hint = e instanceof Error ? e.message : "Could not delete user data.";
+      setDeleteDataError(hint);
+    } finally {
+      setDeleteDataBusy(false);
+    }
+  }, [userId, resetAfterAccountDeleted]);
+
   const handleSlotClick = useCallback((dayIndex: number, slotIndex: number) => {
     const dayName = WEEKDAY_LABELS[dayIndex] ?? "Monday";
     const totalMin = CALENDAR_START_HOUR * 60 + slotIndex * 30;
@@ -424,6 +471,18 @@ export default function App() {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--scu-white)]">
+      <DeleteUserDataConfirm
+        open={deleteDataOpen}
+        busy={deleteDataBusy}
+        error={deleteDataError}
+        onConfirm={() => void handleConfirmDeleteUserData()}
+        onCancel={() => {
+          if (!deleteDataBusy) {
+            setDeleteDataOpen(false);
+            setDeleteDataError(null);
+          }
+        }}
+      />
       <div className="flex min-h-0 flex-1 overflow-hidden">
       <LeftPanel
         userId={userId}
@@ -497,7 +556,13 @@ export default function App() {
         setParsedRows={setParsedRows}
       />
       </div>
-      <SiteFooter />
+      <SiteFooter
+        userId={userId}
+        onDeleteUserData={() => {
+          setDeleteDataError(null);
+          setDeleteDataOpen(true);
+        }}
+      />
     </div>
   );
 }

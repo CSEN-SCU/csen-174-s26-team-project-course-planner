@@ -14,10 +14,13 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from auth import oauth_state
+from agents.memory_agent import purge_user_storage
 from auth.users_db import (
     UserAlreadyExistsError,
     create_user,
+    delete_user_by_id,
     get_or_create_user_for_google,
+    get_user_by_id,
     get_user_by_username,
     verify_login,
 )
@@ -212,3 +215,20 @@ def google_exchange(body: GoogleExchangeBody) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"success": True, "user_id": user_id}
+
+
+@router.delete("/user/{user_id}/data")
+def delete_user_data(user_id: str) -> dict[str, Any]:
+    """Remove all stored data for this user (memory file + SQLite account)."""
+    if get_user_by_id(user_id) is None:
+        raise HTTPException(status_code=404, detail="User not found.")
+    try:
+        purge_user_storage(user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Failed to purge memory for user %s", user_id)
+        raise HTTPException(status_code=500, detail="Could not delete user data.") from exc
+    if not delete_user_by_id(user_id):
+        raise HTTPException(status_code=500, detail="Could not delete user account.")
+    return {"success": True}
