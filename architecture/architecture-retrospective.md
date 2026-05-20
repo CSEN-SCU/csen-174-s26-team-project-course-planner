@@ -39,7 +39,7 @@ Our product vision has not changed since we first created it.
 
 
 ## Week 4 C4 Context Diagram and Container Diagram
-Our oriignal Week 4 Context Diagram and Container Diagram can be found here: [architecture.md](architecture.md)
+Our orignal Week 4 Context Diagram and Container Diagram can be found here: [architecture.md](architecture.md)
 
 ## Current C4 Context Diagram
 
