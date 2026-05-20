@@ -123,7 +123,27 @@ Rules:
 
 
 def planner_node(state: PlanningState) -> dict[str, Any]:
-    """LLM-driven planner. Produces ``candidate_plan``."""
+    """LLM-driven planner.
+
+    By default runs as a ReAct tool-calling loop (the model can call
+    search_schedule / get_open_req_candidates / get_lab_partner before
+    committing). Set ``PLANNER_REACT=0`` to fall back to the single-shot
+    JSON call (cheaper, no tool use) — useful for cost-sensitive runs.
+
+    Produces ``candidate_plan``.
+    """
+    use_react = os.environ.get("PLANNER_REACT", "1") != "0"
+
+    if use_react:
+        from agents.multi_agent.planner_react import run_planner_react
+
+        parsed, tool_calls = run_planner_react(_planner_prompt(state))
+        if tool_calls:
+            log.info("planner_react: %d tool call(s): %s",
+                     len(tool_calls), [t["name"] for t in tool_calls])
+        return {"candidate_plan": parsed.get("recommended") or []}
+
+    # Single-shot fallback.
     client = get_genai_client(purpose="multi-agent planner")
     model = os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
     from google.genai import types

@@ -44,6 +44,12 @@ def _stub_client(replies: list[dict]) -> SimpleNamespace:
 def stub_tools(monkeypatch):
     """All tool calls return canned data so the graph never touches xlsx
     files or Gemini."""
+    # These tests exercise graph ORCHESTRATION with a simple stubbed planner
+    # (graph_mod.get_genai_client). The ReAct planner lives in a separate
+    # module with its own client import and is covered by
+    # test_planner_react.py — so force the single-shot path here.
+    monkeypatch.setenv("PLANNER_REACT", "0")
+
     # Schedule contains CSEN 122 + lab + ENGL 181 + ECEN 153 + lab.
     in_schedule = {"CSEN 122", "CSEN 122L", "ENGL 181", "ECEN 153", "ECEN 153L"}
 
