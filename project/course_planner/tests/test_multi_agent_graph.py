@@ -198,7 +198,7 @@ def test_graph_compiles_with_expected_nodes():
     # langgraph's compiled graph exposes `.get_graph()`
     gdef = g.get_graph()
     nodes = {n.id for n in gdef.nodes.values()}
-    for needed in {"planner", "verifier", "fan_out_instructor", "assembler"}:
+    for needed in {"planner", "verifier", "instructor_one", "assembler"}:
         assert needed in nodes, f"missing node {needed!r}"
 
 

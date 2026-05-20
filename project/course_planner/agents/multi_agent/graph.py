@@ -35,6 +35,7 @@ import uuid
 from typing import Annotated, Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
+from langgraph.types import Send
 
 from agents.gemini_client import get_genai_client
 from agents.multi_agent.tools import (
@@ -209,14 +210,29 @@ def verifier_node(state: PlanningState) -> dict[str, Any]:
     return {"verifier_issues": issues, "verifier_passes": passes}
 
 
-def verifier_router(state: PlanningState) -> str:
-    """Edge: if issues remain AND we haven't exhausted retry budget, loop back
-    to Planner. Otherwise advance to instructor selection."""
+def verifier_router(state: PlanningState):
+    """Conditional edge after the verifier.
+
+    - If issues remain AND retry budget isn't exhausted → loop back to Planner.
+    - Otherwise FAN OUT: dispatch one ``instructor_one`` invocation per
+      recommended course via the ``Send`` API so they run concurrently.
+      Each returns ``{instructor_assignments: {code: pick}}`` which the
+      ``_merge_dicts`` reducer accumulates. They all join at ``assembler``.
+    - If there are no courses, skip straight to ``assembler``.
+    """
     issues = state.get("verifier_issues") or []
     passes = state.get("verifier_passes") or 0
     if issues and passes < 3:  # max 2 corrections after initial draft
         return "planner"
-    return "fan_out_instructor"
+
+    codes = [
+        str(c.get("course", "")).strip()
+        for c in (state.get("candidate_plan") or [])
+        if c.get("course")
+    ]
+    if not codes:
+        return "assembler"
+    return [Send("instructor_one", {"course_code": code}) for code in codes]
 
 
 # ── Node 3: Instructor Selector (one node per recommended course) ───────────
@@ -282,14 +298,23 @@ def _select_best_section(sections: list[dict[str, Any]]) -> dict[str, Any] | Non
     }
 
 
-def make_instructor_node(course_code: str):
-    """Factory: returns a node that resolves the instructor pick for one
-    specific course. Used to fan out — one node per recommended code."""
-    def _node(state: PlanningState) -> dict[str, Any]:
-        sections = tool_get_sections(course_code)
-        pick = _select_best_section(sections)
-        return {"instructor_assignments": {course_code: pick} if pick else {}}
-    return _node
+def instructor_one_node(state: dict[str, Any]) -> dict[str, Any]:
+    """Resolve the instructor pick for ONE course.
+
+    Invoked via the ``Send`` API — one concurrent invocation per recommended
+    course. The ``Send`` payload is ``{"course_code": code}``, so this node's
+    ``state`` is that payload, NOT the full graph state. It returns a single
+    ``instructor_assignments`` entry which the ``_merge_dicts`` reducer folds
+    back into the shared state alongside the other parallel results.
+    """
+    code = ""
+    if isinstance(state, dict):
+        code = str(state.get("course_code", "")).strip()
+    if not code:
+        return {}
+    sections = tool_get_sections(code)
+    pick = _select_best_section(sections)
+    return {"instructor_assignments": {code: pick} if pick else {}}
 
 
 # ── Node 4: Assembler ───────────────────────────────────────────────────────
@@ -325,45 +350,39 @@ def assembler_node(state: PlanningState) -> dict[str, Any]:
 def build_graph():
     """Build and compile the multi-agent StateGraph.
 
-    Note: instructor selection is *not* fanned out across N parallel nodes
-    in this v1 build — that would require dynamic graph construction
-    (one node per recommended code) which LangGraph doesn't natively
-    support without ``Send`` API. We use a single sequential node that
-    loops through codes; the graph shape is in place for the parallel
-    upgrade once R5 (instructor ratings) lands.
+    Instructor selection is fanned out via the ``Send`` API: the
+    ``verifier_router`` conditional edge dispatches one ``instructor_one``
+    invocation per recommended course, all run concurrently in the same
+    superstep, and their ``instructor_assignments`` results are merged by
+    the ``_merge_dicts`` reducer before ``assembler`` runs.
+
+    Graph::
+
+        START → planner → verifier ─[issues & passes<3]→ planner
+                                    ├─[clean]→ Send(instructor_one) × N ┐
+                                    └─[no courses]──────────────────────┤
+                                                                        ▼
+                                                                    assembler → END
     """
     g: StateGraph[PlanningState] = StateGraph(PlanningState)
     g.add_node("planner", planner_node)
     g.add_node("verifier", verifier_node)
-    g.add_node("fan_out_instructor", _all_instructors_node)
+    g.add_node("instructor_one", instructor_one_node)
     g.add_node("assembler", assembler_node)
 
     g.add_edge(START, "planner")
     g.add_edge("planner", "verifier")
+    # verifier_router returns either "planner" (loop), "assembler" (no
+    # courses), or a list of Send("instructor_one", ...) for the fan-out.
     g.add_conditional_edges(
         "verifier",
         verifier_router,
-        {"planner": "planner", "fan_out_instructor": "fan_out_instructor"},
+        ["planner", "instructor_one", "assembler"],
     )
-    g.add_edge("fan_out_instructor", "assembler")
+    # Every parallel instructor_one invocation joins here.
+    g.add_edge("instructor_one", "assembler")
     g.add_edge("assembler", END)
     return g.compile()
-
-
-def _all_instructors_node(state: PlanningState) -> dict[str, Any]:
-    """Sequential aggregator that resolves instructor picks for every
-    course in the candidate plan. Replaces a true Send-based fan-out for
-    now (see ``build_graph`` docstring)."""
-    assignments: dict[str, dict[str, Any]] = {}
-    for entry in state.get("candidate_plan") or []:
-        code = str(entry.get("course", "")).strip()
-        if not code:
-            continue
-        sections = tool_get_sections(code)
-        pick = _select_best_section(sections)
-        if pick:
-            assignments[code] = pick
-    return {"instructor_assignments": assignments}
 
 
 # ── Entry point analogous to ``run_planning_agent`` ─────────────────────────
