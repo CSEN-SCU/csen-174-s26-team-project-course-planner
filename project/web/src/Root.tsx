@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import App from "./App";
 import { AcademicProgressExportTutorialPage } from "./pages/AcademicProgressExportTutorialPage";
+import { CoursePlannerTutorialPage } from "./pages/CoursePlannerTutorialPage";
 import { DataDisclosurePage } from "./pages/DataDisclosurePage";
 
 function normalizePath(pathname: string): string {
@@ -16,6 +17,9 @@ function currentRoute(): string {
   }
   if (hash === "academic-progress-export-tutorial") {
     return "/academic-progress-export-tutorial";
+  }
+  if (hash === "course-planner-tutorial") {
+    return "/course-planner-tutorial";
   }
   return normalizePath(window.location.pathname);
 }
@@ -38,6 +42,9 @@ export function Root() {
   }
   if (route === "/academic-progress-export-tutorial") {
     return <AcademicProgressExportTutorialPage />;
+  }
+  if (route === "/course-planner-tutorial") {
+    return <CoursePlannerTutorialPage />;
   }
   return <App />;
 }

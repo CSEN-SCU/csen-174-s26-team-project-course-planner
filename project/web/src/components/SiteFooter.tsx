@@ -27,6 +27,15 @@ export function SiteFooter({ userId, onDeleteUserData }: SiteFooterProps = {}) {
         >
           Academic Progress Export Tutorial
         </a>
+        <span className="text-xs text-neutral-300" aria-hidden>
+          |
+        </span>
+        <a
+          href="#/course-planner-tutorial"
+          className="text-xs font-medium text-neutral-500 underline-offset-2 transition hover:text-[var(--scu-red)] hover:underline"
+        >
+          SCU Course Planner Tutorial
+        </a>
         {showDelete && (
           <>
             <span className="text-xs text-neutral-300" aria-hidden>
