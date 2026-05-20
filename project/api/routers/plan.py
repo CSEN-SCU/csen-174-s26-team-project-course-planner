@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 from typing import Any
 
@@ -19,6 +20,12 @@ from agents.professor_agent import run_professor_agent
 from middleware.rate_limit import limit
 
 router = APIRouter()
+
+# When MULTI_AGENT_PLAN=1, the legacy POST /api/plan transparently delegates
+# to the LangGraph multi-agent engine. Otherwise it stays on the single-shot
+# planning_agent. The explicit POST /api/plan/v2 always uses the multi-agent
+# engine regardless of this flag.
+_MULTI_AGENT_DEFAULT = os.environ.get("MULTI_AGENT_PLAN", "0") == "1"
 
 _CONVO_START_RE = re.compile(
     r"^\s*(do you|does|is|are|have you|will you|what|where|how|why|when|who|"
@@ -116,6 +123,11 @@ class PlanRequest(BaseModel):
 
 @router.post("", include_in_schema=True, dependencies=[Depends(limit("plan"))])
 def create_plan(body: PlanRequest) -> dict[str, Any]:
+    # Optional global switch: route the default endpoint through the
+    # multi-agent engine without any frontend change.
+    if _MULTI_AGENT_DEFAULT:
+        return _run_multi_agent(body)
+
     memory_snippets: list[str] | None = None
     if body.user_id.strip():
         try:
@@ -190,3 +202,171 @@ def create_plan(body: PlanRequest) -> dict[str, Any]:
         "advice": advice,
         "assistant_reply": assistant_reply,
     }
+
+
+# ── Multi-agent (LangGraph) engine — STEP E ──────────────────────────────────
+
+
+def _load_memory_snippets(user_id: str) -> list[str] | None:
+    if not user_id.strip():
+        return None
+    try:
+        items = list_for_user(user_id.strip())
+    except ValueError:
+        return None
+    snippets = [
+        str(it.get("content") or "")
+        for it in items[:12]
+        if str(it.get("content") or "").strip()
+    ]
+    return snippets or None
+
+
+def _synthesize_advice_reply(plan: dict[str, Any]) -> tuple[str, str]:
+    """The multi-agent assembler doesn't emit advice/assistant_reply (those
+    were legacy single-shot fields). Synthesize them deterministically — no
+    extra LLM call — so the response is a drop-in for the frontend."""
+    recs = plan.get("recommended") or []
+    codes = [str(r.get("course", "?")) for r in recs]
+    total = plan.get("total_units", 0)
+    issues = plan.get("verifier_issues") or []
+    advice = f"This plan covers {len(codes)} course(s) totaling {total} units."
+    if issues:
+        advice += f" The verifier flagged {len(issues)} item(s) for review."
+    reply = (
+        f"I put together a {total}-unit plan: {', '.join(codes)}."
+        if codes
+        else "I couldn't find courses to recommend for next term."
+    )
+    return advice, reply
+
+
+def _shape_v2_response(plan: dict[str, Any]) -> dict[str, Any]:
+    """Normalize a multi-agent plan into the frontend's expected shape."""
+    recs = plan.get("recommended") or []
+    if not isinstance(recs, list):
+        recs = []
+    try:
+        total_units = int(plan.get("total_units") or 0)
+    except (TypeError, ValueError):
+        total_units = 0
+    advice, reply = _synthesize_advice_reply(plan)
+    return {
+        "type": "plan",
+        "engine": "multi_agent",
+        "recommended": recs,
+        "total_units": total_units,
+        "advice": advice,
+        "assistant_reply": reply,
+        "verifier_issues": plan.get("verifier_issues") or [],
+        "verifier_passes": plan.get("verifier_passes", 0),
+    }
+
+
+class PlanV2Request(PlanRequest):
+    # Optional: persist intermediate state under this thread for resume.
+    thread_id: str = ""
+
+
+def _run_multi_agent(body: PlanRequest, *, thread_id: str = "") -> dict[str, Any]:
+    """Shared multi-agent execution with the same conversational routing /
+    no-transcript guards as the legacy endpoint."""
+    from agents.multi_agent import run_multi_agent_plan
+
+    memory_snippets = _load_memory_snippets(body.user_id)
+
+    if _is_conversational(body.user_preference):
+        return {
+            "type": "answer",
+            "reply": _answer_conversational(
+                body.user_preference, body.missing_details, memory_snippets
+            ),
+        }
+    if not body.missing_details:
+        return {
+            "type": "answer",
+            "reply": "Please upload your Academic Progress xlsx file first so I can see your remaining requirements.",
+        }
+
+    try:
+        plan = run_multi_agent_plan(
+            body.missing_details,
+            body.user_preference,
+            previous_plan=body.previous_plan,
+            memory_snippets=memory_snippets,
+            thread_id=thread_id or None,
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"multi-agent plan failed: {exc}") from exc
+    return _shape_v2_response(plan)
+
+
+@router.post("/v2", dependencies=[Depends(limit("plan"))])
+def create_plan_v2(body: PlanV2Request) -> dict[str, Any]:
+    """Explicit multi-agent (Planner ↔ Verifier ↔ InstructorSelector) engine.
+
+    Always uses the LangGraph pipeline regardless of MULTI_AGENT_PLAN.
+    """
+    return _run_multi_agent(body, thread_id=body.thread_id)
+
+
+# ── Human-in-the-loop: review a draft before committing ─────────────────────
+
+_hitl_checkpointer = None
+
+
+def _get_hitl_checkpointer():
+    """Module-level durable checkpointer so review + resume can span two
+    HTTP requests (and survive a worker restart)."""
+    global _hitl_checkpointer
+    if _hitl_checkpointer is None:
+        from agents.multi_agent import make_sqlite_checkpointer
+
+        _hitl_checkpointer = make_sqlite_checkpointer()
+    return _hitl_checkpointer
+
+
+@router.post("/v2/review", dependencies=[Depends(limit("plan"))])
+def review_plan_v2(body: PlanV2Request) -> dict[str, Any]:
+    """Run the multi-agent graph up to (not through) the commit step and
+    return the draft for human approval. Requires a thread_id."""
+    if not body.thread_id.strip():
+        raise HTTPException(status_code=400, detail="thread_id is required for review.")
+    if not body.missing_details:
+        raise HTTPException(status_code=400, detail="No remaining requirements to plan.")
+    from agents.multi_agent import start_plan_with_review
+
+    try:
+        review = start_plan_with_review(
+            body.missing_details,
+            body.user_preference,
+            thread_id=body.thread_id.strip(),
+            checkpointer=_get_hitl_checkpointer(),
+            previous_plan=body.previous_plan,
+            memory_snippets=_load_memory_snippets(body.user_id),
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"review failed: {exc}") from exc
+    return {"type": "plan_review", **review}
+
+
+class ResumeRequest(BaseModel):
+    thread_id: str = ""
+
+
+@router.post("/v2/resume", dependencies=[Depends(limit("plan"))])
+def resume_plan_v2(body: ResumeRequest) -> dict[str, Any]:
+    """Approve a previously-reviewed draft: resume from the checkpoint and
+    finalize the plan."""
+    if not body.thread_id.strip():
+        raise HTTPException(status_code=400, detail="thread_id is required to resume.")
+    from agents.multi_agent import resume_plan
+
+    try:
+        plan = resume_plan(
+            thread_id=body.thread_id.strip(),
+            checkpointer=_get_hitl_checkpointer(),
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"resume failed: {exc}") from exc
+    return _shape_v2_response(plan)
