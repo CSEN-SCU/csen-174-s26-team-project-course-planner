@@ -23,9 +23,7 @@ def _body_bytes_for_user(uid: int) -> int:
 
 @pytest.fixture()
 def alice(db_path):
-    return users_db.create_user(
-        "alice", "alice@example.com", "correct horse battery", db_path=db_path
-    )
+    return users_db.create_user("alice", "alice@example.com", db_path=db_path)
 
 
 def test_compaction_drops_total_bytes_below_trigger(monkeypatch, alice):

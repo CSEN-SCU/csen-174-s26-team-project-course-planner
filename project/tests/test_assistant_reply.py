@@ -37,9 +37,7 @@ def _stub_client(captured_prompts: list[str], reply: dict):
 
 @pytest.fixture()
 def alice(db_path):
-    return users_db.create_user(
-        "alice", "alice@example.com", "correct horse battery", db_path=db_path
-    )
+    return users_db.create_user("alice", "alice@example.com", db_path=db_path)
 
 
 def test_previous_plan_is_summarized_into_prompt(monkeypatch):

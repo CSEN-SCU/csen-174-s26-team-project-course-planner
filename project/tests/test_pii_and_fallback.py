@@ -35,7 +35,7 @@ def _stub_planning(monkeypatch, captured: list[str]):
 
 @pytest.fixture()
 def alice(db_path):
-    return users_db.create_user("alice", "alice@example.com", "correct horse battery", db_path=db_path)
+    return users_db.create_user("alice", "alice@example.com", db_path=db_path)
 
 
 def test_redact_pii_strips_emails_and_id_numbers():

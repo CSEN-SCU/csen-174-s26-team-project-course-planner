@@ -9,7 +9,7 @@ from auth import users_db
 def test_delete_user_data_removes_memory_and_account(db_path, monkeypatch):
     monkeypatch.setattr(memory_agent, "_validate_user_id", lambda uid: int(uid))
 
-    uid = users_db.create_user("alice_del", "alice_del@example.com", "password123")
+    uid = users_db.create_user("alice_del", "alice_del@example.com")
     memory_agent.write(uid, "preference", "Alice prefers morning labs")
     memory_agent.write(uid, "plan_outcome", '{"recommended": []}')
 
@@ -28,8 +28,8 @@ def test_delete_user_data_removes_memory_and_account(db_path, monkeypatch):
 def test_delete_user_data_does_not_touch_other_users(db_path, monkeypatch):
     monkeypatch.setattr(memory_agent, "_validate_user_id", lambda uid: int(uid))
 
-    alice = users_db.create_user("alice_keep", "alice_keep@example.com", "password123")
-    bob = users_db.create_user("bob_drop", "bob_drop@example.com", "password123")
+    alice = users_db.create_user("alice_keep", "alice_keep@example.com")
+    bob = users_db.create_user("bob_drop", "bob_drop@example.com")
     memory_agent.write(alice, "preference", "Alice note")
     memory_agent.write(bob, "preference", "Bob note")
 

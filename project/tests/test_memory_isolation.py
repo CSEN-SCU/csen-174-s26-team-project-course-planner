@@ -19,8 +19,8 @@ from auth import users_db
 
 @pytest.fixture()
 def two_users(db_path):
-    a = users_db.create_user("alice", "alice@example.com", "correct horse battery", db_path=db_path)
-    b = users_db.create_user("bob", "bob@example.com", "another solid password", db_path=db_path)
+    a = users_db.create_user("alice", "alice@example.com", db_path=db_path)
+    b = users_db.create_user("bob", "bob@example.com", db_path=db_path)
     return {"alice": a, "bob": b}
 
 

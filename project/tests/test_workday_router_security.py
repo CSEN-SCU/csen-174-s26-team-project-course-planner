@@ -140,6 +140,6 @@ def test_require_user_valid_returns_canonical_id(monkeypatch):
     import routers.workday as wd
 
     monkeypatch.setattr(
-        wd, "get_user_by_id", lambda uid: {"id": 42, "username": "alice"}
+        wd, "get_user_by_id", lambda uid: {"id": 42, "google_sub": "alice"}
     )
     assert _require_user("42") == "42"

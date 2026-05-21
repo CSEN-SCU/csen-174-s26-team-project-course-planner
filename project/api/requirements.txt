@@ -6,5 +6,4 @@ google-genai
 google-auth
 google-auth-oauthlib
 openpyxl
-bcrypt
 sqlite-vec

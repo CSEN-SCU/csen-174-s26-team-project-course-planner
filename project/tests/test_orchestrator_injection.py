@@ -38,9 +38,7 @@ def _stub_client(captured_prompts: list[str], reply: dict):
 
 @pytest.fixture()
 def alice(db_path):
-    return users_db.create_user(
-        "alice", "alice@example.com", "correct horse battery", db_path=db_path
-    )
+    return users_db.create_user("alice", "alice@example.com", db_path=db_path)
 
 
 @pytest.fixture()
@@ -198,7 +196,7 @@ def test_preference_leading_trailing_whitespace_does_not_change_retrieve_query(
 
 def test_retrieved_snippets_only_from_caller(monkeypatch, db_path, alice, reply):
     """Even when both users have memory, A's plan never injects B's snippets."""
-    bob = users_db.create_user("bob", "bob@example.com", "another solid password")
+    bob = users_db.create_user("bob", "bob@example.com")
     memory_agent.write(bob, "preference", "BOB_SECRET_PHRASE: only Bob should ever see this")
     memory_agent.write(alice, "preference", "Alice loves morning labs")
 

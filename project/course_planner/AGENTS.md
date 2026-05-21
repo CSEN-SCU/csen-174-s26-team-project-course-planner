@@ -43,7 +43,7 @@ Voice transcription uses the `SpeechRecognition` package and **Google’s speech
 ## Key environment variables
 - `GEMINI_API_KEY` or `GOOGLE_API_KEY` — required for planning agent, curriculum PDF gap analysis, and embeddings
 - `GEMINI_MODEL` — optional, defaults to `gemini-2.5-flash`
-- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Google OAuth web client (optional; username/password sign-in still works without them)
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Google OAuth web client for account sign-in
 - `GOOGLE_OAUTH_REDIRECT_URI` — must match the Authorized redirect URI in Google Cloud Console
 - `SCU_PLANNER_COOKIE_KEY` — signs OAuth state + handoff token
 - `SCU_WORKDAY_URL` — the Workday task URL for View My Academic Progress (used by the Playwright scraper)
@@ -53,7 +53,7 @@ Voice transcription uses the `SpeechRecognition` package and **Google’s speech
 
 ## Project layout
 - `agents/` — planning, four-year planning, professor, memory, orchestrator agents
-- `auth/` — `users_db.py` (SQLite-backed users + bcrypt), `google_oauth.py`, `oauth_state.py`
+- `auth/` — `users_db.py` (SQLite-backed OAuth identities), `google_oauth.py`, `oauth_state.py`
 - `db/` — SQLite connection, schema, migrations
 - `utils/` — xlsx parsers, schedule index, Workday scraper, helpers
 - `specs/` — Ralph specs (source of truth for behavior)

@@ -4,7 +4,7 @@ Comparison of `project/course_planner/specs/` against the current `project/cours
 
 ## Done
 
-- [x] Cookie-backed sign-in and registration backed by a local user store, with a single reused login component instance and planner-scoped session keys cleared on logout.
+- [x] Google OAuth sign-in backed by a local user identity store, with planner-scoped session keys cleared on logout.
 - [x] Academic progress export parsing into detail rows, merged requirement status, not-satisfied summaries, and unique parsed course codes.
 - [x] Planner gap list populated from detail rows whose status matches the unsatisfied literal, including rows without a parseable course code.
 - [x] Per-user memory with deterministic embedding fallback, strict user scoping on read/write/delete, and Markdown file persistence (one ``.md`` per user; ranking embeds entries on demand).

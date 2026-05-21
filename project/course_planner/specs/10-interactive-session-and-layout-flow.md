@@ -9,7 +9,7 @@ The host view runs a linear UI pipeline from sign-in through spreadsheet parsing
 
 # Data contracts
 
-- **Session keys for planner flow:** missing gap list (`missing_details` from Excel parse), planning result dict, enriched recommendation list, fingerprint string for last enrichment, course-to-time map, last user preference message text, optional multi-line preference field value, mirrored numeric user id plus username for convenience.
+- **Session keys for planner flow:** missing gap list (`missing_details` from Excel parse), planning result dict, enriched recommendation list, fingerprint string for last enrichment, course-to-time map, last user preference message text, optional multi-line preference field value, and mirrored numeric user id.
 - **Keys cleared on logout:** the gap list, planning result, enrichment list, enrichment fingerprint, course-to-time map, mirrored ids, preference field text, last user message text.
 - **Planning result dict:** includes recommended array, total units, advice string, optional assistant reply string, optional warnings from generator.
 
