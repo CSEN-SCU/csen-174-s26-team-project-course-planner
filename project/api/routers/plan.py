@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 from typing import Any
@@ -118,6 +119,32 @@ class PlanRequest(BaseModel):
     user_preference: str = ""
     user_id: str = ""
     previous_plan: dict[str, Any] | None = None
+    parsed_rows: list[dict[str, Any]] = Field(default_factory=list)
+    completed_course_codes: list[str] = Field(default_factory=list)
+
+
+def _load_parsed_rows_from_memory(user_id: str) -> list[dict[str, Any]]:
+    if not user_id.strip():
+        return []
+    try:
+        items = list_for_user(user_id.strip())
+    except ValueError:
+        return []
+    for it in items:
+        if str(it.get("kind") or "") != "parsed_rows":
+            continue
+        try:
+            rows = json.loads(str(it.get("content") or "[]"))
+            return rows if isinstance(rows, list) else []
+        except json.JSONDecodeError:
+            return []
+    return []
+
+
+def _planning_context(body: PlanRequest) -> tuple[list[dict[str, Any]], list[str] | None]:
+    parsed = body.parsed_rows if body.parsed_rows else _load_parsed_rows_from_memory(body.user_id)
+    completed = body.completed_course_codes or None
+    return parsed, completed
 
 
 @router.post("", include_in_schema=True, dependencies=[Depends(limit("plan"))])
@@ -155,12 +182,15 @@ def create_plan(body: PlanRequest) -> dict[str, Any]:
             "reply": "Please upload your Academic Progress xlsx file first so I can see your remaining requirements.",
         }
 
+    parsed_rows, completed_codes = _planning_context(body)
     try:
         plan = run_planning_agent(
             body.missing_details,
             body.user_preference,
             memory_snippets=memory_snippets,
             previous_plan=body.previous_plan,
+            parsed_rows=parsed_rows,
+            completed_course_codes=completed_codes,
         )
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

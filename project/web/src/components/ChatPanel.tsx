@@ -16,8 +16,20 @@ export type ChatUiMessage = {
   content: string;
 };
 
+function completedCourseCodesFromRows(rows: ParsedRow[]): string[] {
+  const codes = new Set<string>();
+  for (const row of rows) {
+    const status = (row.status ?? "").trim();
+    if (status !== "Satisfied" && status !== "In Progress") continue;
+    const code = (row.course_code ?? "").trim();
+    if (code) codes.add(code);
+  }
+  return [...codes];
+}
+
 export type ChatPanelProps = {
   userId: string | null;
+  parsedRows?: ParsedRow[];
   missingDetails: unknown[];
   planResult: Record<string, unknown> | null;
   messages: ChatUiMessage[];
@@ -64,6 +76,7 @@ function getBestMimeType(): string {
 
 export function ChatPanel({
   userId,
+  parsedRows = [],
   missingDetails,
   planResult,
   messages,
@@ -184,7 +197,7 @@ export function ChatPanel({
 
     const lower = trimmed.toLowerCase();
 
-    // Gate: must have transcript before planning
+    // Gate: must have Academic Progress export before planning
     if (!fileUploaded) {
       setMessages((m) => [
         ...m,
@@ -192,13 +205,13 @@ export function ChatPanel({
           id: `a-${Date.now()}`,
           role: "assistant",
           content:
-            "Please upload your Academic Progress (.xlsx) file first, or sync directly from Workday using the button below.",
+            "Please upload your Academic Progress (.xlsx) export from Workday first using the paperclip below.",
         },
       ]);
       return;
     }
 
-    // Handle pending transcript update confirmation
+    // Handle pending Academic Progress update confirmation
     if (pendingFile) {
       if (lower === "yes" || lower.startsWith("yes") || lower.includes("update")) {
         const f = pendingFile;
@@ -219,6 +232,10 @@ export function ChatPanel({
         trimmed,
         userId ?? "",
         planResult,
+        {
+          parsed_rows: parsedRows,
+          completed_course_codes: completedCourseCodesFromRows(parsedRows),
+        },
       );
 
       // Conversational answer — don't touch the calendar
@@ -609,9 +626,8 @@ export function ChatPanel({
         </div>
         <p className="mt-1.5 text-[10px] text-neutral-400">
           {canDropFiles
-            ? "Drag and drop your .xlsx file here, use the paperclip, or click "
-            : "Upload your transcript with the paperclip, or click "}
-          <WorkdayIcon size={10} /> to sync directly from Workday.
+            ? "Drag and drop your Academic Progress .xlsx here, or use the paperclip to upload."
+            : "Upload your Academic Progress .xlsx with the paperclip."}
         </p>
       </div>
     </aside>

@@ -4,6 +4,8 @@ This document tracks capabilities that are **no longer part of the intended v1 p
 
 **Last updated:** 2026-05-21 (team decision: Google-only sign-in; no Workday auto-sync)
 
+**Planner fixes (2026-05-21):** Completed-course filtering, unit enrichment, and lab lecture pairing were added in `planning_agent.py` — see git history for `test_planning_postprocess.py`.
+
 ---
 
 ## 1. Username / password sign-in

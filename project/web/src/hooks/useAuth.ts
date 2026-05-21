@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useState } from "react";
 import { exchangeGoogleOauth } from "../api/client";
 import {
   clearGoogleOauthPending,
+  clearLocalSession,
   isGoogleOauthPending,
   persistUserId,
   readStoredUserId,
@@ -18,9 +19,10 @@ export function useAuth() {
   }, []);
 
   const signOut = useCallback(() => {
-    setUserId(null);
+    clearLocalSession();
+    setUserIdState(null);
     setGoogleAuthError(null);
-  }, [setUserId]);
+  }, []);
 
   useLayoutEffect(() => {
     const params = new URLSearchParams(window.location.search);

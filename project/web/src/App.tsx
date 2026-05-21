@@ -11,7 +11,8 @@ import { ChatPanel, type ChatUiMessage } from "./components/ChatPanel";
 import { FourYearPlanView } from "./components/FourYearPlanView";
 import { LeftPanel, type MemorySessionRow } from "./components/LeftPanel";
 import type { FourYearPlan, ParsedRow } from "./types";
-import { DeleteUserDataConfirm } from "./components/DeleteUserDataConfirm";
+import { SignOutConfirm } from "./components/DeleteUserDataConfirm";
+import { clearLocalSession } from "./auth/session";
 import { SiteFooter } from "./components/SiteFooter";
 import { CALENDAR_START_HOUR, WEEKDAY_LABELS } from "./types";
 
@@ -50,9 +51,9 @@ export default function App({ userId, onSignOut }: AppProps) {
   const [fourYearPlan, setFourYearPlan] = useState<FourYearPlan | null>(null);
   const [fourYearGenerating, setFourYearGenerating] = useState(false);
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
-  const [deleteDataOpen, setDeleteDataOpen] = useState(false);
-  const [deleteDataBusy, setDeleteDataBusy] = useState(false);
-  const [deleteDataError, setDeleteDataError] = useState<string | null>(null);
+  const [signOutOpen, setSignOutOpen] = useState(false);
+  const [signOutBusy, setSignOutBusy] = useState(false);
+  const [signOutNotice, setSignOutNotice] = useState<string | null>(null);
 
   // Load academic progress + past plan snapshots for this user
   useEffect(() => {
@@ -323,7 +324,8 @@ export default function App({ userId, onSignOut }: AppProps) {
     }
   }, [missingDetails, userId, fourYearGenerating, activeSessionId, planSnapshots]);
 
-  const resetAfterAccountDeleted = useCallback(() => {
+  const resetLocalPlannerState = useCallback(() => {
+    clearLocalSession();
     onSignOut();
     setMissingDetails([]);
     setPlanResult(null);
@@ -340,20 +342,45 @@ export default function App({ userId, onSignOut }: AppProps) {
     setParsedRows([]);
   }, [onSignOut]);
 
-  const handleConfirmDeleteUserData = useCallback(async () => {
-    setDeleteDataBusy(true);
-    setDeleteDataError(null);
+  const finishSignOut = useCallback(
+    (serverNotice: string | null) => {
+      setSignOutOpen(false);
+      setSignOutBusy(false);
+      setSignOutNotice(null);
+      resetLocalPlannerState();
+      if (serverNotice) {
+        try {
+          sessionStorage.setItem("scu_sign_out_notice", serverNotice);
+        } catch {
+          /* ignore */
+        }
+      }
+      window.location.href = "/";
+    },
+    [resetLocalPlannerState],
+  );
+
+  const handleConfirmSignOut = useCallback(async () => {
+    setSignOutBusy(true);
+    setSignOutNotice(null);
+    let serverNotice: string | null = null;
     try {
       await deleteAllUserData(userId);
-      setDeleteDataOpen(false);
-      resetAfterAccountDeleted();
     } catch (e) {
-      const hint = e instanceof Error ? e.message : "Could not delete user data.";
-      setDeleteDataError(hint);
-    } finally {
-      setDeleteDataBusy(false);
+      const hint = e instanceof Error ? e.message : "Could not reach the server.";
+      serverNotice =
+        "Signed out on this device. Server data could not be cleared (" +
+        hint +
+        ") — upload Academic Progress again after your next sign-in.";
     }
-  }, [userId, resetAfterAccountDeleted]);
+    finishSignOut(serverNotice);
+  }, [userId, finishSignOut]);
+
+  const handleCancelSignOut = useCallback(() => {
+    if (signOutBusy) return;
+    setSignOutOpen(false);
+    setSignOutNotice(null);
+  }, [signOutBusy]);
 
   const handleSlotClick = useCallback((dayIndex: number, slotIndex: number) => {
     const dayName = WEEKDAY_LABELS[dayIndex] ?? "Monday";
@@ -366,17 +393,12 @@ export default function App({ userId, onSignOut }: AppProps) {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--scu-white)]">
-      <DeleteUserDataConfirm
-        open={deleteDataOpen}
-        busy={deleteDataBusy}
-        error={deleteDataError}
-        onConfirm={() => void handleConfirmDeleteUserData()}
-        onCancel={() => {
-          if (!deleteDataBusy) {
-            setDeleteDataOpen(false);
-            setDeleteDataError(null);
-          }
-        }}
+      <SignOutConfirm
+        open={signOutOpen}
+        busy={signOutBusy}
+        error={signOutNotice}
+        onConfirm={() => void handleConfirmSignOut()}
+        onCancel={handleCancelSignOut}
       />
       <div className="flex min-h-0 flex-1 overflow-hidden">
       <LeftPanel
@@ -432,6 +454,7 @@ export default function App({ userId, onSignOut }: AppProps) {
 
       <ChatPanel
         userId={userId}
+        parsedRows={parsedRows}
         missingDetails={missingDetails}
         planResult={planResult}
         messages={messages}
@@ -446,13 +469,7 @@ export default function App({ userId, onSignOut }: AppProps) {
         setParsedRows={setParsedRows}
       />
       </div>
-      <SiteFooter
-        userId={userId}
-        onDeleteUserData={() => {
-          setDeleteDataError(null);
-          setDeleteDataOpen(true);
-        }}
-      />
+      <SiteFooter userId={userId} onSignOut={() => setSignOutOpen(true)} />
     </div>
   );
 }

@@ -49,11 +49,22 @@ export async function generatePlan(
   user_preference: string,
   user_id: string,
   previous_plan?: Record<string, unknown> | null,
+  options?: {
+    parsed_rows?: unknown[];
+    completed_course_codes?: string[];
+  },
 ) {
   const res = await fetch(`${API_BASE}/plan`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ missing_details, user_preference, user_id, previous_plan: previous_plan ?? null }),
+    body: JSON.stringify({
+      missing_details,
+      user_preference,
+      user_id,
+      previous_plan: previous_plan ?? null,
+      parsed_rows: options?.parsed_rows ?? [],
+      completed_course_codes: options?.completed_course_codes ?? [],
+    }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(errFromBody(data));
@@ -153,12 +164,34 @@ export async function exchangeGoogleOauth(token: string) {
   return data as { success: boolean; user_id: string };
 }
 
-/** Permanently delete the user's account and all stored memory (plans, transcript, etc.). */
+/** Sign out on server: wipe memory + SQLite account (best-effort). */
 export async function deleteAllUserData(userId: string) {
-  const res = await fetch(`${API_BASE}/auth/user/${encodeURIComponent(userId)}/data`, {
-    method: "DELETE",
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(errFromBody(data));
-  return data as { success: boolean };
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 20_000);
+  try {
+    const res = await fetch(`${API_BASE}/auth/user/${encodeURIComponent(userId)}/data`, {
+      method: "DELETE",
+      signal: controller.signal,
+    });
+    const text = await res.text();
+    let data: unknown = {};
+    try {
+      data = text ? JSON.parse(text) : {};
+    } catch {
+      throw new Error(
+        res.ok
+          ? "Invalid response from server."
+          : `Server error (${res.status}). Check VITE_API_BASE points at your API.`,
+      );
+    }
+    if (!res.ok) throw new Error(errFromBody(data));
+    return data as { success: boolean };
+  } catch (e) {
+    if (e instanceof Error && e.name === "AbortError") {
+      throw new Error("Request timed out. Check that the API service is running.");
+    }
+    throw e;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
