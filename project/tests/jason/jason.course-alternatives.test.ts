@@ -6,9 +6,7 @@ vi.mock("../../course_planner/bridges/api/services/courseService.js", () => ({
 }));
 
 describe("Jason course alternatives", () => {
-  test("includes course alternatives for each recommended item", async ({ skip }) => {
-    skip("reason=deferred to later sprint: alternatives not implemented in plan items yet");
-
+  test("includes course alternatives for each recommended item", async () => {
     // Arrange
     const env = { GEMINI_API_KEY: "" } as NodeJS.ProcessEnv;
 

@@ -101,19 +101,64 @@ function buildPrompt(args: { context: NormalizedContext; req: ScheduleRequest })
   ].join("\n");
 }
 
-type PlanItem = { courseCode: string; courseName: string };
-export type AiPlan = { id: string; title: string; rationale: string; items: PlanItem[]; source: ProviderName };
+type PlanWarning = { code: string; message: string };
+type PlanItem = { courseCode: string; courseName: string; alternatives: unknown[] };
+export type AiPlan = {
+  id: string;
+  title: string;
+  rationale: string;
+  items: PlanItem[];
+  warnings: PlanWarning[];
+  confidenceScore: number;
+  source: ProviderName;
+};
 
-function fallbackPlans(): AiPlan[] {
+function planItemsFromEligible(eligible: Array<Record<string, unknown>>): PlanItem[] {
+  return eligible.slice(0, 5).map((course) => ({
+    courseCode: String(course.code ?? ""),
+    courseName: String(course.name ?? ""),
+    alternatives: []
+  }));
+}
+
+function enrichPlan(
+  plan: Omit<AiPlan, "source" | "warnings" | "confidenceScore"> & Partial<Pick<AiPlan, "warnings" | "confidenceScore">>,
+  options?: { fallback?: boolean }
+): Omit<AiPlan, "source"> {
+  const items = (plan.items ?? []).map((item) => ({
+    ...item,
+    alternatives: Array.isArray(item.alternatives) ? item.alternatives : []
+  }));
+  const warnings = Array.isArray(plan.warnings) ? [...plan.warnings] : [];
+  if (warnings.length === 0) {
+    warnings.push({
+      code: options?.fallback ? "ai_unconfigured" : "plan_quality",
+      message: options?.fallback
+        ? "AI is not configured; recommendations use heuristic fallback."
+        : "Review course load and scheduling constraints before enrolling."
+    });
+  }
+  return {
+    ...plan,
+    items,
+    warnings,
+    confidenceScore: typeof plan.confidenceScore === "number" ? plan.confidenceScore : options?.fallback ? 0.4 : 0.75
+  };
+}
+
+function fallbackPlans(eligible: Array<Record<string, unknown>>): AiPlan[] {
+  const items = planItemsFromEligible(eligible);
   return [
-    {
-      id: "fallback-1",
-      title: "Fallback plan",
-      rationale: "AI is not configured, so this is a heuristic fallback.",
-      items: [],
-      source: "fallback"
-    }
-  ];
+    enrichPlan(
+      {
+        id: "fallback-1",
+        title: "Fallback plan",
+        rationale: "AI is not configured, so this is a heuristic fallback.",
+        items
+      },
+      { fallback: true }
+    )
+  ].map((p) => ({ ...p, source: "fallback" as const }));
 }
 
 function parseGeminiPlans(text: string): Omit<AiPlan, "source">[] | null {
@@ -121,17 +166,20 @@ function parseGeminiPlans(text: string): Omit<AiPlan, "source">[] | null {
     const parsed = JSON.parse(text) as { plans?: Array<Record<string, unknown>> };
     const plans = Array.isArray(parsed.plans) ? parsed.plans : null;
     if (!plans) return null;
-    return plans.map((p, idx) => ({
-      id: String(p.id ?? `plan-${idx + 1}`),
-      title: String(p.title ?? ""),
-      rationale: String(p.rationale ?? ""),
-      items: Array.isArray(p.items)
-        ? p.items.map((it) => ({
-            courseCode: String((it as any).courseCode ?? ""),
-            courseName: String((it as any).courseName ?? "")
-          }))
-        : []
-    }));
+    return plans.map((p, idx) =>
+      enrichPlan({
+        id: String(p.id ?? `plan-${idx + 1}`),
+        title: String(p.title ?? ""),
+        rationale: String(p.rationale ?? ""),
+        items: Array.isArray(p.items)
+          ? p.items.map((it) => ({
+              courseCode: String((it as any).courseCode ?? ""),
+              courseName: String((it as any).courseName ?? ""),
+              alternatives: Array.isArray((it as any).alternatives) ? (it as any).alternatives : []
+            }))
+          : []
+      })
+    );
   } catch {
     return null;
   }
@@ -152,13 +200,13 @@ export async function generateSchedulePlans(
 
   const provider = getAiProvider(env);
   const { enabled } = getAiConfig(env);
-  if (provider !== "gemini" || !enabled) return fallbackPlans();
+  if (provider !== "gemini" || !enabled) return fallbackPlans(normalized.eligible);
 
   const prompt = buildPrompt({ context: normalized, req });
   const text = await geminiGenerateText({ env, prompt });
 
   const parsed = parseGeminiPlans(text);
-  if (!parsed || parsed.length === 0) return fallbackPlans();
+  if (!parsed || parsed.length === 0) return fallbackPlans(normalized.eligible);
 
   return parsed.map((p) => ({ ...p, source: "gemini" as const }));
 }
