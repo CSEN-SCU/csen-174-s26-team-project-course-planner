@@ -1,9 +1,5 @@
 import { useCallback, useLayoutEffect, useState } from "react";
-import {
-  exchangeGoogleOauth,
-  login as apiLogin,
-  register as apiRegister,
-} from "../api/client";
+import { exchangeGoogleOauth } from "../api/client";
 import {
   clearGoogleOauthPending,
   isGoogleOauthPending,
@@ -71,62 +67,10 @@ export function useAuth() {
       });
   }, [setUserId]);
 
-  const handleLogin = useCallback(
-    async (username: string, password: string) => {
-      try {
-        const r = await apiLogin(username, password);
-        if (r.success && r.user_id) {
-          setUserId(String(r.user_id));
-          setGoogleAuthError(null);
-          return { ok: true as const };
-        }
-        return { ok: false as const, error: "Invalid username or password." };
-      } catch (e) {
-        const hint = e instanceof Error ? e.message : "Could not reach the server.";
-        const networkish =
-          hint === "Failed to fetch" ||
-          hint.includes("NetworkError") ||
-          hint.includes("fetch resource");
-        return {
-          ok: false as const,
-          error: networkish
-            ? "Cannot reach API — start uvicorn on port 8000, restart `npm run dev`, or check firewall."
-            : hint,
-        };
-      }
-    },
-    [setUserId],
-  );
-
-  const handleRegister = useCallback(
-    async (username: string, password: string) => {
-      try {
-        const r = await apiRegister(username, password);
-        if (!r.success) return { ok: false as const, error: "Username already taken." };
-        return await handleLogin(username, password);
-      } catch (e) {
-        const hint = e instanceof Error ? e.message : "Could not reach the server.";
-        const networkish =
-          hint === "Failed to fetch" ||
-          hint.includes("NetworkError") ||
-          hint.includes("fetch resource");
-        return {
-          ok: false as const,
-          error: networkish
-            ? "Cannot reach API — start uvicorn on port 8000, restart `npm run dev`, or check firewall."
-            : hint,
-        };
-      }
-    },
-    [handleLogin],
-  );
-
   return {
     userId,
     googleAuthError,
     googleAuthPending,
-    handleLogin,
-    handleRegister,
     signOut,
   };
 }

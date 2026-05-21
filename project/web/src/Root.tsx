@@ -14,8 +14,7 @@ import { HomePage } from "./pages/HomePage";
 
 export function Root() {
   const [route, setRoute] = useState(resolveClientRoute);
-  const { userId, googleAuthError, googleAuthPending, handleLogin, handleRegister, signOut } =
-    useAuth();
+  const { userId, googleAuthError, googleAuthPending, signOut } = useAuth();
 
   useEffect(() => {
     const sync = () => setRoute(resolveClientRoute());
@@ -39,12 +38,7 @@ export function Root() {
 
   if (!userId) {
     return (
-      <HomePage
-        onLogin={handleLogin}
-        onRegister={handleRegister}
-        externalAuthError={googleAuthError}
-        authPending={googleAuthPending}
-      />
+      <HomePage externalAuthError={googleAuthError} authPending={googleAuthPending} />
     );
   }
 

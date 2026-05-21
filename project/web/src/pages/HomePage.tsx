@@ -1,21 +1,15 @@
-import { useState } from "react";
 import { GoogleSignInButton } from "../components/GoogleSignInButton";
 import { SiteFooter } from "../components/SiteFooter";
-import { UsernameAuthPanel } from "../components/UsernameAuthPanel";
 
 const TAGLINE =
   "Build your next-quarter schedule from your transcript and course data — personalized recommendations without the Workday maze.";
 
 export type HomePageProps = {
-  onLogin: (username: string, password: string) => Promise<{ ok: boolean; error?: string }>;
-  onRegister: (username: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   externalAuthError?: string | null;
   authPending?: boolean;
 };
 
-export function HomePage({ onLogin, onRegister, externalAuthError, authPending }: HomePageProps) {
-  const [showAltAuth, setShowAltAuth] = useState(false);
-
+export function HomePage({ externalAuthError, authPending }: HomePageProps) {
   return (
     <div className="home-page flex min-h-screen w-screen flex-col overflow-hidden">
       <main className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 py-12">
@@ -45,24 +39,8 @@ export function HomePage({ onLogin, onRegister, externalAuthError, authPending }
               <GoogleSignInButton />
             )}
             <p className="text-xs text-neutral-500">
-              Sign in to save plans, sync Workday, and build your schedule.
+              Sign in with Google to save plans and build your schedule.
             </p>
-          </div>
-
-          <div className="mt-8">
-            <button
-              type="button"
-              onClick={() => setShowAltAuth((v) => !v)}
-              className="text-xs font-medium text-neutral-500 underline-offset-2 transition hover:text-[var(--scu-red)] hover:underline"
-              aria-expanded={showAltAuth}
-            >
-              {showAltAuth ? "Hide username sign-in" : "Sign in with username instead"}
-            </button>
-            {showAltAuth && (
-              <div className="mt-4 flex justify-center">
-                <UsernameAuthPanel onLogin={onLogin} onRegister={onRegister} />
-              </div>
-            )}
           </div>
         </div>
       </main>

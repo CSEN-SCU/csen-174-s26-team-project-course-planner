@@ -3,8 +3,10 @@
 @tailwind utilities;
 
 :root {
-  --scu-red: #c8102e;
-  --scu-dark-red: #8b0000;
+  /* Santa Clara University brand reds */
+  --scu-red: #a32035;
+  --scu-bronco-red: #862633;
+  --scu-dark-red: #862633;
   --scu-white: #ffffff;
   --scu-gray: #f5f5f5;
   --scu-text: #1a1a1a;
@@ -59,4 +61,9 @@ body {
 .home-tagline {
   font-family: "Libre Baskerville", Georgia, serif;
   font-weight: 400;
+}
+
+.site-footer {
+  background-color: var(--scu-bronco-red);
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
 }

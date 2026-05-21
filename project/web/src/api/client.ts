@@ -138,28 +138,6 @@ export async function generateFourYearPlan(
   return data;
 }
 
-export async function login(username: string, password: string) {
-  const res = await fetch(`${API_BASE}/auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(errFromBody(data));
-  return data as { success: boolean; user_id: string };
-}
-
-export async function register(username: string, password: string) {
-  const res = await fetch(`${API_BASE}/auth/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(errFromBody(data));
-  return data as { success: boolean };
-}
-
 /**
  * Swap the short-lived handoff token in ?google_oauth=... for the usable user_id.
  * Backend signs the token with SCU_PLANNER_COOKIE_KEY so URL tampering is rejected.
