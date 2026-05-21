@@ -42,6 +42,8 @@ Two services compose the app:
 | Professor ratings | `project/course_planner/agents/professor_agent.py` | RateMyProfessor GraphQL (parallel); aligns to Find Course instructors when possible |
 | Rate limiting | `project/api/middleware/rate_limit.py` | Per-IP, per-user, per-user-concurrency token bucket on `/api/plan`, `/api/four-year-plan`, `/api/workday/sync` |
 | Calendar + 4-year UI | `project/web/src/components/CalendarView.tsx`, `FourYearPlanView.tsx` | Mon–Fri weekly grid plus 4-year graduation grid overlaying completed transcript history with AI recommendations |
+| **Multi-agent planner (LangGraph)** | `project/course_planner/agents/multi_agent/` | **Experimental** Planner ↔ Verifier ↔ InstructorSelector graph with tool-calling, parallel fan-out, checkpointing + human-in-the-loop. Exposed at `POST /api/plan/v2`. See [section below](#multi-agent-planner-langgraph) |
+| **Eval harness** | `project/course_planner/evals/` | Deterministic rule-based scorers (R1–R6 + injection safety) + A/B runner to compare engines |
 
 ### Tests
 
@@ -98,6 +100,8 @@ npm run dev          # opens http://localhost:5173
 | `SCU_PLANNER_COOKIE_KEY` | **Production:** signing key for auth cookies. Dev uses a placeholder if unset |
 | `COURSE_PLANNER_DB` | Optional absolute path to SQLite DB (tests set this to a temp file) |
 | `MEMORY_TOP_K`, `MEMORY_INJECT_CHAR_BUDGET`, `MEMORY_EMBED_MODEL` | Optional tuning for memory retrieval / prompt size |
+| `MULTI_AGENT_PLAN` | `1` makes legacy `/api/plan` delegate to the LangGraph multi-agent engine (default off) |
+| `PLANNER_REACT` | `0` disables the Planner's ReAct tool-calling loop (single-shot fallback; default on) |
 
 Do **not** commit `.env` or `project/course_planner/data/`.
 
@@ -115,6 +119,84 @@ Without **Find Course Sections**, recommendations still render; calendar uses **
 ### Lecture + lab pairs (SCU)
 
 For subjects like **CSEN / COEN / PHYS / CHEM / ELEN / BIOL**, a course and its **trailing-L** lab (e.g. **CSEN 194** and **CSEN 194L**) are treated as **same-quarter co-requirements** when **both** still appear in `missing_details`. The planner post-processes the model output so one half is not recommended without the other.
+
+---
+
+## Multi-agent planner (LangGraph)
+
+> **Experimental** — runs alongside the default engine; opt-in via `/api/plan/v2`.
+
+The default `/api/plan` is a single Gemini call with post-processing. A second
+engine in [`project/course_planner/agents/multi_agent/`](project/course_planner/agents/multi_agent/)
+re-implements planning as a **LangGraph `StateGraph`** where three roles
+review each other. It runs at `POST /api/plan/v2` (legacy stays default).
+
+```
+START → Planner → Verifier ──[issues & retries<2]→ Planner      (feedback loop)
+                          ├──[clean]→ Send(InstructorSelector) × N ┐  (parallel)
+                          └──[no courses]──────────────────────────┤
+                                                                    ▼
+                                                                Assembler → END
+```
+
+### Roles (3 decision agents + 1 assembler)
+
+| Node | Type | Decision it makes |
+|------|------|-------------------|
+| **Planner** | LLM, **ReAct tool-calling** | Which tools to call (and when) before proposing courses |
+| **Verifier** | **deterministic** (no LLM) | Loop back to Planner / fan out / skip — after checking hallucination, time conflicts, missing labs, uncovered Core |
+| **InstructorSelector** | deterministic, **parallel** | Best-rated section per course + an instructor comparison table |
+| Assembler | deterministic | Merge the plan + instructor picks into the final response |
+
+### Tools the agents can call
+
+A registry of **9 deterministic tools** (`agents/multi_agent/tools.py`) wraps the
+existing schedule/category/title/ratings utilities. The Planner exposes three to
+the model via native Gemini function-calling: `search_schedule`,
+`get_open_req_candidates`, `get_lab_partner`.
+
+### LangGraph features used
+
+- **Conditional edges** — `verifier_router` 3-way routing (loop / fan-out / skip)
+- **`Send` API** — dynamic parallel fan-out: one `InstructorSelector` per course, merged via a state **reducer**
+- **Checkpointing** — `InMemorySaver` (dev) / `SqliteSaver` (durable; survives restart)
+- **`interrupt_before`** — human-in-the-loop: pause before committing a plan that drops a course
+
+### HTTP endpoints
+
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /api/plan/v2` | Run the multi-agent engine end-to-end |
+| `POST /api/plan/v2/review` | Run up to the commit step and return a **draft** for human approval (needs `thread_id`) |
+| `POST /api/plan/v2/resume` | Approve a reviewed draft: resume from the checkpoint and finalize |
+
+Set `MULTI_AGENT_PLAN=1` to make the **legacy** `POST /api/plan` transparently
+delegate to the multi-agent engine (zero frontend change).
+
+### Design notes
+
+- **Verifier is code, not an LLM** — the rules (no conflicts, lab pairing, Core
+  coverage) are deterministic, so they're cheaper and reliable. The LLM is spent
+  only where creativity helps (the Planner).
+- **No `langchain-google-genai`** — native Gemini function-calling inside a
+  LangGraph node keeps the dependency footprint small.
+
+### Evaluation (`agents` quality)
+
+[`project/course_planner/evals/`](project/course_planner/evals/) scores a plan
+against the domain rules with **7 deterministic scorers** (`no_hallucination`,
+`no_time_conflicts`, `labs_paired`, `unit_cap`, `titles_correct`,
+`open_req_coverage`, `no_injection_leak`) — **no LLM-as-judge**, so scoring is
+reproducible and unit-tested (25 tests). The runner A/B-compares engines on
+scenarios derived from a real transcript:
+
+```bash
+cd project/course_planner
+python -m evals.run_eval --engine both          # legacy vs multi_agent A/B
+python -m evals.run_eval --engine multi_agent --json
+```
+
+The LLM produces the plan; the scorers judge it deterministically.
 
 ---
 
