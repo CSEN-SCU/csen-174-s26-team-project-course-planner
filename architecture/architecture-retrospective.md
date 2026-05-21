@@ -114,8 +114,14 @@ We removed "Requirements and Course Ingestion" because the design changes mentio
 ## Tech Debt
 
 Prudent, Deliberate: We are running the live app as two separate Render services, which makes hosting more complicated to set up and maintain.
+
+
 Reckless, Deliberate: Much of the documentation, such as the README is out of date from the current implementation. We are aware this will need to be cleaned up the code to make it easier to understand by someone else.
+
+
 Prudent, Inadvertent: We quickly developed the front end to make it functional, but this had the side effect of lacking good design. Now, as we go back and begin revising we see how we need to make the same functiaonltiy look and feel better for users.
+
+
 Prudent + Inadvertant: We used a # link work around to host multiple separate pages on Render because it worked separately than how front end files were layed out on our local machines for testing. If we were to refine the project further, we would want to design our code base around our hosting infastructure and vice versa.
 
 ## What we would do differently in another sprint
