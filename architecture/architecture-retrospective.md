@@ -53,14 +53,12 @@ C4Context
     System(coursePlanner, "SCU Course Planner", "Web app for next-quarter planning + four-year plan support with AI-assisted recommendations")
 
     System_Ext(gemini, "Google Gemini API", "Generates schedule recommendations and reasoning")
-    System_Ext(scuData, "SCU Course Data Sources", "Workday")
     System_Ext(rateMyProfessor, "RateMyProfessor", "Contains public student reviews of professor")
 
     Rel(student, coursePlanner, "Uses course planning features", "HTTPS")
     Rel(advisor, coursePlanner, "Reviews saved student planning output", "HTTPS")
     Rel(coursePlanner, gemini, "Sends planning context, receives recommendations", "HTTPS/JSON")
     Rel(coursePlanner, rateMyProfessor, "Fetches professor reviews", "HTTPS/API")
-    Rel(coursePlanner, scuData, "Reads course and section information", "Ingest")
 ```
 
 ## Current C4 Container Diagram
