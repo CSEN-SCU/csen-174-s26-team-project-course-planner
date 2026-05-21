@@ -9,7 +9,8 @@ const UNOFFICIAL_DISCLAIMER =
 
 export type SiteFooterProps = {
   userId?: string | null;
-  onSignOut?: () => void;
+  /** Opens delete-user-data flow (wipes server data + signs out). For testing; will become Log out later. */
+  onDeleteUserData?: () => void;
 };
 
 const linkClass =
@@ -18,8 +19,8 @@ const primaryLinkClass =
   "text-sm font-semibold text-white underline-offset-2 transition hover:text-white/80 hover:underline";
 const dividerClass = "text-xs text-white/40";
 
-export function SiteFooter({ userId, onSignOut }: SiteFooterProps = {}) {
-  const showSignOut = Boolean(userId && onSignOut);
+export function SiteFooter({ userId, onDeleteUserData }: SiteFooterProps = {}) {
+  const showDeleteUserData = Boolean(userId && onDeleteUserData);
 
   return (
     <footer className="site-footer shrink-0 px-4 py-3 text-center">
@@ -42,13 +43,13 @@ export function SiteFooter({ userId, onSignOut }: SiteFooterProps = {}) {
         <a href={COURSE_PLANNER_TUTORIAL_HREF} className={linkClass}>
           SCU Course Planner Tutorial
         </a>
-        {showSignOut && (
+        {showDeleteUserData && (
           <>
             <span className={dividerClass} aria-hidden>
               |
             </span>
-            <button type="button" onClick={onSignOut} className={linkClass}>
-              Sign out
+            <button type="button" onClick={onDeleteUserData} className={linkClass}>
+              Delete user data
             </button>
           </>
         )}

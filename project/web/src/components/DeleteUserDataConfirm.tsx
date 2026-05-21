@@ -1,4 +1,4 @@
-type SignOutConfirmProps = {
+type DeleteUserDataConfirmProps = {
   open: boolean;
   busy?: boolean;
   error?: string | null;
@@ -6,13 +6,13 @@ type SignOutConfirmProps = {
   onCancel: () => void;
 };
 
-export function SignOutConfirm({
+export function DeleteUserDataConfirm({
   open,
   busy = false,
   error,
   onConfirm,
   onCancel,
-}: SignOutConfirmProps) {
+}: DeleteUserDataConfirmProps) {
   if (!open) return null;
 
   return (
@@ -24,23 +24,24 @@ export function SignOutConfirm({
       <div
         role="alertdialog"
         aria-modal="true"
-        aria-labelledby="sign-out-title"
-        aria-describedby="sign-out-desc"
+        aria-labelledby="delete-user-data-title"
+        aria-describedby="delete-user-data-desc"
         className="w-full max-w-md rounded-lg border border-neutral-200 bg-white p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <h2
-          id="sign-out-title"
+          id="delete-user-data-title"
           className="text-center text-base font-semibold text-[var(--scu-text)] sm:text-lg"
         >
-          Sign out?
+          Delete user data?
         </h2>
         <p
-          id="sign-out-desc"
+          id="delete-user-data-desc"
           className="mt-3 text-center text-sm leading-relaxed text-neutral-600"
         >
-          You will return to the home page. Saved plans on this device are cleared. We also try
-          to remove your data from the server so you can start fresh when testing.
+          This removes your saved schedules, Academic Progress upload, and chat history from our
+          servers (when reachable) and signs you out on this device. Use this to reset and test
+          from a clean slate.
         </p>
         {error && (
           <p className="mt-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs text-amber-900">
@@ -61,7 +62,7 @@ export function SignOutConfirm({
             disabled={busy}
             className="rounded-md bg-[var(--scu-red)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--scu-dark-red)] disabled:opacity-60"
           >
-            {busy ? "Signing out…" : "Sign out"}
+            {busy ? "Deleting…" : "Delete user data"}
           </button>
         </div>
       </div>
@@ -69,5 +70,5 @@ export function SignOutConfirm({
   );
 }
 
-/** @deprecated Use SignOutConfirm — kept for existing imports during rename. */
-export const DeleteUserDataConfirm = SignOutConfirm;
+/** Alias — same flow as delete user data (sign out + server wipe). */
+export const SignOutConfirm = DeleteUserDataConfirm;

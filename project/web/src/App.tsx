@@ -11,7 +11,7 @@ import { ChatPanel, type ChatUiMessage } from "./components/ChatPanel";
 import { FourYearPlanView } from "./components/FourYearPlanView";
 import { LeftPanel, type MemorySessionRow } from "./components/LeftPanel";
 import type { FourYearPlan, ParsedRow } from "./types";
-import { SignOutConfirm } from "./components/DeleteUserDataConfirm";
+import { DeleteUserDataConfirm } from "./components/DeleteUserDataConfirm";
 import { clearLocalSession } from "./auth/session";
 import { SiteFooter } from "./components/SiteFooter";
 import { CALENDAR_START_HOUR, WEEKDAY_LABELS } from "./types";
@@ -51,9 +51,9 @@ export default function App({ userId, onSignOut }: AppProps) {
   const [fourYearPlan, setFourYearPlan] = useState<FourYearPlan | null>(null);
   const [fourYearGenerating, setFourYearGenerating] = useState(false);
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
-  const [signOutOpen, setSignOutOpen] = useState(false);
-  const [signOutBusy, setSignOutBusy] = useState(false);
-  const [signOutNotice, setSignOutNotice] = useState<string | null>(null);
+  const [deleteDataOpen, setDeleteDataOpen] = useState(false);
+  const [deleteDataBusy, setDeleteDataBusy] = useState(false);
+  const [deleteDataNotice, setDeleteDataNotice] = useState<string | null>(null);
 
   // Load academic progress + past plan snapshots for this user
   useEffect(() => {
@@ -342,15 +342,15 @@ export default function App({ userId, onSignOut }: AppProps) {
     setParsedRows([]);
   }, [onSignOut]);
 
-  const finishSignOut = useCallback(
+  const finishDeleteUserData = useCallback(
     (serverNotice: string | null) => {
-      setSignOutOpen(false);
-      setSignOutBusy(false);
-      setSignOutNotice(null);
+      setDeleteDataOpen(false);
+      setDeleteDataBusy(false);
+      setDeleteDataNotice(null);
       resetLocalPlannerState();
       if (serverNotice) {
         try {
-          sessionStorage.setItem("scu_sign_out_notice", serverNotice);
+          sessionStorage.setItem("scu_delete_user_data_notice", serverNotice);
         } catch {
           /* ignore */
         }
@@ -360,9 +360,9 @@ export default function App({ userId, onSignOut }: AppProps) {
     [resetLocalPlannerState],
   );
 
-  const handleConfirmSignOut = useCallback(async () => {
-    setSignOutBusy(true);
-    setSignOutNotice(null);
+  const handleConfirmDeleteUserData = useCallback(async () => {
+    setDeleteDataBusy(true);
+    setDeleteDataNotice(null);
     let serverNotice: string | null = null;
     try {
       await deleteAllUserData(userId);
@@ -373,14 +373,14 @@ export default function App({ userId, onSignOut }: AppProps) {
         hint +
         ") — upload Academic Progress again after your next sign-in.";
     }
-    finishSignOut(serverNotice);
-  }, [userId, finishSignOut]);
+    finishDeleteUserData(serverNotice);
+  }, [userId, finishDeleteUserData]);
 
-  const handleCancelSignOut = useCallback(() => {
-    if (signOutBusy) return;
-    setSignOutOpen(false);
-    setSignOutNotice(null);
-  }, [signOutBusy]);
+  const handleCancelDeleteUserData = useCallback(() => {
+    if (deleteDataBusy) return;
+    setDeleteDataOpen(false);
+    setDeleteDataNotice(null);
+  }, [deleteDataBusy]);
 
   const handleSlotClick = useCallback((dayIndex: number, slotIndex: number) => {
     const dayName = WEEKDAY_LABELS[dayIndex] ?? "Monday";
@@ -393,12 +393,12 @@ export default function App({ userId, onSignOut }: AppProps) {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--scu-white)]">
-      <SignOutConfirm
-        open={signOutOpen}
-        busy={signOutBusy}
-        error={signOutNotice}
-        onConfirm={() => void handleConfirmSignOut()}
-        onCancel={handleCancelSignOut}
+      <DeleteUserDataConfirm
+        open={deleteDataOpen}
+        busy={deleteDataBusy}
+        error={deleteDataNotice}
+        onConfirm={() => void handleConfirmDeleteUserData()}
+        onCancel={handleCancelDeleteUserData}
       />
       <div className="flex min-h-0 flex-1 overflow-hidden">
       <LeftPanel
@@ -469,7 +469,7 @@ export default function App({ userId, onSignOut }: AppProps) {
         setParsedRows={setParsedRows}
       />
       </div>
-      <SiteFooter userId={userId} onSignOut={() => setSignOutOpen(true)} />
+      <SiteFooter userId={userId} onDeleteUserData={() => setDeleteDataOpen(true)} />
     </div>
   );
 }

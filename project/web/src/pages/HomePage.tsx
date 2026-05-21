@@ -11,14 +11,14 @@ export type HomePageProps = {
 };
 
 export function HomePage({ externalAuthError, authPending }: HomePageProps) {
-  const [signOutNotice, setSignOutNotice] = useState<string | null>(null);
+  const [deleteDataNotice, setDeleteDataNotice] = useState<string | null>(null);
 
   useEffect(() => {
     try {
-      const msg = sessionStorage.getItem("scu_sign_out_notice");
+      const msg = sessionStorage.getItem("scu_delete_user_data_notice");
       if (msg) {
-        setSignOutNotice(msg);
-        sessionStorage.removeItem("scu_sign_out_notice");
+        setDeleteDataNotice(msg);
+        sessionStorage.removeItem("scu_delete_user_data_notice");
       }
     } catch {
       /* ignore */
@@ -38,12 +38,12 @@ export function HomePage({ externalAuthError, authPending }: HomePageProps) {
             {TAGLINE}
           </p>
 
-          {signOutNotice && (
+          {deleteDataNotice && (
             <p
               role="status"
               className="mx-auto mb-4 max-w-sm rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
             >
-              {signOutNotice}
+              {deleteDataNotice}
             </p>
           )}
 

@@ -164,7 +164,7 @@ export async function exchangeGoogleOauth(token: string) {
   return data as { success: boolean; user_id: string };
 }
 
-/** Sign out on server: wipe memory + SQLite account (best-effort). */
+/** Delete user data on server: wipe memory + SQLite account (best-effort). */
 export async function deleteAllUserData(userId: string) {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 20_000);
