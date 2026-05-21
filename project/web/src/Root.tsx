@@ -1,34 +1,24 @@
 import { useEffect, useState } from "react";
 import App from "./App";
+import { useAuth } from "./hooks/useAuth";
+import {
+  ACADEMIC_PROGRESS_TUTORIAL_PATH,
+  COURSE_PLANNER_TUTORIAL_PATH,
+  DATA_DISCLOSURE_PATH,
+  resolveClientRoute,
+} from "./lib/routes";
 import { AcademicProgressExportTutorialPage } from "./pages/AcademicProgressExportTutorialPage";
 import { CoursePlannerTutorialPage } from "./pages/CoursePlannerTutorialPage";
 import { DataDisclosurePage } from "./pages/DataDisclosurePage";
-
-function normalizePath(pathname: string): string {
-  const trimmed = pathname.replace(/\/+$/, "");
-  return trimmed === "" ? "/" : trimmed;
-}
-
-/** Client route: hash works on static hosts (Render) without server rewrites. */
-function currentRoute(): string {
-  const hash = window.location.hash.replace(/^#\/?/, "");
-  if (hash === "data-disclosure") {
-    return "/data-disclosure";
-  }
-  if (hash === "academic-progress-export-tutorial") {
-    return "/academic-progress-export-tutorial";
-  }
-  if (hash === "course-planner-tutorial") {
-    return "/course-planner-tutorial";
-  }
-  return normalizePath(window.location.pathname);
-}
+import { HomePage } from "./pages/HomePage";
 
 export function Root() {
-  const [route, setRoute] = useState(currentRoute);
+  const [route, setRoute] = useState(resolveClientRoute);
+  const { userId, googleAuthError, googleAuthPending, handleLogin, handleRegister, signOut } =
+    useAuth();
 
   useEffect(() => {
-    const sync = () => setRoute(currentRoute());
+    const sync = () => setRoute(resolveClientRoute());
     window.addEventListener("hashchange", sync);
     window.addEventListener("popstate", sync);
     return () => {
@@ -37,14 +27,26 @@ export function Root() {
     };
   }, []);
 
-  if (route === "/data-disclosure") {
+  if (route === DATA_DISCLOSURE_PATH) {
     return <DataDisclosurePage />;
   }
-  if (route === "/academic-progress-export-tutorial") {
+  if (route === ACADEMIC_PROGRESS_TUTORIAL_PATH) {
     return <AcademicProgressExportTutorialPage />;
   }
-  if (route === "/course-planner-tutorial") {
+  if (route === COURSE_PLANNER_TUTORIAL_PATH) {
     return <CoursePlannerTutorialPage />;
   }
-  return <App />;
+
+  if (!userId) {
+    return (
+      <HomePage
+        onLogin={handleLogin}
+        onRegister={handleRegister}
+        externalAuthError={googleAuthError}
+        authPending={googleAuthPending}
+      />
+    );
+  }
+
+  return <App userId={userId} onSignOut={signOut} />;
 }

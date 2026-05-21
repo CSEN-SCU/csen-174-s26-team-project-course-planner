@@ -1,18 +1,33 @@
-# Render: `/data-disclosure` and other client routes
+# Render: client routes (Data Disclosure, future onboarding)
 
-Render **does not** read Netlify-style `public/_redirects` files. A link to `/data-disclosure` returns **404 Not Found** unless you add a **Rewrite** rule.
+## What you need on Render today: **nothing**
 
-The app footer uses `#/data-disclosure` so **Data Disclosure works without any dashboard change**.
+The app uses **hash routing** for Data Disclosure:
+
+- Footer link: `#/data-disclosure`
+- Full URL example: `https://your-frontend.onrender.com/#/data-disclosure`
+
+Render always serves `/index.html` for the site root. Hash changes are handled entirely in the browser, so you do **not** need Redirect/Rewrite rules for disclosure to work.
+
+`public/_redirects` is for Netlify-style hosts only — **Render ignores it.**
+
+## Google OAuth
+
+After sign-in, Google redirects to `https://your-frontend.onrender.com/?google_oauth=...` (root + query string). That path is also served by `index.html` with no extra config.
 
 ## Optional: clean URL `/data-disclosure` (no `#`)
 
-In the Render dashboard for the **static site** service:
+Only add this if you want shareable links **without** the hash. It is **not required** for the footer link to work.
 
-1. Open the service → **Redirects** (or **Redirects/Rewrites**).
-2. Add a rule:
+1. Render dashboard → your **static site** service → **Redirects** / **Redirects/Rewrites**
+2. Add:
    - **Source:** `/*`
    - **Destination:** `/index.html`
    - **Action:** **Rewrite** (not Redirect)
 3. Save and redeploy if prompted.
 
-Then `https://your-site.onrender.com/data-disclosure` loads the SPA and `Root.tsx` can show the disclosure page.
+`Root.tsx` already recognizes both `#/data-disclosure` and `/data-disclosure` when that rewrite exists.
+
+## Future onboarding slides
+
+When you add a forced first-visit modal, prefer a hash route (e.g. `#/welcome`) or in-app state only — same pattern as disclosure — so you avoid new Render rules per screen.

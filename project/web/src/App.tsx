@@ -1,18 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   deleteAllUserData,
   deleteMemory,
-  exchangeGoogleOauth,
   generateFourYearPlan,
   getMemory,
   saveMemory,
 } from "./api/client";
-import {
-  clearGoogleOauthPending,
-  isGoogleOauthPending,
-  persistUserId,
-  readStoredUserId,
-} from "./auth/session";
 import { CalendarView } from "./components/CalendarView";
 import { ChatPanel, type ChatUiMessage } from "./components/ChatPanel";
 import { FourYearPlanView } from "./components/FourYearPlanView";
@@ -25,13 +18,12 @@ import { CALENDAR_START_HOUR, WEEKDAY_LABELS } from "./types";
 const WELCOME_TEXT =
   "Upload your Academic Progress file or describe your preferences to get started.";
 
-export default function App() {
-  const [userId, setUserIdState] = useState<string | null>(() => readStoredUserId());
-  const setUserId = useCallback((id: string | null) => {
-    persistUserId(id);
-    setUserIdState(id);
-  }, []);
-  const [googleAuthPending, setGoogleAuthPending] = useState(() => isGoogleOauthPending());
+export type AppProps = {
+  userId: string;
+  onSignOut: () => void;
+};
+
+export default function App({ userId, onSignOut }: AppProps) {
   const [missingDetails, setMissingDetails] = useState<unknown[]>([]);
   const [planResult, setPlanResult] = useState<Record<string, unknown> | null>(null);
   const [messages, setMessages] = useState<ChatUiMessage[]>([
@@ -58,67 +50,12 @@ export default function App() {
   const [fourYearPlan, setFourYearPlan] = useState<FourYearPlan | null>(null);
   const [fourYearGenerating, setFourYearGenerating] = useState(false);
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
-  const [googleAuthError, setGoogleAuthError] = useState<string | null>(null);
   const [deleteDataOpen, setDeleteDataOpen] = useState(false);
   const [deleteDataBusy, setDeleteDataBusy] = useState(false);
   const [deleteDataError, setDeleteDataError] = useState<string | null>(null);
 
-  // Consume Google OAuth handoff token before paint when possible (single-use).
-  useLayoutEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get("google_oauth");
-    const err = params.get("google_oauth_error");
-
-    if (!token && !err) return;
-
-    // Always clear the URL so a reload doesn't replay the handoff.
-    params.delete("google_oauth");
-    params.delete("google_oauth_error");
-    const q = params.toString();
-    window.history.replaceState({}, document.title, q ? `?${q}` : window.location.pathname);
-
-    if (err) {
-      clearGoogleOauthPending();
-      setGoogleAuthPending(false);
-      setGoogleAuthError(
-        err === "access_denied" ? "Google sign-in was cancelled." : "Google sign-in failed.",
-      );
-      return;
-    }
-    if (!token) {
-      clearGoogleOauthPending();
-      setGoogleAuthPending(false);
-      return;
-    }
-
-    setGoogleAuthPending(true);
-    void exchangeGoogleOauth(token)
-      .then((r) => {
-        if (r.success && r.user_id) {
-          setUserId(String(r.user_id));
-          setGoogleAuthError(null);
-        } else {
-          setGoogleAuthError("Google sign-in failed. Please try again.");
-        }
-      })
-      .catch(() => {
-        setGoogleAuthError("Google sign-in failed. Please try again.");
-      })
-      .finally(() => {
-        clearGoogleOauthPending();
-        setGoogleAuthPending(false);
-      });
-  }, [setUserId]);
-
-  // Load academic progress + past plan snapshots on login
+  // Load academic progress + past plan snapshots for this user
   useEffect(() => {
-    if (!userId) {
-      setMissingDetails([]);
-      setFileUploaded(false);
-      setPlanSnapshots([]);
-      setParsedRows([]);
-      return;
-    }
     void getMemory(userId)
       .then((r) => {
         const mems: Record<string, unknown>[] = Array.isArray(r.memories) ? r.memories : [];
@@ -387,7 +324,7 @@ export default function App() {
   }, [missingDetails, userId, fourYearGenerating, activeSessionId, planSnapshots]);
 
   const resetAfterAccountDeleted = useCallback(() => {
-    setUserId(null);
+    onSignOut();
     setMissingDetails([]);
     setPlanResult(null);
     setMessages([{ id: "m0", role: "assistant", content: WELCOME_TEXT }]);
@@ -401,11 +338,9 @@ export default function App() {
     setFourYearPlan(null);
     setFourYearGenerating(false);
     setParsedRows([]);
-    setGoogleAuthError(null);
-  }, [setUserId]);
+  }, [onSignOut]);
 
   const handleConfirmDeleteUserData = useCallback(async () => {
-    if (!userId) return;
     setDeleteDataBusy(true);
     setDeleteDataError(null);
     try {
@@ -445,14 +380,11 @@ export default function App() {
       />
       <div className="flex min-h-0 flex-1 overflow-hidden">
       <LeftPanel
-        userId={userId}
         sessions={sessions}
         activeSessionId={activeSessionId}
         onSelectSession={handleSelectSession}
         onDeleteSession={handleDeleteSession}
         onNewPlan={handleNewPlan}
-        externalAuthError={googleAuthError}
-        authPending={googleAuthPending}
       />
 
       {/* Main view area with tab toggle */}
