@@ -171,3 +171,22 @@ export async function deleteAllUserData(userId: string) {
     window.clearTimeout(timeout);
   }
 }
+
+export type OfferedCourse = {
+  course: string;
+  title: string | null;
+  units: number | null;
+  professor: string | null;
+  meeting_days: number[];
+  meeting_start_min: number | null;
+  meeting_end_min: number | null;
+  lab_partner: string | null;
+};
+
+/** Fetch the next-term course catalog for the manual "+ Add course" picker. */
+export async function listCourses() {
+  const res = await fetch(`${API_BASE}/courses`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(errFromBody(data));
+  return (data.courses as OfferedCourse[]) ?? [];
+}

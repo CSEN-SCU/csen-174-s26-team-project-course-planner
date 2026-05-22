@@ -5,7 +5,9 @@ import {
   generateFourYearPlan,
   getMemory,
   saveMemory,
+  type OfferedCourse,
 } from "./api/client";
+import { AddCoursePicker } from "./components/AddCoursePicker";
 import { CalendarView } from "./components/CalendarView";
 import { ChatPanel, type ChatUiMessage } from "./components/ChatPanel";
 import { FourYearPlanView } from "./components/FourYearPlanView";
@@ -274,6 +276,39 @@ export default function App({ userId, onSignOut }: AppProps) {
     setLocalOverride(base.filter((_, i) => i !== idx));
   }, [localOverride, calendarRecommended]);
 
+  // Manual "+ Add course": append picked courses (+ lab co-requisite) to the
+  // live edit layer so they land on the calendar immediately — no AI call.
+  const handleAddCourses = useCallback((picked: OfferedCourse[]) => {
+    const base = localOverride ?? calendarRecommended ?? [];
+    const present = new Set(
+      base.map((r) => String((r as { course?: unknown }).course ?? "").trim().toUpperCase()),
+    );
+    const additions = picked
+      .filter((c) => !present.has(c.course.trim().toUpperCase()))
+      .map((c) => ({
+        course: c.course,
+        title: c.title ?? undefined,
+        units: c.units ?? undefined,
+        best_professor: c.professor ?? undefined,
+        meeting_days: c.meeting_days,
+        meeting_start_min: c.meeting_start_min,
+        meeting_end_min: c.meeting_end_min,
+        category: "Manually added",
+        reason: "Added manually",
+        _manualAdd: true,
+      }));
+    if (additions.length === 0) return;
+    setLocalOverride([...base, ...additions]);
+  }, [localOverride, calendarRecommended]);
+
+  const effectiveCodes = useMemo(
+    () =>
+      (effectiveRecommended ?? []).map((r) =>
+        String((r as { course?: unknown }).course ?? ""),
+      ),
+    [effectiveRecommended],
+  );
+
   const handleGenerateFourYearPlan = useCallback(async () => {
     if (!missingDetails.length || fourYearGenerating) return;
     setFourYearGenerating(true);
@@ -442,6 +477,11 @@ export default function App({ userId, onSignOut }: AppProps) {
           >
             4-Year Plan
           </button>
+          {viewMode === "calendar" && (
+            <div className="ml-auto flex items-center pb-1 pr-1">
+              <AddCoursePicker existingCodes={effectiveCodes} onAdd={handleAddCourses} />
+            </div>
+          )}
         </div>
 
         {viewMode === "calendar" ? (

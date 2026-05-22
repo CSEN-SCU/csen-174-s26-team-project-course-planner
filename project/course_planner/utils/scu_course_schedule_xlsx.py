@@ -832,3 +832,65 @@ def all_sections_for_course(
                 out.append(sec)
     out.sort(key=lambda s: s["section"])
     return out
+
+
+# ── Course catalog listing (manual add UI) ──────────────────────────────────
+
+_LAB_PAIR_SUBJECTS = frozenset(
+    {"CSEN", "COEN", "CSCI", "ELEN", "ECEN", "PHYS", "CHEM", "BIOL", "MECH"}
+)
+
+
+def list_offered_courses(path: Path | None = None) -> list[dict[str, Any]]:
+    """Return every distinct course offered next term, shaped for the manual
+    "+ Add course" picker AND for direct placement on the calendar.
+
+    Each entry:
+      {course, title, units, professor, meeting_days, meeting_start_min,
+       meeting_end_min, lab_partner}
+
+    Meeting fields come from the section index (the representative section);
+    ``lab_partner`` is the trailing-L (or de-L) co-requisite code when that
+    partner is itself offered, so the frontend can auto-add the pair.
+    """
+    sched = load_schedule_section_index(path)
+    titles = load_course_titles_index(path)
+    units = load_course_units_index(path)
+    if not sched:
+        return []
+
+    # Deduplicate by (subject, number); aliases (COEN mirror of CSEN) are
+    # already present as separate keys in the index — collapse them so the
+    # picker doesn't show CSEN 122 and COEN 122 as two rows.
+    seen: set[tuple[str, str]] = set()
+    out: list[dict[str, Any]] = []
+    for (subj, num), entry in sched.items():
+        # Skip the mirrored alias rows: keep the CSEN/ECEN spelling, drop the
+        # COEN/ELEN duplicate when the primary exists.
+        if subj in {"COEN", "ELEN"}:
+            primary = {"COEN": "CSEN", "ELEN": "ECEN"}[subj]
+            if (primary, num) in sched:
+                continue
+        if (subj, num) in seen:
+            continue
+        seen.add((subj, num))
+        code = f"{subj} {num}"
+        instructors = list(entry.get("instructors") or [])
+        lab_partner = None
+        if subj in _LAB_PAIR_SUBJECTS:
+            partner_num = num[:-1] if num.endswith("L") else f"{num}L"
+            partner_keys = planned_section_keys(f"{subj} {partner_num}")
+            if any(k in sched for k in partner_keys):
+                lab_partner = f"{subj} {partner_num}"
+        out.append({
+            "course": code,
+            "title": course_title_for(code, titles),
+            "units": course_units_for(code, units),
+            "professor": instructors[0] if instructors else None,
+            "meeting_days": list(entry.get("meeting_days") or []),
+            "meeting_start_min": entry.get("meeting_start_min"),
+            "meeting_end_min": entry.get("meeting_end_min"),
+            "lab_partner": lab_partner,
+        })
+    out.sort(key=lambda c: (c["course"].split()[0], c["course"]))
+    return out
