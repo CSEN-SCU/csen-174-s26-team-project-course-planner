@@ -41,7 +41,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python3 -m pip install --upgrade pip
-          python3 -m pip install -r project/api/requirements.txt -r project/course_planner/requirements.txt
+          python3 -m pip install -r project/requirements.txt
 
       - name: Run Python tests (pytest under project/tests)
         working-directory: project
