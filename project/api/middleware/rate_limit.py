@@ -2,10 +2,9 @@
 
 Why this exists
 ---------------
-``/api/plan`` and ``/api/four-year-plan`` invoke Gemini per request and
-``/api/workday/sync`` spins up a Playwright browser. Without limits, a single
-user (or attacker) can spam regenerate and burn the API budget ("denial of
-wallet") while also collapsing UX for everyone else.
+``/api/plan`` and ``/api/four-year-plan`` invoke Gemini per request. Without
+limits, a single user (or attacker) can spam regenerate and burn the API budget
+("denial of wallet") while also collapsing UX for everyone else.
 
 This module provides a *zero-dependency* token-bucket limiter with three
 independent scopes per route:
@@ -78,11 +77,9 @@ class RouteLimits:
 # Defaults match the rate-limit spec in the security review:
 #   /api/plan           — 10/min per IP, 20/min per user, max 2 concurrent
 #   /api/four-year-plan —  5/min per IP, 10/min per user, max 1 concurrent
-#   /api/workday/sync   —  2/min per IP,  3/min per user, max 1 concurrent
 DEFAULT_LIMITS: Dict[str, RouteLimits] = {
     "plan": RouteLimits(per_minute_ip=10, per_minute_user=20, max_concurrent_per_user=2),
     "four_year_plan": RouteLimits(per_minute_ip=5, per_minute_user=10, max_concurrent_per_user=1),
-    "workday_sync": RouteLimits(per_minute_ip=2, per_minute_user=3, max_concurrent_per_user=1),
 }
 
 

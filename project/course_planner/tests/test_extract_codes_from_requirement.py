@@ -1,6 +1,6 @@
 """Tests for ``_extract_codes_from_requirement`` regex extraction.
 
-The Workday Academic Progress export has course codes embedded in free-form
+The manually exported Academic Progress file has course codes embedded in free-form
 ``requirement`` strings rather than a separate code column (column 3 / D is
 ``Registrations Used`` — usually empty on the not-satisfied summary rows).
 The planning agent leans on this regex to recover codes from text like:

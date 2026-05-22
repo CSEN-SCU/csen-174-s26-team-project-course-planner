@@ -46,7 +46,6 @@ Voice transcription uses the `SpeechRecognition` package and **Google’s speech
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Google OAuth web client for account sign-in
 - `GOOGLE_OAUTH_REDIRECT_URI` — must match the Authorized redirect URI in Google Cloud Console
 - `SCU_PLANNER_COOKIE_KEY` — signs OAuth state + handoff token
-- `SCU_WORKDAY_URL` — the Workday task URL for View My Academic Progress (used by the Playwright scraper)
 - `FRONTEND_BASE_URL` — where the API redirects the browser after Google sign-in (default `http://localhost:5173`)
 - `COURSE_PLANNER_DB` — optional path to SQLite DB
 - `MEMORY_COMPACTION_TRIGGER_BYTES` — byte threshold before memory file is compacted (default 512KB)
@@ -55,7 +54,7 @@ Voice transcription uses the `SpeechRecognition` package and **Google’s speech
 - `agents/` — planning, four-year planning, professor, memory, orchestrator agents
 - `auth/` — `users_db.py` (SQLite-backed OAuth identities), `google_oauth.py`, `oauth_state.py`
 - `db/` — SQLite connection, schema, migrations
-- `utils/` — xlsx parsers, schedule index, Workday scraper, helpers
+- `utils/` — xlsx parsers, schedule index, helpers
 - `specs/` — Ralph specs (source of truth for behavior)
 - `data/` — local SQLite DB + per-user memory files (gitignored)
 

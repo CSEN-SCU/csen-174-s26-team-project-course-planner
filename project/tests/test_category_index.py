@@ -10,7 +10,7 @@ The schedule xlsx has a free-form ``Course Tags`` column shaped like:
 
 ``_parse_course_tag_codes`` splits these into the short code + the long
 description (both indexed) so the planning agent can match either side
-of a Workday requirement string against the same key set.
+of an Academic Progress export requirement string against the same key set.
 
 ``load_category_course_index`` then walks the xlsx and builds a reverse
 map ``{normalized_tag: [course_codes]}`` used by the open-requirement

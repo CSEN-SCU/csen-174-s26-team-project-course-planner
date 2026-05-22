@@ -1,11 +1,11 @@
-"""Lab co-requirement pairing works with Workday-style missing_details.
+"""Lab co-requirement pairing works with Academic Progress export rows.
 
 The existing test_lab_pairing.py uses items with explicit ``course="CSEN 194"``
-fields. Real Workday transcripts ship ``course=None`` for every row — the
-codes live inside the ``requirement`` text (e.g. ``"CSEN/COEN 194/L"``).
-The lab pairer originally built its lookup with ``item.get("course")``,
-which silently became an empty index for Workday items and let labs vanish
-on follow-up turns.
+fields. Real Academic Progress exports often ship ``course=None`` for every
+row - the codes live inside the ``requirement`` text (for example,
+``"CSEN/COEN 194/L"``). The lab pairer originally built its lookup with
+``item.get("course")``, which silently became an empty index for export rows
+and let labs vanish on follow-up turns.
 
 These tests pin the regression: the pairer must use ``_resolve_item_codes``
 under the hood and survive a CSEN/COEN alias swap on the partner lookup.
@@ -16,28 +16,28 @@ from __future__ import annotations
 from agents import planning_agent
 
 
-# Workday-style item: ``course=None``; codes only appear in ``requirement``.
-def _workday(requirement: str, units: int = 5) -> dict:
+# Academic Progress export item: ``course=None``; codes only appear in ``requirement``.
+def _academic_progress_export(requirement: str, units: int = 5) -> dict:
     return {"course": None, "requirement": requirement, "status": "Not Satisfied", "units": units}
 
 
-# ── md_by_code lookup (the regression's root cause) ──────────────────────────
+# -- md_by_code lookup (the regression's root cause) --------------------------
 
 
-def test_pair_resolves_partner_via_extracted_codes_workday_format():
+def test_pair_resolves_partner_via_extracted_codes_academic_progress_export_format():
     """Lecture-only recommendation must still pair the lab even when
     every missing_details item has ``course=None``."""
     recommended = [
         {"course": "CSEN 194", "category": "Senior Design", "units": 3, "reason": "kickoff"},
     ]
     missing_details = [
-        _workday("Computer Science and Engineering Major: CSEN/COEN 194/L", units=5),
+        _academic_progress_export("Computer Science and Engineering Major: CSEN/COEN 194/L", units=5),
     ]
 
     paired = planning_agent._pair_lab_corequirements(recommended, missing_details)
 
     codes = {item["course"] for item in paired}
-    assert "CSEN 194L" in codes, "lab partner must be auto-added for Workday format"
+    assert "CSEN 194L" in codes, "lab partner must be auto-added for Academic Progress export format"
 
 
 def test_pair_handles_ampersand_continuation():
@@ -46,7 +46,7 @@ def test_pair_handles_ampersand_continuation():
         {"course": "CSEN 122", "category": "Major", "units": 4, "reason": "core"},
     ]
     missing_details = [
-        _workday("Computer Science and Engineering Major: CSEN/COEN 122 & 122L"),
+        _academic_progress_export("Computer Science and Engineering Major: CSEN/COEN 122 & 122L"),
     ]
 
     paired = planning_agent._pair_lab_corequirements(recommended, missing_details)
@@ -77,9 +77,9 @@ def test_pair_uses_csen_coen_alias_for_partner_lookup():
 
 def test_extract_regex_does_not_handle_bare_ampersand_continuation():
     """Document a known regex limitation: ``"COEN 194 & 194L"`` (no slash
-    subject group) only yields ``COEN 194``.  Real Workday transcripts
+    subject group) only yields ``COEN 194``. Real Academic Progress exports
     always use the slash form ``"CSEN/COEN 194/L"`` or ``"CSEN/COEN 194
-    & 194L"`` so this edge has never bitten us in production — but the
+    & 194L"`` so this edge has never bitten us in production - but the
     test pins current behaviour so a future regex tweak can intentionally
     extend support and update this baseline."""
     from agents.planning_agent import _extract_codes_from_requirement
@@ -91,7 +91,7 @@ def test_pair_added_lab_carries_title_fallback():
     recommended = [
         {"course": "CSEN 122", "category": "Major", "units": 4, "reason": "core"},
     ]
-    missing_details = [_workday("CSEN/COEN 122 & 122L")]
+    missing_details = [_academic_progress_export("CSEN/COEN 122 & 122L")]
 
     paired = planning_agent._pair_lab_corequirements(recommended, missing_details)
     lab = next(i for i in paired if i["course"].endswith("122L"))
@@ -103,7 +103,7 @@ def test_pair_does_not_duplicate_when_lab_already_recommended():
         {"course": "CSEN 194", "category": "Senior Design", "units": 3, "reason": "kickoff"},
         {"course": "CSEN 194L", "category": "Senior Design", "units": 1, "reason": "lab"},
     ]
-    missing_details = [_workday("CSEN/COEN 194/L")]
+    missing_details = [_academic_progress_export("CSEN/COEN 194/L")]
 
     paired = planning_agent._pair_lab_corequirements(recommended, missing_details)
     codes = [i["course"] for i in paired]
@@ -112,14 +112,14 @@ def test_pair_does_not_duplicate_when_lab_already_recommended():
 
 
 def test_pair_no_op_when_partner_not_in_any_requirement():
-    """A standalone CSEN 9 with no lab in any requirement text → no pairing.
+    """A standalone CSEN 9 with no lab in any requirement text -> no pairing.
 
     Use a low number that doesn't trigger lab patterns elsewhere."""
     recommended = [
         {"course": "CSEN 9", "category": "Major", "units": 4, "reason": "intro"},
     ]
     # No 9L anywhere in the missing_details text
-    missing_details = [_workday("CSEN 9 only")]
+    missing_details = [_academic_progress_export("CSEN 9 only")]
 
     paired = planning_agent._pair_lab_corequirements(recommended, missing_details)
     assert [i["course"] for i in paired] == ["CSEN 9"]

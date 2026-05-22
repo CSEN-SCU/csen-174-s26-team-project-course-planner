@@ -23,5 +23,5 @@ There is currently **no** student-facing upload for this file; updating it is an
 
 ## Related docs
 
-- [`docs/outdated-features.md`](outdated-features.md) — deprecated Workday auto-sync, username/password login, etc.
+- [`docs/outdated-features.md`](outdated-features.md) — removed Workday auto-sync, deprecated username/password login, etc.
 - [`AGENTS.md`](../AGENTS.md) — domain rules (lab pairing, units, etc.)

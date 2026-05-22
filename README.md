@@ -10,20 +10,19 @@
 
 ## SCU Course Planner
 
-A web app for Santa Clara University students. Upload SCU **View My
-Academic Progress** (`.xlsx`) or sync directly from Workday, describe
-preferences in natural language, and get a **recommended next-quarter
-schedule** and **multi-quarter graduation plan** with **RateMyProfessor**
-enrichment and a **weekly calendar** preview (when **Find Course
-Sections** `.xlsx` is present). Per-user **long-term memory** (RAG)
-and **follow-up chat replies** support iterative planning across
-sessions.
+A web app for Santa Clara University students. Manually export SCU **View My
+Academic Progress** from Workday as an Excel file, upload it, describe
+preferences in natural language, and get a **recommended next-quarter schedule**
+and **multi-quarter graduation plan** with **RateMyProfessor** enrichment and a
+**weekly calendar** preview (when **Find Course Sections** `.xlsx` is present).
+Per-user **long-term memory** (RAG) and **follow-up chat replies** support
+iterative planning across sessions.
 
 Two services compose the app:
 
 | Path | Stack | Role |
 |------|-------|------|
-| [`project/api/`](project/api/) | FastAPI + Python agents | REST API for auth, transcript upload, plan generation, four-year plan, Workday sync, memory CRUD |
+| [`project/api/`](project/api/) | FastAPI + Python agents | REST API for auth, Academic Progress upload, plan generation, four-year plan, memory CRUD |
 | [`project/web/`](project/web/) | React + Vite + Tailwind | SPA: login + chat + calendar + 4-year grid |
 | [`project/course_planner/`](project/course_planner/) | Python package | Shared **agents**, **SQLite + sqlite-vec**, **auth/users_db**, and **xlsx parsers** used by the FastAPI service |
 
@@ -38,9 +37,8 @@ Two services compose the app:
 | Planning | `project/course_planner/agents/planning_agent.py` | **Gemini** structured JSON: `recommended`, `total_units`, `advice`, **`assistant_reply`**. **Lecture+lab pairs** (e.g. CSEN 194 + CSEN 194L) when both appear in the gap; retries / fallback models; **`meta` / `warnings` / per-course `alternatives`**. Prompt-injection sanitiser on user text |
 | Four-year plan | `project/course_planner/agents/four_year_planning_agent.py` | Multi-quarter graduation grid; surfaces open Core/GE candidates via Course-Tags index; typed `EmptyPlanError` / `InconsistentPlanError` |
 | Requirement parsing | `project/course_planner/utils/academic_progress_xlsx.py` | Parses DegreeWorks export; builds `missing_details` and `parsed_rows` |
-| Workday sync | `project/api/routers/workday.py`, `project/course_planner/utils/workday_scraper.py` | Playwright-driven export with search-bar fallback; URL allowlist + error scrubbing |
 | Professor ratings | `project/course_planner/agents/professor_agent.py` | RateMyProfessor GraphQL (parallel); aligns to Find Course instructors when possible |
-| Rate limiting | `project/api/middleware/rate_limit.py` | Per-IP, per-user, per-user-concurrency token bucket on `/api/plan`, `/api/four-year-plan`, `/api/workday/sync` |
+| Rate limiting | `project/api/middleware/rate_limit.py` | Per-IP, per-user, per-user-concurrency token bucket on `/api/plan`, `/api/four-year-plan` |
 | Calendar + 4-year UI | `project/web/src/components/CalendarView.tsx`, `FourYearPlanView.tsx` | Mon–Fri weekly grid plus 4-year graduation grid overlaying completed transcript history with AI recommendations |
 | **Multi-agent planner (LangGraph)** | `project/course_planner/agents/multi_agent/` | **Experimental** Planner ↔ Verifier ↔ InstructorSelector graph with tool-calling, parallel fan-out, checkpointing + human-in-the-loop. Exposed at `POST /api/plan/v2`. See [section below](#multi-agent-planner-langgraph) |
 | **Eval harness** | `project/course_planner/evals/` | Deterministic rule-based scorers (R1–R6 + injection safety) + A/B runner to compare engines |
@@ -57,7 +55,7 @@ python3 -m pytest tests/
 ### Architecture (high level)
 
 ```
-Academic Progress (.xlsx)  ──or──>  Workday (Playwright sync)
+Manual Academic Progress export (.xlsx/.xlsm)
         ↓
 Requirement Parser → missing_details + parsed_rows
         ↓
@@ -207,7 +205,7 @@ The LLM produces the plan; the scorers judge it deterministically.
 | [`product-vision.md`](product-vision.md) | Product vision + HMW |
 | [`problem_framing_canvas.md`](problem_framing_canvas.md) | Problem Framing Canvas |
 | [`architecture/architecture.md`](architecture/architecture.md) | C4 diagrams |
-| [`project/api/`](project/api/) | FastAPI service (auth, plan, four-year-plan, Workday sync, memory) |
+| [`project/api/`](project/api/) | FastAPI service (auth, upload, plan, four-year-plan, memory) |
 | [`project/web/`](project/web/) | React + Vite frontend |
 | [`prototypes/`](prototypes/) | Teammate divergent prototypes |
 

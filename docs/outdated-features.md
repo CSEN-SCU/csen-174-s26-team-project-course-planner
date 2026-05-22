@@ -42,8 +42,8 @@ This document tracks capabilities that are **no longer part of the intended v1 p
 
 ## 2. Workday Playwright auto-sync (“Sync from Workday”)
 
-| Status | **Deprecated for v1** — UI copy removed from home page; chat UI may still expose sync. |
-|--------|----------------------------------------------------------------------------------------|
+| Status | **Removed for v1** — manual Academic Progress Excel upload is the supported path. |
+|--------|------------------------------------------------------------------------------------|
 
 ### What it was
 
@@ -55,23 +55,22 @@ This document tracks capabilities that are **no longer part of the intended v1 p
 - Students **upload** the Workday export file (manual export). See **Academic Progress Export Tutorial** in the footer (`#/academic-progress-export-tutorial`).
 - Home page no longer says “sync Workday” under the Google button.
 
-### Where it still appears (cleanup candidates)
+### Removed surfaces
 
-| Location | What it says |
-|----------|----------------|
-| `project/web/src/components/ChatPanel.tsx` | Workday sync button, status bar, messages (“sync directly from Workday”) |
+| Location | What was removed |
+|----------|------------------|
+| `project/web/src/components/ChatPanel.tsx` | Workday sync button, status bar, polling, and sync messages |
 | `project/web/src/api/client.ts` | `startWorkdaySync`, `pollWorkdayStatus` |
 | `project/api/routers/workday.py` | Sync + status endpoints |
-| `project/api/main.py` | `workday` router mounted |
-| `project/api/middleware/rate_limit.py` | `workday_sync` rate limits |
-| `HANDOFF.md` §0 env | `SCU_WORKDAY_URL` marked **STALE**; §1 data flow lists “Workday Playwright sync” |
-| `docs/sprint-1-retro.md` | Jiasheng contribution: “Workday auto-sync via Playwright” |
-| `README.md` | May reference Workday sync (verify when editing README) |
+| `project/api/main.py` | `workday` router mount |
+| `project/api/middleware/rate_limit.py` | `workday_sync` rate-limit bucket |
+| `project/course_planner/utils/workday_scraper.py` | Playwright scraper |
+| `project/course_planner/requirements.txt` | `playwright` dependency |
 
 ### Sources
 
 - **User decision (2026-05-21):** “we are not doing that anymore” (Workday sync); keep tagline that mentions avoiding the “Workday maze” (positioning only).
-- **HANDOFF.md:** `SCU_WORKDAY_URL=...  # STALE — see #W below` and architecture diagram branch `(or Workday Playwright sync)`.
+- **HANDOFF.md:** legacy references to `SCU_WORKDAY_URL` and the Playwright sync branch were removed.
 - **Sprint retro:** `docs/sprint-1-retro.md` — shipped Workday auto-sync in Sprint 1.
 - **AGENTS.md:** Does not mandate Workday sync; R3/R6 focus on memory and calendar UX.
 
@@ -107,10 +106,10 @@ Previous UI used `#c8102e` / `#8b0000`. Official references:
 
 ## Suggested cleanup order (kanban-friendly)
 
-1. Remove Workday sync UI + API (or gate behind env flag) — largest dead path.
+1. Workday sync UI + API — removed for v1; keep manual export tutorial.
 2. Remove or document-only `POST /auth/login` and `/auth/register` if no non-Google users needed.
 3. Archive or mark `specs/01-user-authentication.md` as Streamlit-legacy.
-4. Update `HANDOFF.md` / `README.md` data-flow diagram to upload-only.
+4. `HANDOFF.md` / `README.md` data-flow diagrams — updated to upload-only.
 
 ---
 

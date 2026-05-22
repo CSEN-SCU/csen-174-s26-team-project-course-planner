@@ -47,3 +47,20 @@ def test_only_google_oauth_routes_are_exposed(tmp_path, monkeypatch):
         for path in paths
         if path.startswith("/api/auth/") and not path.startswith("/api/auth/google/")
     } == {"/api/auth/user/{user_id}/data"}
+
+
+def test_manual_academic_progress_upload_route_is_exposed(tmp_path, monkeypatch):
+    api_dir = Path(__file__).resolve().parents[1] / "api"
+    if str(api_dir) not in sys.path:
+        sys.path.insert(0, str(api_dir))
+
+    monkeypatch.setenv("COURSE_PLANNER_DB", str(tmp_path / "startup.db"))
+    monkeypatch.setenv("COURSE_PLANNER_MEMORY_DIR", str(tmp_path / "memory"))
+
+    sys.modules.pop("main", None)
+    main = importlib.import_module("main")
+
+    with TestClient(main.app) as client:
+        paths = set(client.get("/openapi.json").json()["paths"])
+
+    assert "/api/upload/transcript" in paths

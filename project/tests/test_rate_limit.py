@@ -186,9 +186,8 @@ def test_anonymous_concurrency_is_unbounded(limiter):
 
 
 def test_default_limits_match_review_spec():
-    """The defaults shipped in DEFAULT_LIMITS must match the red-team review:
-    plan 10/min IP + 20/min user + 2 concurrent;
-    four_year_plan 5/min + 10/min + 1; workday_sync 2/min + 3/min + 1."""
+    """The defaults protect only the LLM-backed routes."""
+    assert set(DEFAULT_LIMITS) == {"plan", "four_year_plan"}
     assert DEFAULT_LIMITS["plan"].per_minute_ip == 10
     assert DEFAULT_LIMITS["plan"].per_minute_user == 20
     assert DEFAULT_LIMITS["plan"].max_concurrent_per_user == 2
@@ -196,7 +195,3 @@ def test_default_limits_match_review_spec():
     assert DEFAULT_LIMITS["four_year_plan"].per_minute_ip == 5
     assert DEFAULT_LIMITS["four_year_plan"].per_minute_user == 10
     assert DEFAULT_LIMITS["four_year_plan"].max_concurrent_per_user == 1
-
-    assert DEFAULT_LIMITS["workday_sync"].per_minute_ip == 2
-    assert DEFAULT_LIMITS["workday_sync"].per_minute_user == 3
-    assert DEFAULT_LIMITS["workday_sync"].max_concurrent_per_user == 1

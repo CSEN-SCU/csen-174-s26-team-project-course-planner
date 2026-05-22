@@ -51,7 +51,6 @@ GOOGLE_CLIENT_SECRET=...
 GOOGLE_OAUTH_REDIRECT_URI=http://localhost:8000/api/auth/google/callback
 FRONTEND_BASE_URL=http://localhost:5173
 SCU_PLANNER_COOKIE_KEY=<random 48 bytes>
-SCU_WORKDAY_URL=https://www.myworkday.com/scu/d/task/2998$44123.htmld  # STALE — see #W below
 ```
 
 ---
@@ -59,12 +58,15 @@ SCU_WORKDAY_URL=https://www.myworkday.com/scu/d/task/2998$44123.htmld  # STALE �
 ## 1. Data flow (how a plan is made)
 
 ```
-Workday xlsx upload  ─►  upload.py  ─►  parse_academic_progress_xlsx()
-   │                                          │
-   │  (or Workday Playwright sync)            ▼
-   │                                  missing_details  (NOTE: course_code is
-   │                                  almost always None — codes live in the
-   │                                  `requirement` TEXT, e.g. "CSEN/COEN 122 & 122L")
+Manual Workday Academic Progress xlsx upload
+   │
+   ▼
+upload.py ─► parse_academic_progress_xlsx()
+   │
+   ▼
+missing_details  (NOTE: course_code is almost always None — codes live in the
+`requirement` TEXT, e.g. "CSEN/COEN 122 & 122L")
+   │
    ▼
 run_planning_agent(missing_details, user_preference, memory, previous_plan)
    │
@@ -189,7 +191,7 @@ teammates via PRs (#26 #27 #28) and direct commits.
 |---|---------|--------|
 | 1 | Rate limiting on planning endpoints | ✅ merged (`4322cbb`) — `middleware/rate_limit.py`; verified live (429s) |
 | 2 | Session/memory restoration after login | ✅ effectively done (parsedRows + memory hydration, singleton kinds) |
-| 3 | Workday sync auth + URL allowlist + error scrubbing | ✅ merged (`2c79ce0`) — verified live (401 on anon) |
+| 3 | Workday sync auth + URL allowlist + error scrubbing | Removed for v1; manual upload is the only Academic Progress ingestion path |
 | 4 | New Plan reset clears all state | ⚠️ verify — `handleNewPlan` clears most; add a Vitest test to pin it |
 | 5 | 4-year plan blind to electives/goals | ⏳ schema split done in agent (electives/goals params); UI inputs + endpoint wiring may be incomplete — verify `four_year_plan.py` + `FourYearPlanView.tsx` |
 | 6 | 4-year plan intermittently empty | ✅ merged (`0850dc9`) — structured errors |
@@ -205,11 +207,9 @@ teammates via PRs (#26 #27 #28) and direct commits.
 
 ## 5. Known tech debt / gotchas
 
-- **STALE Workday URL**: `SCU_WORKDAY_URL` task ID `2998$44123` now resolves to
-  "View My Active Holds", not Academic Progress. The scraper has a search-bar
-  fallback (`utils/workday_scraper.py::_try_search_for_report`) but the env
-  value should be updated to the real Academic Progress task URL. Manual xlsx
-  upload (📎) always works as fallback.
+- **Manual Academic Progress upload only**: students export "View My Academic
+  Progress" from Workday as `.xlsx` / `.xlsm` and upload it with the paperclip.
+  The Playwright Workday sync path and `SCU_WORKDAY_URL` env var were removed.
 - **Pre-existing broken tests** (NOT regressions — both reference symbols
   removed in earlier sprints):
   - `tests/test_schedule_filter.py` — imports `_filter_to_schedule` (deleted).
@@ -237,7 +237,6 @@ project/
       plan.py                        POST /api/plan (legacy single-shot)
       four_year_plan.py              POST /api/four-year-plan
       upload.py                      POST /api/upload/transcript
-      workday.py                     POST /api/workday/sync (auth+allowlist, RT#3)
       memory.py                      GET/DELETE /api/memory/{uid}
       auth.py                        login/register + Google OAuth
   course_planner/
@@ -250,14 +249,13 @@ project/
     utils/
       scu_course_schedule_xlsx.py    schedule/category/title/conflict helpers
       academic_progress_xlsx.py      Workday xlsx parser
-      workday_scraper.py             Playwright sync + search fallback
     SCU_Find_Course_Sections.xlsx    next-term schedule (source of truth)
     View_My_Academic_Progress.xlsx   sample transcript
     tests/                           pytest + vitest live here together
   web/src/
     App.tsx                          root state, login hydration, handlers
     components/
-      ChatPanel.tsx                  chat + upload + workday sync UI
+      ChatPanel.tsx                  chat + manual Academic Progress upload
       CalendarView.tsx               "This Quarter" weekly grid (R6 target)
       FourYearPlanView.tsx           4-year grid (completed gray + recommended)
       LeftPanel.tsx                  login/register, sessions, New Plan

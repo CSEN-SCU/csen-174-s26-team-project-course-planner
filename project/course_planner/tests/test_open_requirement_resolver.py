@@ -1,6 +1,6 @@
 """Open Core / GE requirement resolution.
 
-For Workday items that have no specific course code (e.g.
+For Academic Progress export items that have no specific course code (e.g.
 ``"Core: ENGR: RTC 3"``, ``"Core: ENGR: Experiential Learning for Social
 Justice"``), the planning agent normalizes the text and looks up
 candidate courses in the schedule's Course-Tags reverse index.
@@ -106,7 +106,7 @@ def test_resolve_empty_inputs_safe():
 
 
 def test_resolve_real_world_arts_requirement():
-    """The student's Arts requirement is the full Workday phrasing.
+    """The student's Arts requirement is the full Academic Progress export phrasing.
     Parenthetical detail must be stripped before lookup."""
     cat = {"arts": ["ARTS 30", "ARTH 11A"]}
     sched = {("ARTS", "30"): _slot(), ("ARTH", "11A"): _slot()}
