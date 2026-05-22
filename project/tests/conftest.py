@@ -18,10 +18,20 @@ from pathlib import Path
 
 import pytest
 
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]  # project/
+_TESTS_DIR = Path(__file__).resolve().parent
+_PROJECT_ROOT = _TESTS_DIR.parent
 _APP_ROOT = _PROJECT_ROOT / "course_planner"
 if str(_APP_ROOT) not in sys.path:
     sys.path.insert(0, str(_APP_ROOT))
+if str(_TESTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_TESTS_DIR))
+
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "requires_schedule_xlsx: needs project/course_planner/SCU_Find_Course_Sections.xlsx",
+    )
 
 
 @pytest.fixture()

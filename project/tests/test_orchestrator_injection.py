@@ -58,12 +58,38 @@ def _patch_client(monkeypatch, captured_prompts, reply):
     monkeypatch.setattr(planning_agent, "get_genai_client", lambda **_kw: stub)
 
 
+def _fake_schedule_index(*codes: str) -> dict:
+    index: dict = {}
+    for code in codes:
+        subj, num = code.split()
+        index[(subj, num)] = {
+            "instructors": [],
+            "meeting_days": [],
+            "meeting_start_min": None,
+            "meeting_end_min": None,
+        }
+    return index
+
+
 def test_inject_retrieved_snippets_into_prompt_prefix(monkeypatch, alice, reply):
     memory_agent.write(alice, "preference", "Alice prefers no classes before 9am, quality over difficulty")
     memory_agent.write(alice, "plan_outcome", "Last quarter Alice took COEN 146 with prof X, total_units=12")
 
     captured: list[str] = []
-    _patch_client(monkeypatch, captured, reply)
+    single_course_reply = {
+        "recommended": [
+            {"course": "COEN 174", "category": "Core", "units": 4, "reason": "team SE"},
+        ],
+        "total_units": 4,
+        "advice": "Take core first.",
+    }
+    _patch_client(monkeypatch, captured, single_course_reply)
+    monkeypatch.setattr(
+        planning_agent,
+        "load_schedule_section_index",
+        lambda: _fake_schedule_index("COEN 174"),
+    )
+    monkeypatch.setattr(planning_agent, "load_category_course_index", lambda: {})
 
     out = orchestrator.plan_for_user(
         alice,
@@ -71,7 +97,7 @@ def test_inject_retrieved_snippets_into_prompt_prefix(monkeypatch, alice, reply)
         "easy quarter, prefer mornings",
     )
 
-    assert out["total_units"] == 8
+    assert out["total_units"] == 4
     assert len(captured) == 1
     prompt = captured[0]
     assert "BACKGROUND CONTEXT" in prompt

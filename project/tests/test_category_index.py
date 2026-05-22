@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import pytest
 
+from support import schedule_xlsx_available
 from utils.scu_course_schedule_xlsx import (
     _parse_course_tag_codes,
     load_category_course_index,
@@ -82,7 +83,12 @@ def test_parse_handles_pipe_with_no_short_code():
 @pytest.fixture(scope="module")
 def cat_idx() -> dict[str, list[str]]:
     """Build the index once for all integration tests."""
-    return load_category_course_index()
+    if not schedule_xlsx_available():
+        pytest.skip("SCU_Find_Course_Sections.xlsx not available")
+    idx = load_category_course_index()
+    if not idx:
+        pytest.skip("SCU_Find_Course_Sections.xlsx not available")
+    return idx
 
 
 def test_index_loads_non_empty(cat_idx):

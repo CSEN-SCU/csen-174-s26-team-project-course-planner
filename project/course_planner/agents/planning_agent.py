@@ -755,6 +755,24 @@ def _is_code_in_schedule(code: str, schedule_index: dict) -> bool:
     return any(k in schedule_index for k in planned_section_keys(code))
 
 
+def _filter_to_schedule(
+    recommended: list[dict],
+    schedule_index: dict,
+) -> list[dict]:
+    """Keep only recommendations that exist in the next-term schedule index.
+
+    When the index is empty (schedule xlsx unavailable), return the input
+    unchanged so callers do not drop the whole plan.
+    """
+    if not schedule_index:
+        return list(recommended)
+    return [
+        item
+        for item in recommended
+        if _is_code_in_schedule((item.get("course") or "").strip(), schedule_index)
+    ]
+
+
 def _partition_recommended(
     recommended: list[dict],
     schedule_index: dict,
