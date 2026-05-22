@@ -18,6 +18,8 @@ import { CALENDAR_START_HOUR, WEEKDAY_LABELS } from "./types";
 
 const WELCOME_TEXT =
   "Upload your Academic Progress file or describe your preferences to get started.";
+const NEW_PLAN_TEXT =
+  "Started a new plan. Upload your Academic Progress file or describe your preferences for next quarter.";
 
 export type AppProps = {
   userId: string;
@@ -47,6 +49,9 @@ export default function App({ userId, onSignOut }: AppProps) {
   const [fileUploaded, setFileUploaded] = useState(false);
   const [localOverride, setLocalOverride] = useState<Record<string, unknown>[] | null>(null);
   const [chatPrefill, setChatPrefill] = useState<string | null>(null);
+  // Bumped to ask the chat panel to focus its input (e.g. on "New Plan"),
+  // without injecting any text into the box.
+  const [chatFocusNonce, setChatFocusNonce] = useState(0);
   const [viewMode, setViewMode] = useState<"calendar" | "four-year">("calendar");
   const [fourYearPlan, setFourYearPlan] = useState<FourYearPlan | null>(null);
   const [fourYearGenerating, setFourYearGenerating] = useState(false);
@@ -238,13 +243,17 @@ export default function App({ userId, onSignOut }: AppProps) {
   }, [userId, activeSessionId, planSnapshots]);
 
   const handleNewPlan = useCallback(() => {
-    // Keep missingDetails, fileUploaded, planSnapshots — only reset current chat
+    // Keep missingDetails, fileUploaded, planSnapshots — only reset current chat.
     setLocalOverride(null);
     setPlanResult(null);
     setSessionCalendarRecommended(null);
     setFourYearPlan(null);
     setActiveSessionId(null);
-    setMessages([{ id: "m0", role: "assistant", content: WELCOME_TEXT }]);
+    // Always give visible feedback, even from an already-empty state:
+    // distinct message, switch to the calendar tab, and focus the chat input.
+    setMessages([{ id: `m-new-${Date.now()}`, role: "assistant", content: NEW_PLAN_TEXT }]);
+    setViewMode("calendar");
+    setChatFocusNonce((n) => n + 1);
   }, []);
 
   const handleDeleteSession = useCallback((id: string) => {
@@ -466,6 +475,7 @@ export default function App({ userId, onSignOut }: AppProps) {
         onPlanGenerated={handlePlanGenerated}
         prefillInput={chatPrefill}
         onPrefillConsumed={() => setChatPrefill(null)}
+        focusNonce={chatFocusNonce}
         setParsedRows={setParsedRows}
       />
       </div>

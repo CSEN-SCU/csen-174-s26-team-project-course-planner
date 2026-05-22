@@ -41,6 +41,8 @@ export type ChatPanelProps = {
   onPlanGenerated: (plan: Record<string, unknown>, messages: ChatUiMessage[]) => void;
   prefillInput?: string | null;
   onPrefillConsumed?: () => void;
+  /** Bump to focus the input without injecting text (e.g. on "New Plan"). */
+  focusNonce?: number;
   setParsedRows?: (v: ParsedRow[]) => void;
 };
 
@@ -88,6 +90,7 @@ export function ChatPanel({
   onPlanGenerated,
   prefillInput,
   onPrefillConsumed,
+  focusNonce,
   setParsedRows,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
@@ -116,6 +119,13 @@ export function ChatPanel({
       setTimeout(() => textareaRef.current?.focus(), 0);
     }
   }, [prefillInput, onPrefillConsumed]);
+
+  // Focus the input on demand (e.g. "New Plan") without injecting text.
+  useEffect(() => {
+    if (focusNonce && focusNonce > 0) {
+      setTimeout(() => textareaRef.current?.focus(), 0);
+    }
+  }, [focusNonce]);
 
   const processFile = useCallback(async (f: File) => {
     try {
