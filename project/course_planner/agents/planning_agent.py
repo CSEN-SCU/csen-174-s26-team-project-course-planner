@@ -19,9 +19,11 @@ from utils.academic_progress_helpers import (
 )
 from utils.scu_course_schedule_xlsx import (
     course_title_for,
+    course_units_for,
     detect_time_conflicts,
     load_category_course_index,
     load_course_titles_index,
+    load_course_units_index,
     load_schedule_section_index,
     planned_section_keys,
 )
@@ -1245,20 +1247,28 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
     parsed["recommended"] = paired
     parsed["total_units"] = _recompute_total_units(paired)
 
-    # ── Title override: trust the schedule xlsx over the LLM ─────────────────
-    # The LLM occasionally hallucinates course names (e.g. labelling
-    # CSEN 122L "Data Structures and Algorithms Lab" when the catalog
-    # says "Computer Architecture Laboratory"). The schedule xlsx is
-    # the authoritative title source, so we override per-recommendation.
+    # ── Title + units override: trust the schedule xlsx over the LLM ─────────
+    # The LLM hallucinates both course names (CSEN 122L → "Data Structures
+    # Lab") AND unit counts (CSEN 122 → 3u, lab → 2u). The catalog truth is
+    # CSEN 122 = 4u, CSEN 122L = 1u. The schedule xlsx is authoritative for
+    # both, so override per-recommendation, then recompute the total.
     titles_index = load_course_titles_index()
-    if titles_index:
+    units_index = load_course_units_index()
+    if titles_index or units_index:
         for item in parsed.get("recommended") or []:
             if not isinstance(item, dict):
                 continue
             code = (item.get("course") or "").strip()
-            real_title = course_title_for(code, titles_index)
-            if real_title:
-                item["title"] = real_title
+            if titles_index:
+                real_title = course_title_for(code, titles_index)
+                if real_title:
+                    item["title"] = real_title
+            if units_index:
+                real_units = course_units_for(code, units_index)
+                if real_units is not None:
+                    item["units"] = real_units
+        if units_index:
+            parsed["total_units"] = _recompute_total_units(parsed.get("recommended") or [])
 
     eff_model = resolved_model or model
     parsed["meta"] = {

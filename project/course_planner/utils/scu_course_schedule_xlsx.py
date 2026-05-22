@@ -639,6 +639,72 @@ def course_title_for(course_code: str, titles_index: dict[tuple[str, str], str])
     return None
 
 
+def load_course_units_index(path: Path | None = None) -> dict[tuple[str, str], int]:
+    """Build a (subject, number) → units index from the schedule xlsx 'Units'
+    column.
+
+    Used to OVERRIDE the units field on courses recommended by the LLM. The
+    model frequently invents unit counts (e.g. CSEN 122 as 3u, its lab as 2u);
+    the catalog truth is CSEN 122 = 4u, CSEN 122L = 1u. CSEN↔COEN and
+    ECEN↔ELEN aliases are mirrored.
+    """
+    p = _find_schedule_path(path)
+    if p is None:
+        return {}
+    index: dict[tuple[str, str], int] = {}
+    wb = load_workbook(p, read_only=True, data_only=True)
+    try:
+        ws = wb.active
+        it = ws.iter_rows(values_only=True)
+        header_row = next(it, None)
+        if not header_row:
+            return {}
+        h = [str(c).strip() if c is not None else "" for c in header_row]
+        try:
+            idx_sec = h.index("Course Section")
+        except ValueError:
+            return {}
+        idx_units = next((i for i, x in enumerate(h) if x == "Units"), None)
+        if idx_units is None:
+            return {}
+        for row in it:
+            if not row or idx_sec >= len(row):
+                continue
+            key = _parse_section_subject_number(row[idx_sec])
+            if not key:
+                continue
+            raw = row[idx_units] if idx_units < len(row) else None
+            try:
+                units = int(float(str(raw).strip()))
+            except (TypeError, ValueError):
+                continue
+            if key not in index:
+                index[key] = units
+        for (subj, num) in list(index.keys()):
+            if subj == "CSEN":
+                index.setdefault(("COEN", num), index[(subj, num)])
+            elif subj == "COEN":
+                index.setdefault(("CSEN", num), index[(subj, num)])
+            elif subj == "ECEN":
+                index.setdefault(("ELEN", num), index[(subj, num)])
+            elif subj == "ELEN":
+                index.setdefault(("ECEN", num), index[(subj, num)])
+    finally:
+        wb.close()
+    return index
+
+
+def course_units_for(course_code: str, units_index: dict[tuple[str, str], int]) -> int | None:
+    """Return catalog units for ``course_code``, trying CSEN/COEN aliases."""
+    if not units_index:
+        return None
+    for key in planned_section_keys(course_code):
+        u = units_index.get(key)
+        if u is not None:
+            return u
+    return None
+
+
 # ── Instructor ratings (R5) ──────────────────────────────────────────────────
 
 

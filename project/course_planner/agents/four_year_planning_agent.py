@@ -17,8 +17,10 @@ from agents.gemini_client import get_genai_client
 from agents.planning_agent import _normalize_open_req_text, _resolve_item_codes, _resolve_open_requirement
 from utils.scu_course_schedule_xlsx import (
     course_title_for,
+    course_units_for,
     load_category_course_index,
     load_course_titles_index,
+    load_course_units_index,
     load_schedule_section_index,
     planned_section_keys,
 )
@@ -493,17 +495,28 @@ Output JSON matching the schema exactly.
         quarter["courses"] = filtered
         quarter["total_units"] = sum(int(c.get("units") or 0) for c in filtered)
 
-    # ── Title override: schedule xlsx is the authoritative title source ──
+    # ── Title + units override: schedule xlsx is authoritative for both ──
     titles_index = load_course_titles_index()
-    if titles_index:
+    units_index = load_course_units_index()
+    if titles_index or units_index:
         for quarter in parsed.get("quarters") or []:
             for c in quarter.get("courses") or []:
                 if not isinstance(c, dict):
                     continue
                 code = (c.get("course") or "").strip()
-                real_title = course_title_for(code, titles_index)
-                if real_title:
-                    c["title"] = real_title
+                if titles_index:
+                    real_title = course_title_for(code, titles_index)
+                    if real_title:
+                        c["title"] = real_title
+                if units_index:
+                    real_units = course_units_for(code, units_index)
+                    if real_units is not None:
+                        c["units"] = real_units
+            # recompute the quarter total after unit overrides
+            if units_index:
+                quarter["total_units"] = sum(
+                    int(c.get("units") or 0) for c in (quarter.get("courses") or [])
+                )
 
     # ────────────────────────────────────────────────────────────────────────
     parsed.setdefault("total_remaining_units", total_units)
