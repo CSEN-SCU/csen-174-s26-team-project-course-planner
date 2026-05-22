@@ -60,17 +60,35 @@ class JasonPlanningAgentFutureFeaturesRedTests(unittest.TestCase):
         fake_client = self._fake_client_with_text(
             '{"recommended":[{"course":"CSE 130","category":"Core","units":5,"reason":"Required"},{"course":"CSE 160","category":"Core","units":5,"reason":"Required"},{"course":"CSE 170","category":"Elective","units":5,"reason":"Elective"},{"course":"CSE 180","category":"Elective","units":5,"reason":"Elective"}],"total_units":20,"advice":"You can do this."}'
         )
+        missing = [
+            {"course": "CSE 130", "category": "Core", "units": 5},
+            {"course": "CSE 160", "category": "Core", "units": 5},
+            {"course": "CSE 170", "category": "Elective", "units": 5},
+            {"course": "CSE 180", "category": "Elective", "units": 5},
+        ]
+        schedule_index = {
+            ("CSE", "130"): {},
+            ("CSE", "160"): {},
+            ("CSE", "170"): {},
+            ("CSE", "180"): {},
+        }
 
         with patch.dict("os.environ", {"GEMINI_API_KEY": "test-key"}, clear=True):
-            with patch.object(planning_agent, "get_genai_client", return_value=fake_client):
-                result = planning_agent.run_planning_agent(
-                    [{"course": "CSE 130", "category": "Core", "units": 5}],
-                    "finish as quickly as possible",
-                )
+            with patch.object(planning_agent, "load_schedule_section_index", return_value=schedule_index):
+                with patch.object(planning_agent, "load_category_course_index", return_value={}):
+                    with patch.object(planning_agent, "get_genai_client", return_value=fake_client):
+                        result = planning_agent.run_planning_agent(
+                            missing,
+                            "finish as quickly as possible",
+                        )
 
-        # RED target: backend should add warnings metadata for risky schedules.
         self.assertIn("warnings", result)
         self.assertGreater(len(result["warnings"]), 0)
+        codes = {w.get("code") for w in result["warnings"]}
+        self.assertTrue(
+            codes & {"high_unit_load", "dense_schedule", "below_full_time_units"},
+            f"expected a load warning, got {result['warnings']}",
+        )
 
 
 if __name__ == "__main__":

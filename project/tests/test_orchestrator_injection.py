@@ -170,7 +170,20 @@ def test_no_injection_block_when_no_memory(monkeypatch, alice, reply):
 
 def test_plan_for_user_writes_back_summary(monkeypatch, alice, reply):
     captured: list[str] = []
-    _patch_client(monkeypatch, captured, reply)
+    single_course_reply = {
+        "recommended": [
+            {"course": "COEN 174", "category": "Core", "units": 4, "reason": "team SE"},
+        ],
+        "total_units": 4,
+        "advice": "Take core first.",
+    }
+    _patch_client(monkeypatch, captured, single_course_reply)
+    monkeypatch.setattr(
+        planning_agent,
+        "load_schedule_section_index",
+        lambda: _fake_schedule_index("COEN 174"),
+    )
+    monkeypatch.setattr(planning_agent, "load_category_course_index", lambda: {})
 
     before = len(memory_agent.list_for_user(alice))
 
@@ -187,8 +200,8 @@ def test_plan_for_user_writes_back_summary(monkeypatch, alice, reply):
     assert "PREF:" in new_row["content"]
     assert "GAP:" in new_row["content"]
     assert "PLAN:" in new_row["content"]
-    assert "COEN 146" in new_row["content"]
-    assert "total_units=8" in new_row["content"]
+    assert "COEN 174" in new_row["content"]
+    assert "total_units=4" in new_row["content"]
 
 
 def test_plan_for_user_requires_user_id(monkeypatch, reply):

@@ -45,7 +45,7 @@ def test_enrich_units_defaults_lecture_and_lab():
 
 
 def test_pair_lab_uses_units_lookup():
-    md = [{"requirement": "CSEN/COEN 122 & 122L", "units": 4}]
+    md = [{"requirement": "CSEN/COEN 122 & 122L"}]
     recs = [{"course": "CSEN 122", "units": 4, "category": "Major", "reason": "lec"}]
     lookup = {"CSEN 122": 4, "CSEN 122L": 1}
     paired = planning_agent._pair_lab_corequirements(recs, md, units_lookup=lookup)

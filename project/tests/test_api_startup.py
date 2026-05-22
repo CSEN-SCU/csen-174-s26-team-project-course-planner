@@ -20,10 +20,11 @@ def test_api_startup_migrates_database_before_auth_routes(tmp_path, monkeypatch)
     main = importlib.import_module("main")
 
     with TestClient(main.app) as client:
-        res = client.delete("/api/auth/user/1/data")
+        res = client.delete("/api/auth/user/99999/data")
 
-    assert res.status_code == 404
-    assert res.json() == {"detail": "User not found."}
+    # Sign-out clears memory even when the SQLite row is gone (ephemeral deploys).
+    assert res.status_code == 200
+    assert res.json() == {"success": True}
 
 
 def test_only_google_oauth_routes_are_exposed(tmp_path, monkeypatch):

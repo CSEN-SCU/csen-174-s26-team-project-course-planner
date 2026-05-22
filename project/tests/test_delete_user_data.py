@@ -69,7 +69,7 @@ def test_delete_user_data_api_clears_orphan_memory(db_path, monkeypatch):
 def test_delete_user_data_api_full_account(db_path, monkeypatch):
     monkeypatch.setattr(memory_agent, "_validate_user_id", lambda uid: int(uid))
 
-    uid = users_db.create_user("del_api", "del_api@example.com", "password123")
+    uid = users_db.create_user("del_api", "del_api@example.com")
     memory_agent.write(uid, "preference", "note")
 
     with TestClient(main.app) as client:
