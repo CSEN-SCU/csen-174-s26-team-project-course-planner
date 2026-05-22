@@ -14,7 +14,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from auth import oauth_state
-from agents.memory_agent import purge_user_storage
+from agents.memory_agent import delete_all_for_user, purge_user_storage
 from auth.users_db import (
     delete_user_by_id,
     get_or_create_user_for_google,
@@ -174,16 +174,33 @@ def google_exchange(body: GoogleExchangeBody) -> dict[str, Any]:
 
 @router.delete("/user/{user_id}/data")
 def delete_user_data(user_id: str) -> dict[str, Any]:
-    """Remove all stored data for this user (memory file + SQLite account)."""
-    if get_user_by_id(user_id) is None:
-        raise HTTPException(status_code=404, detail="User not found.")
+    """Remove all stored data for this user (memory file + SQLite account).
+
+    Purges memory first so a stale browser session still clears data even when
+    the SQLite user row was lost (e.g. ephemeral disk on Render after redeploy).
+    """
     try:
-        purge_user_storage(user_id)
+        uid = int(user_id)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Invalid user id.") from exc
+    if uid <= 0:
+        raise HTTPException(status_code=400, detail="Invalid user id.")
+
+    # Best-effort wipe (sign-out / reset for testing). Do not fail the request if
+    # one step is already gone — the browser will clear local state regardless.
+    try:
+        purge_user_storage(uid)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("Failed to purge memory for user %s", user_id)
-        raise HTTPException(status_code=500, detail="Could not delete user data.") from exc
-    if not delete_user_by_id(user_id):
-        raise HTTPException(status_code=500, detail="Could not delete user account.")
+    except Exception:  # noqa: BLE001
+        logger.exception("purge_user_storage failed for user %s", uid)
+
+    try:
+        delete_all_for_user(uid)
+    except Exception:  # noqa: BLE001
+        logger.exception("delete_all_for_user failed for user %s", uid)
+
+    if not delete_user_by_id(uid):
+        logger.info("delete_user_data: no SQLite row for user %s (memory may still be cleared)", uid)
+
     return {"success": True}

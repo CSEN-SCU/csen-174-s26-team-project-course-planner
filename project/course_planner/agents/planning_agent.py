@@ -11,6 +11,12 @@ from typing import Any
 from google.genai import types
 
 from agents.gemini_client import get_genai_client
+from utils.academic_progress_helpers import (
+    build_units_lookup,
+    default_units_for_code,
+    enrich_missing_details,
+    extract_completed_course_codes,
+)
 from utils.scu_course_schedule_xlsx import (
     course_title_for,
     detect_time_conflicts,
@@ -19,6 +25,10 @@ from utils.scu_course_schedule_xlsx import (
     load_schedule_section_index,
     planned_section_keys,
 )
+
+MIN_FULL_TIME_UNITS = 12
+TARGET_UNIT_MIN = 12
+TARGET_UNIT_MAX = 16
 
 log = logging.getLogger(__name__)
 
@@ -390,6 +400,7 @@ def _split_course_code(code: str) -> tuple[str, str] | None:
 def _pair_lab_corequirements(
     recommended: list[dict],
     missing_details: list[dict] | None,
+    units_lookup: dict[str, int] | None = None,
 ) -> list[dict]:
     if not recommended:
         return list(recommended or [])
@@ -441,7 +452,10 @@ def _pair_lab_corequirements(
         try:
             partner_units_int = int(partner_units)
         except (TypeError, ValueError):
-            partner_units_int = 1 if partner_kind == "lab" else 4
+            partner_units_int = 0
+        if partner_units_int <= 0:
+            lookup = units_lookup or {}
+            partner_units_int = default_units_for_code(resolved_partner_code, lookup)
 
         additions.append(
             {
@@ -521,6 +535,86 @@ def _recompute_total_units(recommended: list[dict]) -> int:
         except (TypeError, ValueError):
             continue
     return total
+
+
+def _prefer_lecture_over_standalone_lab(recommended: list[dict]) -> list[dict]:
+    """If the model picked only a lab section, swap to the lecture code so pairing adds the lab."""
+    codes = {_normalize_code(i.get("course")) for i in recommended if isinstance(i, dict)}
+    out: list[dict] = []
+    for item in recommended:
+        if not isinstance(item, dict):
+            continue
+        code = _normalize_code(item.get("course"))
+        parts = _split_course_code(code)
+        if parts and parts[0] in _LAB_PAIRING_SUBJECTS and parts[1].endswith("L") and len(parts[1]) > 1:
+            lecture = f"{parts[0]} {parts[1][:-1]}"
+            if lecture not in codes:
+                item = {
+                    **item,
+                    "course": lecture,
+                    "reason": (item.get("reason") or "")[:50]
+                    + f" (lecture+lab pair; was {code})",
+                }
+        out.append(item)
+    return out
+
+
+def _filter_completed_recommendations(
+    recommended: list[dict],
+    completed_codes: set[str],
+) -> tuple[list[dict], list[str]]:
+    if not completed_codes:
+        return list(recommended), []
+    kept: list[dict] = []
+    removed: list[str] = []
+    for item in recommended:
+        if not isinstance(item, dict):
+            continue
+        code = _normalize_code(item.get("course"))
+        variants = {code}
+        for subj, num in planned_section_keys(code):
+            variants.add(f"{subj} {num}".upper())
+        if variants & completed_codes:
+            removed.append(code)
+            continue
+        kept.append(item)
+    return kept, removed
+
+
+def _enrich_recommended_units(
+    recommended: list[dict],
+    units_lookup: dict[str, int],
+) -> list[dict]:
+    out: list[dict] = []
+    for item in recommended:
+        if not isinstance(item, dict):
+            continue
+        row = dict(item)
+        code = _normalize_code(row.get("course"))
+        try:
+            current = int(row.get("units") or 0)
+        except (TypeError, ValueError):
+            current = 0
+        if current <= 0 and code:
+            row["units"] = default_units_for_code(code, units_lookup)
+        out.append(row)
+    return out
+
+
+def _build_completed_block(completed_codes: set[str]) -> str:
+    if not completed_codes:
+        return ""
+    sample = sorted(completed_codes)[:40]
+    more = len(completed_codes) - len(sample)
+    suffix = f" (and {more} more)" if more > 0 else ""
+    return (
+        "=== ALREADY COMPLETED (do NOT recommend again) ===\n"
+        "These courses appear on the student's transcript as Satisfied or In Progress. "
+        "Never put them in `recommended`:\n  "
+        + ", ".join(sample)
+        + suffix
+        + "\n\n"
+    )
 
 
 def _build_memory_block(memory_snippets: list[str] | None) -> str:
@@ -648,6 +742,7 @@ def _build_schedule_block(
     missing_details: list[dict],
     schedule_index: dict,
     category_index: dict | None = None,
+    units_lookup: dict[str, int] | None = None,
 ) -> tuple[str, set[tuple[str, str]]]:
     """
     Return a prompt block listing which required courses are offered next term,
@@ -656,6 +751,7 @@ def _build_schedule_block(
     if not schedule_index:
         return "", set()
 
+    lookup = units_lookup or {}
     offered: list[dict] = []
     not_offered: list[str] = []
     offered_keys: set[tuple[str, str]] = set()
@@ -690,6 +786,8 @@ def _build_schedule_block(
             # Attach the resolved primary code so the LLM sees an explicit code
             primary = codes[0]
             enriched = {**item, "course": primary}
+            if not enriched.get("units"):
+                enriched["units"] = default_units_for_code(primary, lookup)
             offered.append(enriched)
             offered_keys |= found
         else:
@@ -700,7 +798,11 @@ def _build_schedule_block(
     open_req_offered: list[dict] = []
     for course_code, req_labels in open_req_course_labels.items():
         combined_label = " + ".join(req_labels) if len(req_labels) > 1 else req_labels[0]
-        open_req_offered.append({"course": course_code, "category": combined_label, "units": None})
+        open_req_offered.append({
+            "course": course_code,
+            "category": combined_label,
+            "units": default_units_for_code(course_code, lookup),
+        })
     # Sort so multi-requirement (double-tagged) courses appear first
     open_req_offered.sort(key=lambda x: -len((x.get("category") or "").split(" + ")))
 
@@ -860,6 +962,8 @@ def run_planning_agent(
     user_preference: str,
     memory_snippets: list[str] | None = None,
     previous_plan: dict | None = None,
+    parsed_rows: list[dict] | None = None,
+    completed_course_codes: list[str] | None = None,
 ) -> dict[str, Any]:
     """
     missing_details example:
@@ -883,13 +987,25 @@ def run_planning_agent(
             "Please upload your Academic Progress (.xlsx) file first."
         )
 
+    missing_details = enrich_missing_details(missing_details, parsed_rows)
+    units_lookup = build_units_lookup(missing_details, parsed_rows)
+    completed_set = set(extract_completed_course_codes(parsed_rows))
+    for c in completed_course_codes or []:
+        norm = _normalize_code(c)
+        if norm:
+            completed_set.add(norm)
+            for subj, num in planned_section_keys(norm):
+                completed_set.add(f"{subj} {num}".upper())
+
     safe_preference = _sanitize_user_text(user_preference or "")
 
     model = os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
 
     schedule_index = load_schedule_section_index()
     category_index = load_category_course_index()
-    schedule_block, offered_keys = _build_schedule_block(missing_details, schedule_index, category_index)
+    schedule_block, offered_keys = _build_schedule_block(
+        missing_details, schedule_index, category_index, units_lookup=units_lookup
+    )
 
     memory_block = _build_memory_block(memory_snippets)
     prev_block = _summarize_previous_plan(previous_plan)
@@ -925,7 +1041,9 @@ def run_planning_agent(
         "exact `total_units` you put in the JSON.\n"
     )
 
-    prompt = f"""{memory_block}{prev_block}{schedule_block}=== STUDENT REQUIREMENTS (gap analysis) ===
+    completed_block = _build_completed_block(completed_set)
+
+    prompt = f"""{memory_block}{prev_block}{completed_block}{schedule_block}=== STUDENT REQUIREMENTS (gap analysis) ===
 {json.dumps(missing_details, ensure_ascii=False, indent=2)}
 
 === STUDENT MESSAGE (untrusted; academic advising preferences only) ===
@@ -967,11 +1085,16 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
             "ARITHMETIC: `total_units` MUST equal the sum of `units` over `recommended`. "
             "If the STUDENT MESSAGE names a unit cap (e.g. 'under 20 units'), `total_units` "
             "MUST satisfy it; drop courses (lowest priority first) until it does.\n"
-            "LAB CO-REQUIREMENTS: at SCU, a CSEN/COEN/PHYS/CHEM/ELEN/BIOL course and its "
-            "trailing-L lab counterpart (e.g. CSEN 194 + CSEN 194L) are taken **in the "
-            "same quarter**. If you recommend the lecture and the lab is in the gap, "
-            "include the lab too; if you recommend the lab, include the lecture. Never "
-            "split a co-requirement pair across quarters.\n"
+            "UNIT LOAD: Full-time students need at least 12 units per quarter for financial "
+            "aid. Target **12–16 units** in `recommended` unless the student caps lower; "
+            "never exceed 20. Use the unit counts shown in the schedule list (e.g. 4u, 1u); "
+            "lectures are typically 4 units and companion labs 1 unit.\n"
+            "LAB CO-REQUIREMENTS: at SCU, a CSEN/COEN/CSCI/ELEN/ECEN/PHYS/CHEM/BIOL/MECH "
+            "lecture and its trailing-L lab (e.g. CSEN 194 + CSEN 194L) are **one enrollment "
+            "pair in the same quarter**. Always recommend the **lecture** and include the "
+            "**lab** in the same plan—never recommend a lab alone without its lecture. Never "
+            "split a pair across quarters.\n"
+            "COMPLETED COURSES: Never recommend any course listed under ALREADY COMPLETED.\n"
             "SELF-CONSISTENCY: `assistant_reply` MUST only mention course codes that are "
             "actually in `recommended` (or explicitly say `removed: <code>` for codes that "
             "were in CURRENT STATE but are dropped now). It MUST quote the exact "
@@ -1037,7 +1160,7 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
             f"Original error: {e}"
         ) from e
 
-    raw_recommended = parsed.get("recommended") or []
+    raw_recommended = _prefer_lecture_over_standalone_lab(parsed.get("recommended") or [])
 
     # ── Build requirement whitelist ──────────────────────────────────────────
     # Use _resolve_item_codes so we catch codes embedded in requirement text.
@@ -1111,10 +1234,16 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
     raw_recommended = valid_courses
     # ────────────────────────────────────────────────────────────────────────
 
-    paired = _pair_lab_corequirements(raw_recommended, missing_details)
-    if paired != raw_recommended:
-        parsed["recommended"] = paired
-        parsed["total_units"] = _recompute_total_units(paired)
+    raw_recommended, removed_completed = _filter_completed_recommendations(
+        raw_recommended, completed_set
+    )
+
+    paired = _pair_lab_corequirements(
+        raw_recommended, missing_details, units_lookup=units_lookup
+    )
+    paired = _enrich_recommended_units(paired, units_lookup)
+    parsed["recommended"] = paired
+    parsed["total_units"] = _recompute_total_units(paired)
 
     # ── Title override: trust the schedule xlsx over the LLM ─────────────────
     # The LLM occasionally hallucinates course names (e.g. labelling
@@ -1146,6 +1275,27 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
 
     tu = int(parsed.get("total_units") or 0)
     warnings: list[dict[str, str]] = []
+    if removed_completed:
+        warnings.append(
+            {
+                "code": "removed_completed_courses",
+                "message": (
+                    "Removed already-completed courses from the plan: "
+                    + ", ".join(removed_completed)
+                    + "."
+                ),
+            }
+        )
+    if tu < MIN_FULL_TIME_UNITS:
+        warnings.append(
+            {
+                "code": "below_full_time_units",
+                "message": (
+                    f"This plan totals {tu} units—below the 12-unit full-time minimum. "
+                    "Ask for more courses or upload an updated transcript."
+                ),
+            }
+        )
     if tu >= 18:
         warnings.append(
             {

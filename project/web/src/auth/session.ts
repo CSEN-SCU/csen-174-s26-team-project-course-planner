@@ -13,6 +13,13 @@ export function persistUserId(userId: string | null): void {
   else sessionStorage.removeItem(USER_ID_KEY);
 }
 
+/** Clear browser session (sign out). Does not touch server data by itself. */
+export function clearLocalSession(): void {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem(USER_ID_KEY);
+  sessionStorage.removeItem(GOOGLE_OAUTH_PENDING_KEY);
+}
+
 /** Handoff token present while returning from Google OAuth (before exchange). */
 export function readGoogleOauthHandoffFromUrl(): string | null {
   if (typeof window === "undefined") return null;

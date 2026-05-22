@@ -1,8 +1,9 @@
+import { useEffect, useState } from "react";
 import { GoogleSignInButton } from "../components/GoogleSignInButton";
 import { SiteFooter } from "../components/SiteFooter";
 
 const TAGLINE =
-  "Build your next-quarter schedule from your transcript and course data — personalized recommendations without the Workday maze.";
+  "Build your next-quarter schedule from your Academic Progress export and this quarter's course list — personalized recommendations without the Workday maze.";
 
 export type HomePageProps = {
   externalAuthError?: string | null;
@@ -10,6 +11,20 @@ export type HomePageProps = {
 };
 
 export function HomePage({ externalAuthError, authPending }: HomePageProps) {
+  const [deleteDataNotice, setDeleteDataNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const msg = sessionStorage.getItem("scu_delete_user_data_notice");
+      if (msg) {
+        setDeleteDataNotice(msg);
+        sessionStorage.removeItem("scu_delete_user_data_notice");
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   return (
     <div className="home-page flex min-h-screen w-screen flex-col overflow-hidden">
       <main className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 py-12">
@@ -22,6 +37,15 @@ export function HomePage({ externalAuthError, authPending }: HomePageProps) {
           <p className="home-tagline mx-auto mb-10 max-w-md text-base leading-relaxed text-neutral-600 sm:text-lg">
             {TAGLINE}
           </p>
+
+          {deleteDataNotice && (
+            <p
+              role="status"
+              className="mx-auto mb-4 max-w-sm rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+            >
+              {deleteDataNotice}
+            </p>
+          )}
 
           {externalAuthError && (
             <p

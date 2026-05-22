@@ -486,7 +486,7 @@ export function FourYearPlanView({
         {/* No transcript uploaded yet */}
         {!hasTranscript && !showTimeline && (
           <div className="flex flex-col items-center justify-center h-64 text-center">
-            <p className="text-sm font-medium text-neutral-400">No transcript uploaded</p>
+            <p className="text-sm font-medium text-neutral-400">No Academic Progress file uploaded</p>
             <p className="mt-1 text-xs text-neutral-300">
               Upload your Academic Progress file in the chat panel, then generate your 4-year plan.
             </p>
@@ -527,7 +527,7 @@ export function FourYearPlanView({
             {/* Prompt to generate if we have completed data but no plan */}
             {hasCompletedData && !plan && (
               <div className="flex items-center gap-3 rounded-lg border border-dashed border-neutral-300 bg-white px-4 py-3 text-xs text-neutral-500">
-                <span>Completed courses loaded from transcript.</span>
+                <span>Completed courses loaded from your Academic Progress export.</span>
                 <button
                   onClick={onGenerate}
                   className="ml-auto shrink-0 rounded-md bg-[var(--scu-red)] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-red-700"
