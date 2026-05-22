@@ -421,13 +421,6 @@ export function ChatPanel({
         </div>
       )}
 
-      <div className="shrink-0 border-b border-neutral-200 px-4 py-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-[var(--scu-text)]">SCU Course Planner</h2>
-        {fileUploaded && (
-          <span className="text-[10px] text-emerald-600 font-medium">● Progress loaded</span>
-        )}
-      </div>
-
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {messages.map((msg) => (
           <div
