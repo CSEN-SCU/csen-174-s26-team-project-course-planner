@@ -3,7 +3,7 @@ import { GoogleSignInButton } from "../components/GoogleSignInButton";
 import { SiteFooter } from "../components/SiteFooter";
 
 const TAGLINE =
-  "Build your next-quarter schedule from your Academic Progress export and this quarter's course list — personalized recommendations without the Workday maze.";
+  "Build your upcoming SCU schedule, perzonalized with on your major requirements and course preferences.";
 
 export type HomePageProps = {
   externalAuthError?: string | null;
@@ -62,9 +62,6 @@ export function HomePage({ externalAuthError, authPending }: HomePageProps) {
             ) : (
               <GoogleSignInButton />
             )}
-            <p className="text-xs text-neutral-500">
-              Sign in with Google to save plans and build your schedule.
-            </p>
           </div>
         </div>
       </main>
