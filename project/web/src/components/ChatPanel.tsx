@@ -48,11 +48,26 @@ export type ChatPanelProps = {
 
 function planSummaryText(plan: Record<string, unknown>): string {
   const recs = (plan.recommended as Record<string, unknown>[]) ?? [];
-  const lines = recs.map((x) => {
-    const c = String(x.course ?? "?");
-    const u = x.units != null ? String(x.units) : "?";
-    return `• ${c} (${u} units)`;
-  });
+  const norm = (r: Record<string, unknown>) => String(r.course ?? "").trim().toUpperCase();
+  const codeSet = new Set(recs.map(norm));
+  const unitsOf = (r: Record<string, unknown>) => (r.units != null ? String(r.units) : "?");
+
+  // A lab is grouped UNDER its lecture when that lecture is also in the plan
+  // (SCU lecture+lab co-requisites are taken together — show them together).
+  const isGroupedLab = (code: string) => /L$/.test(code) && codeSet.has(code.slice(0, -1));
+
+  const lines: string[] = [];
+  for (const r of recs) {
+    const code = norm(r);
+    if (isGroupedLab(code)) continue; // emitted beneath its lecture below
+    lines.push(`• ${String(r.course ?? "?")} (${unitsOf(r)} units)`);
+    const labCode = `${code}L`;
+    if (codeSet.has(labCode)) {
+      const lab = recs.find((x) => norm(x) === labCode);
+      if (lab) lines.push(`   ↳ ${String(lab.course)} — lab (${unitsOf(lab)} units)`);
+    }
+  }
+
   const tu = plan.total_units != null ? String(plan.total_units) : "?";
   const adv =
     typeof plan.advice === "string" && plan.advice.trim()
