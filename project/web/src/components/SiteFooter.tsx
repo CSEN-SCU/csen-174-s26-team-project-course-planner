@@ -4,8 +4,7 @@ import {
   DATA_DISCLOSURE_HREF,
 } from "../lib/routes";
 
-const UNOFFICIAL_DISCLAIMER =
-  "Unofficial student project — not affiliated with Santa Clara University.";
+const AFFILIATION_DISCLAIMER = "Not affiliated with Santa Clara University.";
 
 export type SiteFooterProps = {
   userId?: string | null;
@@ -15,8 +14,6 @@ export type SiteFooterProps = {
 
 const linkClass =
   "text-xs font-medium text-white/90 underline-offset-2 transition hover:text-white hover:underline";
-const primaryLinkClass =
-  "text-sm font-semibold text-white underline-offset-2 transition hover:text-white/80 hover:underline";
 const dividerClass = "text-xs text-white/40";
 
 export function SiteFooter({ userId, onDeleteUserData }: SiteFooterProps = {}) {
@@ -28,7 +25,7 @@ export function SiteFooter({ userId, onDeleteUserData }: SiteFooterProps = {}) {
         className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1"
         aria-label="Site information"
       >
-        <a href={DATA_DISCLOSURE_HREF} className={primaryLinkClass}>
+        <a href={DATA_DISCLOSURE_HREF} className={linkClass}>
           Data Disclosure
         </a>
         <span className={dividerClass} aria-hidden>
@@ -55,7 +52,7 @@ export function SiteFooter({ userId, onDeleteUserData }: SiteFooterProps = {}) {
         )}
       </nav>
       <p className="mt-1.5 text-[11px] leading-snug text-white/55">
-        {UNOFFICIAL_DISCLAIMER}
+        {AFFILIATION_DISCLAIMER}
       </p>
     </footer>
   );

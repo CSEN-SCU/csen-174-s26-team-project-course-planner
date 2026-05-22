@@ -42,7 +42,6 @@ body {
 }
 
 .home-brand-scu {
-  font-family: "Libre Baskerville", Georgia, serif;
   font-size: clamp(2.75rem, 8vw, 3.75rem);
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -50,17 +49,11 @@ body {
 }
 
 .home-brand-planner {
-  font-family: "DM Sans", system-ui, sans-serif;
   font-size: clamp(1rem, 3vw, 1.25rem);
   font-weight: 500;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: #5c5c5c;
-}
-
-.home-tagline {
-  font-family: "Libre Baskerville", Georgia, serif;
-  font-weight: 400;
 }
 
 .site-footer {
