@@ -5,7 +5,7 @@ const DISCLOSURE_TEXT =
 
 export function DataDisclosurePage() {
   return (
-    <StaticInfoPageLayout>
+    <StaticInfoPageLayout roundPanelBottom>
       <h1 className="mb-4 text-center text-xl font-bold tracking-tight text-[var(--scu-text)] sm:text-2xl">
         Data Disclosure
       </h1>

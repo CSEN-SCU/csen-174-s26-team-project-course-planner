@@ -5,11 +5,14 @@ import { SiteFooter } from "./SiteFooter";
 type StaticInfoPageLayoutProps = {
   children: ReactNode;
   maxWidth?: "max-w-2xl" | "max-w-3xl";
+  /** Round the panel bottom when content ends above the footer (data disclosure only). */
+  roundPanelBottom?: boolean;
 };
 
 export function StaticInfoPageLayout({
   children,
   maxWidth = "max-w-2xl",
+  roundPanelBottom = false,
 }: StaticInfoPageLayoutProps) {
   const mainRef = useRef<HTMLElement>(null);
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -39,8 +42,17 @@ export function StaticInfoPageLayout({
     if (panelSurface) {
       panelSurface.classList.toggle("rounded-t-lg", !isTopClamped);
       panelSurface.classList.toggle("rounded-t-none", isTopClamped);
+
+      if (roundPanelBottom) {
+        const article = anchor.parentElement?.querySelector("article");
+        const articleBottom = article?.getBoundingClientRect().bottom ?? 0;
+        const footerTop = footerWrap?.getBoundingClientRect().top ?? window.innerHeight;
+        const isBottomClamped = articleBottom >= footerTop - 0.5;
+        panelSurface.classList.toggle("rounded-b-lg", !isBottomClamped);
+        panelSurface.classList.toggle("rounded-b-none", isBottomClamped);
+      }
     }
-  }, []);
+  }, [roundPanelBottom]);
 
   useLayoutEffect(() => {
     syncPanel();
