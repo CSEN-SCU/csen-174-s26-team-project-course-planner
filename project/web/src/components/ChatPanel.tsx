@@ -535,14 +535,6 @@ export function ChatPanel({
             </button>
             <button
               type="button"
-              onClick={() => void send()}
-              disabled={isGenerating}
-              className="rounded-md bg-[var(--scu-red)] px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--scu-dark-red)] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isGenerating ? "…" : "Send"}
-            </button>
-            <button
-              type="button"
               onClick={() => void toggleVoice()}
               disabled={voiceStatus === "processing"}
               title={micLabel}
@@ -555,6 +547,14 @@ export function ChatPanel({
               }`}
             >
               {voiceStatus === "processing" ? <SpinnerIcon /> : <MicIcon />}
+            </button>
+            <button
+              type="button"
+              onClick={() => void send()}
+              disabled={isGenerating}
+              className="rounded-md bg-[var(--scu-red)] px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--scu-dark-red)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isGenerating ? "…" : "Send"}
             </button>
           </div>
         </div>
