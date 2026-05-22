@@ -79,4 +79,4 @@ index 89a7c2a..f1d3a21 100644
 
 Jolli Connection Screenshot:
 
-![Jolli Connection](Screenshot%202026-04-29%20at%2015-14-16%20Jolli.png)
+![Jolli Connection](img/Screenshot%202026-04-29%20at%2015-14-16%20Jolli.png)

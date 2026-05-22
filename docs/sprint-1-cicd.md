@@ -25,9 +25,9 @@ We avoided commiting secrets by ensure that the .env file is in the .gitignore, 
 
 Successful deploys (Render dashboard):
 
-![Static site — frontend deployments](courseplannerfrontend.jpg)
+![Static site — frontend deployments](img/courseplannerfrontend.jpg)
 
-![Web service — API deployments](courseplannerbackend.jpg)
+![Web service — API deployments](img/courseplannerbackend.jpg)
 
 ### Platform choice paragraph
 

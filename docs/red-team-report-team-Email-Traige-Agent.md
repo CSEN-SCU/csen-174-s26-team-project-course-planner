@@ -4,7 +4,7 @@
 
 Our target is a course-planning assistant for Santa Clara University students: it ingests Academic Progress exports, optionally syncs Workday, and uses Gemini-backed agents to recommend next-term schedules, four-year plans, and conversational help. We reviewed the public repository layout (`project/api`, `project/web`, `project/course_planner`), the FastAPI routes and routers, the Vite/React client, and agent prompt construction in `planning_agent.py` and related modules. We exercised the deployed or locally running application through the chat UI, repeated API-style actions such as rapid regeneration, and manual prompt-injection strings.
 
-Screenshots in this `docs/` folder document UI failures, empty plans, Workday sync errors, and model behavior under adversarial prompts. Cursor-assisted code review complemented dynamic testing to tie each finding to concrete surfaces such as routes, lack of auth or rate limits, and prompt assembly.
+Screenshots in `docs/img/` document UI failures, empty plans, Workday sync errors, and model behavior under adversarial prompts. Cursor-assisted code review complemented dynamic testing to tie each finding to concrete surfaces such as routes, lack of auth or rate limits, and prompt assembly.
 
 ### Threat Model
 
@@ -79,7 +79,7 @@ On successful login, fetch server state (`missing_details` snapshot, memory list
 
 **Evidence:**
 
-![Workday sync failed with missing Playwright dependency](sync_screenshot.png)
+![Workday sync failed with missing Playwright dependency](img/sync_screenshot.png)
 
 **Severity:** Low (feature reliability; higher if users rely on sync instead of manual upload of sensitive files). *Not very serious as just simply not implemented yet.*
 
@@ -132,7 +132,7 @@ Wire New Plan to the same reset handler as the documented chat flow: clear `plan
 
 **Evidence:**
 
-![Assistant refuses to add a different elective to the four-year plan](four_year_screenshot.png)
+![Assistant refuses to add a different elective to the four-year plan](img/four_year_screenshot.png)
 
 **Severity:** Moderate (product correctness and Responsible AI alignment — misleading completeness).
 
@@ -159,7 +159,7 @@ Separate degree requirements from student goals in the schema; pass explicit ele
 
 **Evidence:**
 
-![Four-year plan grid with empty quarters and zero scheduled units](four_year_misfunction_screenshot.png)
+![Four-year plan grid with empty quarters and zero scheduled units](img/four_year_misfunction_screenshot.png)
 
 **Severity:** Major (core feature unreliable).
 
@@ -186,7 +186,7 @@ Strict response validation; when parse fails, return a structured error and neve
 
 **Evidence:**
 
-![Prompt injection: model includes burrito instructions in the advice section](prompt_injection_screenshot.png)
+![Prompt injection: model includes burrito instructions in the advice section](img/prompt_injection_screenshot.png)
 
 **Severity:** Major (integrity of planning output; severity depends on downstream trust in the UI).
 
@@ -212,9 +212,9 @@ Treat model output as untrusted: validate JSON schema strictly, strip or sandbox
 
 **Evidence:**
 
-![Model echoes internal precedence rules from the system prompt](prompt_injection_2_screenshot.png)
+![Model echoes internal precedence rules from the system prompt](img/prompt_injection_2_screenshot.png)
 
-![Repository source for the leaked precedence block in `planning_agent.py`](prompt_injection_3_screenshot.png)
+![Repository source for the leaked precedence block in `planning_agent.py`](img/prompt_injection_3_screenshot.png)
 
 **Severity:** Moderate to Major (information disclosure about prompt structure aids further attacks; usually not direct credential leak).
 
