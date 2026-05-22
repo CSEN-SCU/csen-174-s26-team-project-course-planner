@@ -491,10 +491,10 @@ export function ChatPanel({
           </div>
         )}
 
-        <div className="flex items-end gap-2">
+        <div className="flex items-stretch gap-2">
           <textarea
             ref={textareaRef}
-            rows={2}
+            rows={1}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
@@ -504,9 +504,9 @@ export function ChatPanel({
               }
             }}
             placeholder="Message…"
-            className="min-h-[44px] flex-1 resize-none rounded-md border border-neutral-300 px-3 py-2 text-sm text-[var(--scu-text)] outline-none ring-0 placeholder:text-neutral-400 focus:border-[var(--scu-red)] focus:ring-1 focus:ring-[var(--scu-red)]"
+            className="min-h-0 flex-1 resize-none self-stretch rounded-md border border-neutral-300 px-3 py-2 text-sm text-[var(--scu-text)] outline-none ring-0 placeholder:text-neutral-400 focus:border-[var(--scu-red)] focus:ring-1 focus:ring-[var(--scu-red)]"
           />
-          <div className="flex flex-col gap-1">
+          <div className="flex shrink-0 flex-col items-center justify-between gap-1">
             <button
               type="button"
               onClick={onFilePick}
@@ -517,6 +517,14 @@ export function ChatPanel({
             </button>
             <button
               type="button"
+              onClick={() => void send()}
+              disabled={isGenerating}
+              className="rounded-md bg-[var(--scu-red)] px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--scu-dark-red)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isGenerating ? "…" : "Send"}
+            </button>
+            <button
+              type="button"
               onClick={() => void toggleVoice()}
               disabled={voiceStatus === "processing"}
               title={micLabel}
@@ -524,21 +532,13 @@ export function ChatPanel({
                 voiceStatus === "recording"
                   ? "bg-[var(--scu-red)] text-white"
                   : voiceStatus === "processing"
-                  ? "bg-neutral-100 text-neutral-400 cursor-wait"
+                  ? "cursor-wait bg-neutral-100 text-neutral-400"
                   : "text-neutral-500 hover:bg-neutral-100 hover:text-[var(--scu-text)]"
               }`}
             >
               {voiceStatus === "processing" ? <SpinnerIcon /> : <MicIcon />}
             </button>
           </div>
-          <button
-            type="button"
-            onClick={() => void send()}
-            disabled={isGenerating}
-            className="h-[44px] shrink-0 rounded-md bg-[var(--scu-red)] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--scu-dark-red)] disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isGenerating ? "…" : "Send"}
-          </button>
         </div>
         <p className="mt-1.5 text-[10px] text-neutral-400">
           {canDropFiles
