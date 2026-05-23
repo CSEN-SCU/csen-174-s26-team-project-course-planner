@@ -34,6 +34,32 @@ TARGET_UNIT_MAX = 16
 
 log = logging.getLogger(__name__)
 
+# ── System-prompt exfiltration tracking (RT#8) ───────────────────────────────
+import threading
+_leak_attempt_lock = threading.Lock()
+_leak_attempt_count = 0
+
+
+def get_leak_attempt_count() -> int:
+  """Return the total count of detected system-prompt leak attempts."""
+  with _leak_attempt_lock:
+    return _leak_attempt_count
+
+
+def reset_leak_attempt_count() -> None:
+  """Reset the leak attempt counter (for testing)."""
+  global _leak_attempt_count
+  with _leak_attempt_lock:
+    _leak_attempt_count = 0
+
+
+def _increment_leak_attempt_count() -> None:
+  """Increment the leak attempt counter when a leak is detected."""
+  global _leak_attempt_count
+  with _leak_attempt_lock:
+    _leak_attempt_count += 1
+
+
 # ── Prompt injection defences ────────────────────────────────────────────────
 # Maximum length of any free-form user-supplied text inserted into the prompt.
 # Long pasted essays are truncated to keep the prompt manageable and to make
@@ -168,9 +194,17 @@ def filter_freeform_model_text(text: str, *, fallback: str = _FALLBACK_CONVERSAT
     elif not isinstance(text, str):
         text = str(text)
     cleaned = text.strip()
-    if _contains_recipe_content(cleaned) or _contains_system_prompt_leak(cleaned):
+    if _contains_system_prompt_leak(cleaned):
+        _increment_leak_attempt_count()
         log.warning(
-            "planning_agent: replacing free-form model text that matched injection "
+            "planning_agent: replacing free-form model text that matched system-prompt "
+            "leak denylist; first 80 chars=%r",
+            cleaned[:80],
+        )
+        return fallback
+    if _contains_recipe_content(cleaned):
+        log.warning(
+            "planning_agent: replacing free-form model text that matched recipe "
             "denylist; first 80 chars=%r",
             cleaned[:80],
         )
@@ -291,9 +325,17 @@ def _sanitize_model_output(parsed: dict[str, Any]) -> dict[str, Any]:
     advice = parsed.get("advice")
     if not isinstance(advice, str):
         advice = "" if advice is None else str(advice)
-    if _contains_recipe_content(advice) or _contains_system_prompt_leak(advice):
+    if _contains_system_prompt_leak(advice):
+        _increment_leak_attempt_count()
         log.warning(
-            "planning_agent: replacing advice that matched injection denylist; "
+            "planning_agent: replacing advice that matched system-prompt "
+            "leak denylist; first 80 chars=%r",
+            advice[:80],
+        )
+        advice = _FALLBACK_ADVICE
+    elif _contains_recipe_content(advice):
+        log.warning(
+            "planning_agent: replacing advice that matched recipe denylist; "
             "first 80 chars=%r",
             advice[:80],
         )
@@ -306,11 +348,17 @@ def _sanitize_model_output(parsed: dict[str, Any]) -> dict[str, Any]:
         assistant_reply = ""
     elif not isinstance(assistant_reply, str):
         assistant_reply = str(assistant_reply)
-    if _contains_system_prompt_leak(assistant_reply) or _contains_recipe_content(
-        assistant_reply
-    ):
+    if _contains_system_prompt_leak(assistant_reply):
+        _increment_leak_attempt_count()
         log.warning(
-            "planning_agent: replacing assistant_reply that matched injection "
+            "planning_agent: replacing assistant_reply that matched system-prompt "
+            "leak denylist; first 80 chars=%r",
+            assistant_reply[:80],
+        )
+        assistant_reply = _FALLBACK_ASSISTANT_REPLY
+    elif _contains_recipe_content(assistant_reply):
+        log.warning(
+            "planning_agent: replacing assistant_reply that matched recipe "
             "denylist; first 80 chars=%r",
             assistant_reply[:80],
         )
