@@ -573,6 +573,61 @@ def load_category_course_index(path: Path | None = None) -> dict[str, list[str]]
     return index
 
 
+@lru_cache(maxsize=1)
+def load_core_integrations_course_set(path: str | None = None) -> frozenset[str]:
+    """Return the set of course codes that carry at least one 'Core Integrations ::' tag.
+
+    Used by R4 to restrict Educational Enrichment candidates to courses that
+    actually carry a Core Integrations tag, not the broader Pathways pool.
+    Returns ``frozenset()`` when the schedule xlsx is absent.
+    """
+    p = _find_schedule_path(Path(path) if path else None)
+    if p is None:
+        return frozenset()
+
+    codes: set[str] = set()
+    wb = load_workbook(p, read_only=True, data_only=True)
+    try:
+        ws = wb.active
+        it = ws.iter_rows(values_only=True)
+        header_row = next(it, None)
+        if not header_row:
+            return frozenset()
+        h = [str(c).strip() if c is not None else "" for c in header_row]
+        try:
+            idx_sec = h.index("Course Section")
+        except ValueError:
+            return frozenset()
+        idx_tags = _find_col(h, _TAGS_HEADERS)
+        if idx_tags is None:
+            return frozenset()
+
+        for row in it:
+            if not row or idx_sec >= len(row):
+                continue
+            key = _parse_section_subject_number(row[idx_sec])
+            if not key:
+                continue
+            subj, num = key
+            tags_cell = row[idx_tags] if idx_tags < len(row) else None
+            if not tags_cell:
+                continue
+            # A course qualifies if any tag line starts with "Core Integrations ::"
+            for line in str(tags_cell).split("\n"):
+                if line.strip().lower().startswith("core integrations ::"):
+                    course_code = f"{subj} {num}"
+                    codes.add(course_code)
+                    if subj == "CSEN":
+                        codes.add(f"COEN {num}")
+                    elif subj == "COEN":
+                        codes.add(f"CSEN {num}")
+                    break
+    finally:
+        wb.close()
+
+    return frozenset(codes)
+
+
 def load_course_titles_index(path: Path | None = None) -> dict[tuple[str, str], str]:
     """Build a (subject, number) → canonical course title index.
 
