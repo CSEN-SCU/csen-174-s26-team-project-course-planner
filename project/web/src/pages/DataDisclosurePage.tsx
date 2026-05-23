@@ -1,7 +1,7 @@
 import { StaticInfoPageLayout } from "../components/StaticInfoPageLayout";
 
 const DISCLOSURE_TEXT =
-  "Please note: Data enterred into this website will be processed by Gemini models. Names and grades are truncated from uploaded academic progress reports, however any other information, including personaly identifiable information entered into the message box, will be sent and processed.";
+  "Please note: Data entered into this website will be processed by Gemini models. Grades are excluded from uploaded academic progress reports before processing, however any other information, including personally identifiable information entered into the message box, will be sent and processed.";
 
 export function DataDisclosurePage() {
   return (
