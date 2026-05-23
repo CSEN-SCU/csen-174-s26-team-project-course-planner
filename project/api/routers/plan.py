@@ -17,6 +17,7 @@ from agents.planning_agent import (
     UNTRUSTED_INPUT_SYSTEM_RULES,
     filter_freeform_model_text,
     run_planning_agent,
+    suggest_courses_for_slot,
 )
 from agents.professor_agent import run_professor_agent
 from middleware.rate_limit import limit
@@ -399,3 +400,36 @@ def resume_plan_v2(body: ResumeRequest) -> dict[str, Any]:
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"resume failed: {exc}") from exc
     return _shape_v2_response(plan)
+
+
+# ── Slot-based course suggestions (R6) ──────────────────────────────────────
+
+class SlotSuggestionRequest(BaseModel):
+    day_index: int = Field(..., description="0=Mon, 1=Tue, ..., 4=Fri")
+    start_min: int = Field(..., description="Start time in minutes since midnight")
+    end_min: int = Field(..., description="End time in minutes since midnight")
+    missing_details: list[dict[str, Any]] = Field(..., description="Open requirements")
+    exclude_codes: list[str] = Field(default_factory=list, description="Codes to exclude")
+
+
+@router.post("/suggest_for_slot", dependencies=[Depends(limit("plan"))])
+def suggest_for_slot(body: SlotSuggestionRequest) -> dict[str, Any]:
+    """Suggest up to 5 courses that fit a calendar slot and open requirements (R6).
+
+    This is a cheaper alternative to full /api/plan regeneration for slot-click popover.
+    """
+    try:
+        candidates = suggest_courses_for_slot(
+            day_index=body.day_index,
+            start_min=body.start_min,
+            end_min=body.end_min,
+            missing_details=body.missing_details,
+            exclude_codes=body.exclude_codes,
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"suggestion failed: {exc}") from exc
+
+    return {
+        "candidates": candidates,
+        "count": len(candidates),
+    }

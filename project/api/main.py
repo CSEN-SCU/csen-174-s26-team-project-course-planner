@@ -26,7 +26,7 @@ from fastapi.responses import JSONResponse
 
 from db.migrate import migrate
 from middleware.rate_limit import RateLimitExceeded
-from routers import auth, courses, four_year_plan, memory, plan, upload, voice
+from routers import auth, courses, diagnostics, four_year_plan, memory, plan, upload, voice
 
 app = FastAPI(title="SCU Course Planner API")
 
@@ -89,6 +89,7 @@ app.include_router(four_year_plan.router, prefix="/api/four-year-plan", tags=["f
 app.include_router(memory.router, prefix="/api/memory", tags=["memory"])
 app.include_router(upload.router, prefix="/api/upload", tags=["upload"])
 app.include_router(voice.router, prefix="/api/voice", tags=["voice"])
+app.include_router(diagnostics.router, prefix="/api/diagnostics", tags=["diagnostics"])
 
 
 @app.get("/api/health")

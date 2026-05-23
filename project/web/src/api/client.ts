@@ -190,3 +190,42 @@ export async function listCourses() {
   if (!res.ok) throw new Error(errFromBody(data));
   return (data.courses as OfferedCourse[]) ?? [];
 }
+
+// ── Slot-based course suggestions (R6) ──────────────────────────────────────
+
+export type CourseSuggestion = {
+  course: string;
+  title: string;
+  units: number;
+  instructor: string;
+  rating: number;
+  difficulty: number;
+  rationale: string;
+};
+
+/** Suggest courses for a calendar time slot (R6 popover). */
+export async function suggestCoursesForSlot(params: {
+  day_index: number;
+  start_min: number;
+  end_min: number;
+  missing_details: Record<string, unknown>[];
+  exclude_codes?: string[];
+}) {
+  const res = await fetch(`${API_BASE}/plan/suggest_for_slot`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      day_index: params.day_index,
+      start_min: params.start_min,
+      end_min: params.end_min,
+      missing_details: params.missing_details,
+      exclude_codes: params.exclude_codes ?? [],
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(errFromBody(data));
+  return {
+    candidates: (data.candidates as CourseSuggestion[]) ?? [],
+    count: data.count as number,
+  };
+}
