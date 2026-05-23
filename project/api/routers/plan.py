@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import csv
 import json
 import os
 import re
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -20,8 +23,34 @@ from agents.planning_agent import (
 )
 from agents.professor_agent import run_professor_agent
 from middleware.rate_limit import limit
+from utils.scu_course_schedule_xlsx import list_offered_courses
 
 router = APIRouter()
+
+# ---------------------------------------------------------------------------
+# Instructor ratings cache (read once from CSV, no live RMP call needed here)
+# ---------------------------------------------------------------------------
+
+_RATINGS_PATH = Path(__file__).parent.parent.parent / "course_planner" / "data" / "instructor_ratings.csv"
+
+
+@lru_cache(maxsize=1)
+def _load_instructor_ratings() -> dict[str, float | None]:
+    """Return {instructor_name: rating} from the local CSV. Missing → None."""
+    out: dict[str, float | None] = {}
+    if not _RATINGS_PATH.exists():
+        return out
+    with _RATINGS_PATH.open(newline="", encoding="utf-8") as f:
+        for row in csv.DictReader(r for r in f if not r.startswith("#")):
+            name = (row.get("instructor_name") or "").strip()
+            raw = (row.get("rating") or "").strip()
+            if not name:
+                continue
+            try:
+                out[name] = float(raw)
+            except ValueError:
+                out[name] = None
+    return out
 
 # When MULTI_AGENT_PLAN=1, the legacy POST /api/plan transparently delegates
 # to the LangGraph multi-agent engine. Otherwise it stays on the single-shot
@@ -399,3 +428,158 @@ def resume_plan_v2(body: ResumeRequest) -> dict[str, Any]:
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"resume failed: {exc}") from exc
     return _shape_v2_response(plan)
+
+
+# ---------------------------------------------------------------------------
+# R6 — Calendar slot-click suggestion popover
+# ---------------------------------------------------------------------------
+
+class SuggestForSlotRequest(BaseModel):
+    day: int  # 0 = Mon … 4 = Fri
+    start_min: int  # minutes from 8 AM (e.g. 120 = 10:00 AM)
+    end_min: int  # start_min + 30 for a single slot click
+    missing_details: list[dict[str, Any]] = Field(default_factory=list)
+    user_id: str = ""
+    exclude_codes: list[str] = Field(default_factory=list)
+
+
+def _time_label(minutes_from_8am: int) -> str:
+    total = 8 * 60 + minutes_from_8am
+    h, m = divmod(total, 60)
+    suffix = "AM" if h < 12 else "PM"
+    h12 = h % 12 or 12
+    return f"{h12}:{m:02d} {suffix}"
+
+
+def _day_label(day: int) -> str:
+    return ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"][day % 5]
+
+
+def _score_time_proximity(course_start: int | None, slot_start: int, slot_end: int) -> int:
+    """Higher = better match. Courses that start inside [slot-60, slot+90] score positively."""
+    if course_start is None:
+        return 0
+    if slot_start <= course_start <= slot_end + 90:
+        return 3  # starts at or after the slot
+    if course_start >= slot_start - 60:
+        return 2  # starts up to 60 min before (e.g. 9am course for 9:30 click)
+    return 0
+
+
+@router.post("/suggest_for_slot", dependencies=[Depends(limit("plan"))])
+def suggest_for_slot(body: SuggestForSlotRequest) -> dict[str, Any]:
+    """Return 3-5 candidate courses for the clicked calendar slot.
+
+    Filters the next-term schedule to courses that meet on the clicked day
+    and whose start time is within ±60 min of the slot, then uses Gemini
+    to rank by open-requirement fit and produce a short rationale per course.
+    """
+    all_courses = list_offered_courses()
+    ratings = _load_instructor_ratings()
+    exclude = {c.upper() for c in body.exclude_codes}
+
+    # Filter: must meet on this day and be nearby in time
+    candidates: list[dict[str, Any]] = []
+    for c in all_courses:
+        code = str(c.get("course") or "")
+        if code.upper() in exclude:
+            continue
+        days: list[int] = list(c.get("meeting_days") or [])
+        if body.day not in days:
+            continue
+        score = _score_time_proximity(c.get("meeting_start_min"), body.start_min, body.end_min)
+        if score == 0:
+            continue
+        prof = c.get("professor") or ""
+        rating = ratings.get(prof)
+        candidates.append({**c, "_time_score": score, "_rating": rating})
+
+    # Sort: time proximity first, then rating desc
+    candidates.sort(
+        key=lambda x: (
+            -x["_time_score"],
+            -(x["_rating"] or 0.0),
+        )
+    )
+
+    # Cap to 20 for the LLM context; it will pick the best 5
+    pool = candidates[:20]
+
+    if not pool:
+        return {"candidates": []}
+
+    # Build a Gemini prompt to rank and explain
+    req_summary = ""
+    if body.missing_details:
+        reqs = [str(r.get("requirement") or r.get("course_code") or "") for r in body.missing_details[:10]]
+        req_summary = "Open requirements: " + ", ".join(r for r in reqs if r)
+
+    pool_lines = "\n".join(
+        f"- {c['course']}: {c.get('title') or ''} | {c.get('professor') or 'TBA'}"
+        f" | {_time_label(c['meeting_start_min'])} on {_day_label(body.day)}"
+        f" | {c.get('units') or '?'} units"
+        for c in pool
+    )
+
+    slot_desc = f"{_day_label(body.day)} ~{_time_label(body.start_min)}"
+    prompt = (
+        f"A student clicked the {slot_desc} slot on their weekly calendar.\n"
+        f"{req_summary}\n\n"
+        "From the courses below, pick the 5 best fits (fewest prerequisites already done, "
+        "covers open requirements, good instructor reputation). "
+        "For each, write one SHORT sentence of rationale (≤15 words). "
+        "Output ONLY a JSON array of up to 5 objects, each with keys: "
+        '"course" (string), "rationale" (string). No markdown fences.\n\n'
+        f"Courses:\n{pool_lines}"
+    )
+
+    client = get_genai_client(purpose="slot suggestion")
+    cfg = types.GenerateContentConfig(
+        max_output_tokens=512,
+        system_instruction=(
+            "You are an SCU academic advisor. "
+            "Output valid JSON only — a JSON array, nothing else."
+        ),
+    )
+    ranked_codes: list[dict[str, str]] = []
+    try:
+        resp = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=cfg,
+        )
+        text = (resp.text or "").strip().strip("```json").strip("```").strip()
+        parsed = json.loads(text)
+        if isinstance(parsed, list):
+            ranked_codes = [
+                {"course": str(r.get("course", "")), "rationale": str(r.get("rationale", ""))}
+                for r in parsed
+                if isinstance(r, dict)
+            ][:5]
+    except Exception:  # noqa: BLE001
+        # Fallback: just return the top 5 pool items with no rationale
+        ranked_codes = [{"course": str(c["course"]), "rationale": ""} for c in pool[:5]]
+
+    # Merge rationales back with full course data
+    pool_by_code = {str(c["course"]): c for c in pool}
+    result: list[dict[str, Any]] = []
+    for r in ranked_codes:
+        code = r["course"]
+        base = pool_by_code.get(code)
+        if base is None:
+            continue
+        prof = base.get("professor") or ""
+        rating_val = ratings.get(prof)
+        result.append({
+            "course": code,
+            "title": base.get("title") or "",
+            "professor": prof,
+            "rating": rating_val,
+            "units": base.get("units"),
+            "meeting_days": base.get("meeting_days") or [],
+            "meeting_start_min": base.get("meeting_start_min"),
+            "meeting_end_min": base.get("meeting_end_min"),
+            "rationale": r["rationale"],
+        })
+
+    return {"candidates": result}

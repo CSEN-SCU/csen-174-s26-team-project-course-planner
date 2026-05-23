@@ -29,7 +29,8 @@ function formatCourseTime(startMin: number, endMin: number): string {
 export type CalendarViewProps = {
   recommendedCourses: Record<string, unknown>[] | null;
   onRemoveCourse?: (idx: number) => void;
-  onSlotClick?: (dayIndex: number, slotIndex: number) => void;
+  /** Called with the day index, slot index, and the cell's bounding rect for popover positioning. */
+  onSlotClick?: (dayIndex: number, slotIndex: number, rect: DOMRect) => void;
 };
 
 export function CalendarView({ recommendedCourses, onRemoveCourse, onSlotClick }: CalendarViewProps) {
@@ -114,7 +115,7 @@ export function CalendarView({ recommendedCourses, onRemoveCourse, onSlotClick }
                     key={slotIndex}
                     className={`group w-full border-b border-neutral-100 transition ${onSlotClick ? "hover:bg-red-50/50 cursor-pointer" : ""}`}
                     style={{ height: SLOT_HEIGHT_PX }}
-                    onClick={() => onSlotClick?.(dayIndex, slotIndex)}
+                    onClick={(e) => onSlotClick?.(dayIndex, slotIndex, e.currentTarget.getBoundingClientRect())}
                   >
                     {onSlotClick && (
                       <span className="block text-center text-lg font-light text-neutral-300 opacity-0 group-hover:opacity-100 leading-none select-none" style={{ paddingTop: 4 }}>+</span>

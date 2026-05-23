@@ -16,7 +16,12 @@ import type { FourYearPlan, ParsedRow } from "./types";
 import { DeleteUserDataConfirm } from "./components/DeleteUserDataConfirm";
 import { clearLocalSession } from "./auth/session";
 import { SiteFooter } from "./components/SiteFooter";
-import { CALENDAR_START_HOUR, WEEKDAY_LABELS } from "./types";
+import type {} from "./types";
+import {
+  SlotSuggestionPopover,
+  type SlotCandidate,
+  type SlotPopoverState,
+} from "./components/SlotSuggestionPopover";
 
 const WELCOME_TEXT =
   "Upload your Academic Progress file or describe your preferences to get started.";
@@ -61,6 +66,7 @@ export default function App({ userId, onSignOut }: AppProps) {
   const [deleteDataOpen, setDeleteDataOpen] = useState(false);
   const [deleteDataBusy, setDeleteDataBusy] = useState(false);
   const [deleteDataNotice, setDeleteDataNotice] = useState<string | null>(null);
+  const [slotPopover, setSlotPopover] = useState<SlotPopoverState | null>(null);
 
   // Load academic progress + past plan snapshots for this user
   useEffect(() => {
@@ -426,14 +432,42 @@ export default function App({ userId, onSignOut }: AppProps) {
     setDeleteDataNotice(null);
   }, [deleteDataBusy]);
 
-  const handleSlotClick = useCallback((dayIndex: number, slotIndex: number) => {
-    const dayName = WEEKDAY_LABELS[dayIndex] ?? "Monday";
-    const totalMin = CALENDAR_START_HOUR * 60 + slotIndex * 30;
-    const d = new Date();
-    d.setHours(Math.floor(totalMin / 60), totalMin % 60, 0, 0);
-    const timeStr = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
-    setChatPrefill(`Can you add a course for me on ${dayName} around ${timeStr}?`);
+  // R6: open the slot-suggestion popover (no chat round-trip)
+  const handleSlotClick = useCallback((dayIndex: number, slotIndex: number, rect: DOMRect) => {
+    const startMin = slotIndex * 30; // minutes from CALENDAR_START_HOUR
+    setSlotPopover({ day: dayIndex, startMin, rect });
   }, []);
+
+  // R6: "Add to plan" from the popover — append directly to planResult
+  const handleAddFromSlot = useCallback(
+    (candidate: SlotCandidate) => {
+      const newCourse: Record<string, unknown> = {
+        course: candidate.course,
+        title: candidate.title,
+        professor: candidate.professor,
+        units: candidate.units,
+        meeting_days: candidate.meeting_days,
+        meeting_start_min: candidate.meeting_start_min,
+        meeting_end_min: candidate.meeting_end_min,
+      };
+      setPlanResult((prev) => {
+        const existing: Record<string, unknown>[] = Array.isArray(prev?.recommended)
+          ? (prev!.recommended as Record<string, unknown>[])
+          : [];
+        // Avoid duplicates
+        if (existing.some((c) => c.course === candidate.course)) return prev;
+        const updated = [...existing, newCourse];
+        return { ...(prev ?? {}), recommended: updated };
+      });
+      // Also keep sessionCalendarRecommended in sync
+      setSessionCalendarRecommended((prev) => {
+        const existing = Array.isArray(prev) ? prev : [];
+        if (existing.some((c) => c.course === candidate.course)) return prev;
+        return [...existing, newCourse];
+      });
+    },
+    [],
+  );
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--scu-white)]">
@@ -520,6 +554,22 @@ export default function App({ userId, onSignOut }: AppProps) {
       />
       </div>
       <SiteFooter userId={userId} onDeleteUserData={() => setDeleteDataOpen(true)} />
+
+      {/* R6 — Slot suggestion popover */}
+      {slotPopover && (
+        <SlotSuggestionPopover
+          state={slotPopover}
+          missingDetails={missingDetails as Record<string, unknown>[]}
+          userId={userId}
+          existingCodes={
+            (effectiveRecommended ?? [])
+              .map((c) => String(c.course ?? ""))
+              .filter(Boolean)
+          }
+          onAddCourse={handleAddFromSlot}
+          onClose={() => setSlotPopover(null)}
+        />
+      )}
     </div>
   );
 }
