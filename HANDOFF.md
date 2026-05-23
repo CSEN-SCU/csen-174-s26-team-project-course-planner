@@ -187,7 +187,7 @@ teammates via PRs (#26 #27 #28) and direct commits.
 | 6 | 4-year plan intermittently empty | ✅ merged (`0850dc9`) — structured errors |
 | 7 | Prompt injection via user_preference | ✅ merged (`1b1e6b1` + teammate `b083746`) — `_sanitize_user_text`, output denylist |
 | 8 | System-prompt exfiltration | ⚠️ partial — `_SYSTEM_PROMPT_LEAK_PHRASES` + `_contains_system_prompt_leak` exist in `planning_agent.py`; confirm it's applied to `advice`/`assistant_reply` and add the `GET /api/diagnostics/leak_attempts` admin endpoint (not yet present) |
-| RAI | Responsible-AI: data disclosure, PII scrub, lifecycle | ✅ partial — Data Disclosure page merged (PRs #26/#27); PII scrub util + "Delete my data" endpoint still TODO |
+| RAI | Responsible-AI: data disclosure, PII scrub, lifecycle | ✅ done — Data Disclosure page (expanded copy, no typos), `DELETE /api/auth/user/{id}/data` endpoint, `purge_user_storage` + `_redact_pii`, frontend confirm dialog with accurate copy; 9 tests pass |
 
 > The 9 background red-team subagents I launched earlier mostly hit the API
 > rate limit and produced little; the merged fixes above came from teammate
