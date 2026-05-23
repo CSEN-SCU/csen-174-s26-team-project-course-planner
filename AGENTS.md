@@ -84,6 +84,27 @@ row in the left panel for every chat turn.
 - When a new preference contradicts BACKGROUND CONTEXT (memory),
   CURRENT ASK wins. See the system_instruction in `planning_agent.py`.
 
+### R7 — Follow-up edits are TARGETED diffs  ✅ implemented
+
+A follow-up like "replace ECEN 153 with a Chinese class" or "drop
+CSEN 194" must change **only the course(s) the user named** (plus their
+lab partners). Every other course in CURRENT STATE stays. Do NOT
+regenerate the whole plan — the LLM, asked to re-emit the full list
+minus one course, routinely drops unrelated courses, duplicates the
+replacement, and reports an inconsistent total.
+
+- Enforced deterministically in `planning_agent.py`:
+  - `_named_removal_codes(user_preference)` — extracts the codes the
+    user authorized removing (handles "ecen153" with no space and CJK
+    text; expands to lab partners + CSEN↔COEN / ECEN↔ELEN aliases).
+  - `_reconcile_followup_edit(new_recs, previous_plan, user_preference)`
+    — dedups the LLM output and re-adds any CURRENT STATE course it
+    dropped that the user did NOT name. Runs on every follow-up turn.
+  - `total_units` is always recomputed from the final list.
+- Tests: `tests/test_followup_swap.py`.
+- Only rebuild the whole plan when the user explicitly asks (e.g. "start
+  over", "redo my whole schedule") or clicks **New Plan**.
+
 ### R4 — Educational Enrichment: pick the highest-rated course  ⏳ partially
 
 For the "Computer Science and Engineering Major: Educational Enrichment –

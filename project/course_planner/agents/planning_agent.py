@@ -667,6 +667,93 @@ def _summarize_previous_plan(previous_plan: dict | None) -> str:
     )
 
 
+def _named_removal_codes(user_preference: str) -> set[str]:
+    """Course codes the student explicitly named in a follow-up edit.
+
+    A swap/drop like "replace ECEN 153 with a Chinese class" or
+    "ecen153换成…" names ECEN 153. We extract such codes (handling missing
+    spaces + case) plus their lab partners and CSEN↔COEN / ECEN↔ELEN
+    aliases, so a deterministic reconcile knows which courses the user
+    actually authorized removing.
+    """
+    text = (user_preference or "").upper()
+    named: set[str] = set()
+    # No trailing \b: CJK text (e.g. "ECEN153换成…") counts as word chars in
+    # Unicode, so \b after the number wouldn't match. Use a negative lookahead
+    # for another digit instead.
+    for m in re.finditer(r"(?<![A-Z])([A-Z]{2,6})\s*(\d{1,3}[A-Z]?)(?![0-9])", text):
+        named.add(f"{m.group(1)} {m.group(2)}")
+    expanded: set[str] = set(named)
+    _alias = {"CSEN": "COEN", "COEN": "CSEN", "ECEN": "ELEN", "ELEN": "ECEN"}
+    for code in named:
+        parts = _split_course_code(code)
+        if not parts:
+            continue
+        subj, num = parts
+        # lab partner
+        partner_num = num[:-1] if num.endswith("L") else f"{num}L"
+        expanded.add(f"{subj} {partner_num}")
+        # subject alias (+ its lab partner)
+        alt = _alias.get(subj)
+        if alt:
+            expanded.add(f"{alt} {num}")
+            expanded.add(f"{alt} {partner_num}")
+    return expanded
+
+
+def _reconcile_followup_edit(
+    new_recs: list[dict],
+    previous_plan: dict | None,
+    user_preference: str,
+) -> list[dict]:
+    """Make a follow-up edit a TARGETED diff (AGENTS.md R7).
+
+    1. Deduplicate the LLM's list by course code (it sometimes repeats a
+       course — e.g. CHST 4 twice).
+    2. Re-add any course from CURRENT STATE that the LLM dropped but the
+       user did NOT name for removal. A "swap X for Y" must keep every
+       other course; the model frequently drops unrelated courses when it
+       re-emits the whole plan.
+
+    Removals the user explicitly asked for (and their lab partners /
+    aliases) are respected.
+    """
+    # 1. Dedup (keep first occurrence; preserve order).
+    seen: set[str] = set()
+    deduped: list[dict] = []
+    for r in new_recs:
+        if not isinstance(r, dict):
+            continue
+        code = _normalize_code(r.get("course"))
+        if code and code in seen:
+            continue
+        if code:
+            seen.add(code)
+        deduped.append(r)
+
+    if not isinstance(previous_plan, dict):
+        return deduped
+    prev = previous_plan.get("recommended") or []
+    if not prev:
+        return deduped
+
+    named = _named_removal_codes(user_preference)
+    present = {_normalize_code(r.get("course")) for r in deduped}
+
+    # 2. Preserve previous courses the LLM dropped without authorization.
+    for pr in prev:
+        if not isinstance(pr, dict):
+            continue
+        code = _normalize_code(pr.get("course"))
+        if not code or code in present:
+            continue
+        if code in named:
+            continue  # the student asked to remove this — honor it
+        deduped.append(pr)
+        present.add(code)
+    return deduped
+
+
 def _resolve_item_codes(item: dict) -> list[str]:
     """Return the list of course codes to try for one missing_details item.
 
@@ -1235,6 +1322,12 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
 
     raw_recommended = valid_courses
     # ────────────────────────────────────────────────────────────────────────
+
+    # Follow-up edits must be TARGETED diffs (R7): dedup the LLM output and
+    # re-add any CURRENT STATE course it dropped without the user asking.
+    raw_recommended = _reconcile_followup_edit(
+        raw_recommended, previous_plan, user_preference
+    )
 
     raw_recommended, removed_completed = _filter_completed_recommendations(
         raw_recommended, completed_set
