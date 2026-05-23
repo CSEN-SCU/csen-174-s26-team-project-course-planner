@@ -24,6 +24,7 @@ from utils.scu_course_schedule_xlsx import (
     load_category_course_index,
     load_course_titles_index,
     load_course_units_index,
+    load_instructor_ratings,
     load_schedule_section_index,
     planned_section_keys,
 )
@@ -1468,3 +1469,99 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
     parsed["warnings"] = warnings
 
     return _sanitize_model_output(parsed)
+
+
+# ── Slot-based course suggestions (R6) ──────────────────────────────────────
+
+def suggest_courses_for_slot(
+    day_index: int,
+    start_min: int,
+    end_min: int,
+    missing_details: list[dict[str, any]],
+    exclude_codes: list[str] | None = None,
+) -> list[dict[str, any]]:
+  """Suggest up to 5 courses that fit a calendar slot and open requirements.
+
+  Args:
+    day_index: 0=Mon, 1=Tue, ..., 6=Sun
+    start_min: start time in minutes since midnight
+    end_min: end time in minutes since midnight
+    missing_details: list of open requirements (from academic progress)
+    exclude_codes: course codes to exclude (e.g. already in plan)
+
+  Returns:
+    List of up to 5 candidate courses with title, instructor, rating, rationale
+  """
+  exclude_codes = exclude_codes or []
+  schedule_index = load_schedule_section_index()
+  ratings = load_instructor_ratings()
+  units_index = load_course_units_index()
+  category_index = load_category_course_index()
+
+  # Build a set of open categories from missing_details
+  open_categories = set()
+  for detail in missing_details:
+    cat = detail.get("category")
+    if isinstance(cat, str):
+      open_categories.add(cat)
+
+  candidates = []
+
+  # Scan schedule index for courses that fit the time slot
+  for (subject, course_num), section_info in schedule_index.items():
+    course_code = f"{subject} {course_num}"
+
+    # Skip if already excluded
+    if course_code in exclude_codes:
+      continue
+
+    meeting_days = section_info.get("meeting_days") or []
+    meeting_start = section_info.get("meeting_start_min")
+    meeting_end = section_info.get("meeting_end_min")
+
+    # Check if the course meets on this day and overlaps the time slot
+    day_char = "MTWRF"[day_index] if day_index < 5 else None
+    if not day_char or day_char not in meeting_days:
+      continue
+
+    # Check for time overlap
+    if meeting_start is not None and meeting_end is not None:
+      if meeting_end <= start_min or meeting_start >= end_min:
+        continue  # No overlap
+
+    # Build candidate entry
+    instructors = section_info.get("instructors") or []
+    best_instructor = instructors[0] if instructors else None
+    instructor_name = best_instructor if isinstance(best_instructor, str) else "Unknown"
+
+    rating_info = None
+    if best_instructor:
+      for r in ratings:
+        if r.get("instructor_name") == best_instructor and r.get("course_code") == course_code:
+          rating_info = r
+          break
+
+    # Compute rationale
+    rationale = "Available at this time"
+    if open_categories:
+      course_categories = category_index.get((subject, course_num)) or []
+      matching_cats = [c for c in course_categories if c in open_categories]
+      if matching_cats:
+        rationale = f"Covers {', '.join(matching_cats)}"
+
+    unit_count = course_units_for(course_code, units_index) or 0
+
+    candidate = {
+        "course": course_code,
+        "title": course_title_for((subject, course_num)) or course_code,
+        "units": unit_count,
+        "instructor": instructor_name,
+        "rating": rating_info.get("rating", 3.0) if rating_info else 3.0,
+        "difficulty": rating_info.get("difficulty", 3.0) if rating_info else 3.0,
+        "rationale": rationale,
+    }
+    candidates.append(candidate)
+
+  # Sort by rating (descending) and limit to 5
+  candidates.sort(key=lambda x: (-x["rating"], x["course"]))
+  return candidates[:5]

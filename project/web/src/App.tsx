@@ -14,6 +14,7 @@ import { FourYearPlanView } from "./components/FourYearPlanView";
 import { LeftPanel, type MemorySessionRow } from "./components/LeftPanel";
 import type { FourYearPlan, ParsedRow } from "./types";
 import { DeleteUserDataConfirm } from "./components/DeleteUserDataConfirm";
+import { SlotSuggestionPopover } from "./components/SlotSuggestionPopover";
 import { clearLocalSession } from "./auth/session";
 import { SiteFooter } from "./components/SiteFooter";
 import { CALENDAR_START_HOUR, WEEKDAY_LABELS } from "./types";
@@ -61,6 +62,16 @@ export default function App({ userId, onSignOut }: AppProps) {
   const [deleteDataOpen, setDeleteDataOpen] = useState(false);
   const [deleteDataBusy, setDeleteDataBusy] = useState(false);
   const [deleteDataNotice, setDeleteDataNotice] = useState<string | null>(null);
+  // Slot suggestion popover state (R6)
+  const [slotPopoverOpen, setSlotPopoverOpen] = useState(false);
+  const [slotPopoverData, setSlotPopoverData] = useState<{
+    dayIndex: number;
+    slotIndex: number;
+    startMin: number;
+    endMin: number;
+    topPx: number;
+    leftPx: number;
+  } | null>(null);
 
   // Load academic progress + past plan snapshots for this user
   useEffect(() => {
@@ -301,6 +312,17 @@ export default function App({ userId, onSignOut }: AppProps) {
     setLocalOverride([...base, ...additions]);
   }, [localOverride, calendarRecommended]);
 
+  // Add course from slot suggestion popover (R6)
+  const handleAddFromSlotSuggestion = useCallback((course: Record<string, unknown>) => {
+    const base = localOverride ?? calendarRecommended ?? [];
+    const courseCode = String(course.course ?? "").trim().toUpperCase();
+    const present = new Set(
+      base.map((r) => String((r as { course?: unknown }).course ?? "").trim().toUpperCase()),
+    );
+    if (present.has(courseCode)) return;
+    setLocalOverride([...base, { ...course, _slotSuggestion: true }]);
+  }, [localOverride, calendarRecommended]);
+
   const effectiveCodes = useMemo(
     () =>
       (effectiveRecommended ?? []).map((r) =>
@@ -427,12 +449,23 @@ export default function App({ userId, onSignOut }: AppProps) {
   }, [deleteDataBusy]);
 
   const handleSlotClick = useCallback((dayIndex: number, slotIndex: number) => {
-    const dayName = WEEKDAY_LABELS[dayIndex] ?? "Monday";
-    const totalMin = CALENDAR_START_HOUR * 60 + slotIndex * 30;
-    const d = new Date();
-    d.setHours(Math.floor(totalMin / 60), totalMin % 60, 0, 0);
-    const timeStr = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
-    setChatPrefill(`Can you add a course for me on ${dayName} around ${timeStr}?`);
+    const startMin = CALENDAR_START_HOUR * 60 + slotIndex * 30;
+    const endMin = startMin + 30; // 30-minute slot
+
+    // Calculate popover position (approximate, relative to calendar)
+    // This will be refined when we have the actual click event position
+    const topPx = slotIndex * 50; // ~50px per slot (approximate)
+    const leftPx = dayIndex * 140 + 80; // ~140px per day column + some offset
+
+    setSlotPopoverData({
+      dayIndex,
+      slotIndex,
+      startMin,
+      endMin,
+      topPx,
+      leftPx,
+    });
+    setSlotPopoverOpen(true);
   }, []);
 
   return (
@@ -485,11 +518,28 @@ export default function App({ userId, onSignOut }: AppProps) {
         </div>
 
         {viewMode === "calendar" ? (
-          <CalendarView
-            recommendedCourses={effectiveRecommended}
-            onRemoveCourse={handleRemoveCourse}
-            onSlotClick={handleSlotClick}
-          />
+          <div className="relative min-h-0 flex-1">
+            <CalendarView
+              recommendedCourses={effectiveRecommended}
+              onRemoveCourse={handleRemoveCourse}
+              onSlotClick={handleSlotClick}
+            />
+            {/* Slot suggestion popover (R6) */}
+            {slotPopoverOpen && slotPopoverData && (
+              <SlotSuggestionPopover
+                day_index={slotPopoverData.dayIndex}
+                slot_index={slotPopoverData.slotIndex}
+                start_min={slotPopoverData.startMin}
+                end_min={slotPopoverData.endMin}
+                missing_details={missingDetails as Record<string, unknown>[]}
+                excluded_courses={effectiveCodes}
+                onAddCourse={handleAddFromSlotSuggestion}
+                onClose={() => setSlotPopoverOpen(false)}
+                top_px={slotPopoverData.topPx}
+                left_px={slotPopoverData.leftPx}
+              />
+            )}
+          </div>
         ) : (
           <FourYearPlanView
             plan={fourYearPlan}
