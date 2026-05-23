@@ -86,86 +86,67 @@ re-validated against the live schedule index.
 
 ---
 
-## 2. LangGraph multi-agent system (NEW — `agents/multi_agent/`)
+## 2. LangGraph multi-agent system — `agents/multi_agent/` (BUILT)
 
-A parallel implementation to `run_planning_agent`. **Not wired to any HTTP
-endpoint yet.** Opt-in via `from agents.multi_agent import run_multi_agent_plan`.
+A second planning engine alongside `run_planning_agent`. **The full A→E
+track is DONE and wired to HTTP** at `POST /api/plan/v2`. Legacy
+`/api/plan` stays the default; set `MULTI_AGENT_PLAN=1` to make it
+delegate to the multi-agent engine.
 
 ```
 START → planner → verifier ─[issues & passes<3]→ planner (loop)
-                            └─[clean]→ fan_out_instructor → assembler → END
+                          ├─[clean]→ Send(instructor_one) × N  (parallel)
+                          └─[no courses]──────────────────────→ assembler → END
 ```
 
 | Node | LLM? | Role |
 |------|------|------|
-| Planner | yes (Gemini) | propose recommended courses; re-run with verifier feedback embedded |
-| Verifier | no (pure code) | hallucination, time-conflict, missing-lab, uncovered-Core checks |
-| InstructorSelector | no (stub) | pick best-rated section + alternatives table |
+| Planner | yes — **ReAct tool-calling** | calls `search_schedule` / `get_open_req_candidates` / `get_lab_partner` before proposing courses; native Gemini function-calling (no langchain). `PLANNER_REACT=0` → single-shot fallback |
+| Verifier | no (pure code) | hallucination, time-conflict, missing-lab, uncovered-Core checks; routes back to planner / fans out / skips |
+| InstructorSelector | no | ranks sections by **real instructor rating** (catalog `instructor_ratings.csv`), tie-break difficulty; parallel via `Send` |
 | Assembler | no | merge plan + instructor picks into final response |
 
 Files:
-- `agents/multi_agent/tools.py` — 9 deterministic tools wrapping existing
-  utils (`ALL_TOOLS` registry).
-- `agents/multi_agent/graph.py` — `PlanningState` TypedDict, the 4 nodes,
-  `build_graph()`, `run_multi_agent_plan()`.
-- `tests/test_multi_agent_graph.py` — 6 tests, Gemini stubbed, all green.
+- `agents/multi_agent/tools.py` — 9 deterministic tools (`ALL_TOOLS`).
+- `agents/multi_agent/planner_react.py` — bounded ReAct loop (`run_planner_react`).
+- `agents/multi_agent/graph.py` — `PlanningState`, nodes, `Send` fan-out,
+  checkpointer factories (`make_memory_checkpointer` / `make_sqlite_checkpointer`),
+  HITL helpers (`start_plan_with_review` / `resume_plan` / `get_plan_state`),
+  `run_multi_agent_plan(... thread_id, checkpointer)`.
+- HTTP: `POST /api/plan/v2`, `/api/plan/v2/review`, `/api/plan/v2/resume`
+  (`project/api/routers/plan.py`).
+- Tests: `test_multi_agent_graph.py`, `test_planner_react.py`,
+  `test_instructor_fanout.py`, `test_instructor_ratings.py`,
+  `test_checkpoint_resume.py`, `test_plan_v2_endpoint.py` — all green.
 
-### 2.1 BACKLOG — LangGraph next steps (in priority order)
+### 2.1 What's DONE (was STEP A–E)
 
-**STEP A — R5 instructor ratings (IN PROGRESS, not committed)**
-- Create `project/course_planner/data/instructor_ratings.csv` with columns:
-  `instructor_name,rating,difficulty,would_take_again_pct,source`
-- The schedule xlsx has **579 distinct instructors** (extract via
-  `load_schedule_section_index()` → entry["instructors"]). Seed a subset with
-  `source="seed"`; real data needs an RMP scrape or manual entry — DO NOT
-  fabricate and present as real; mark provenance in the `source` column.
-- Add `load_instructor_ratings() -> dict[str, dict]` (cached) in
-  `utils/scu_course_schedule_xlsx.py`.
-- Replace the stub in `agents/multi_agent/tools.py::tool_get_instructor_rating`.
-- Make `agents/multi_agent/graph.py::_select_best_section` actually rank by
-  rating desc, tie-break by lower difficulty, and skip sections that
-  time-conflict with already-chosen courses.
-- Tests: ratings loader; best-section picker prefers higher rating; missing
-  rating falls back to first section without crashing.
-- Mirror into the LEGACY path too (`agents/planning_agent.py`) per AGENTS.md
-  R5: add an `instructor` field to each `recommended[i]` with `alternatives[]`.
+- **A — instructor ratings** ✅ `data/instructor_ratings.csv` (seed,
+  `source=seed_placeholder`) + `load_instructor_ratings` / `course_units_for`
+  loaders; picker ranks by rating. *Real RMP data still TODO* — the seed
+  rows are placeholders; `requirements.txt` already has `ratemyprofessors-client`.
+- **B — tool-calling planner** ✅ native Gemini function-calling ReAct loop.
+- **C — parallel fan-out** ✅ `Send` API, one `instructor_one` per course.
+- **D — checkpointing + HITL** ✅ Memory/SQLite savers + `interrupt_before`.
+- **E — HTTP wiring** ✅ `/api/plan/v2` + review/resume.
 
-**STEP B — Tool-calling Planner (ReAct)**
-- Today the planner is a single prompt. Upgrade it to decide *when* to call
-  `search_schedule` / `get_open_req_candidates` / `get_lab_partner`.
-- Two options:
-  1. `langchain-google-genai` `ChatGoogleGenerativeAI.bind_tools()` +
-     LangGraph prebuilt `ToolNode` / `create_react_agent`. Cleanest but adds
-     the `langchain-google-genai` dependency.
-  2. Native Gemini function-calling via `google.genai` `Tool`/`FunctionDeclaration`,
-     hand-rolled tool loop. No new dep, more code.
-- Recommend option 1 for the multi_agent module (it's already LangGraph).
-- Keep the deterministic Verifier as-is (no LLM there).
-- Tests: stub the chat model to emit a tool call then a final answer; assert
-  the tool was invoked and the loop terminated.
+### 2.2 Eval harness — `agents`-quality measurement (BUILT)
 
-**STEP C — Parallel InstructorSelector via `Send` API**
-- Current `_all_instructors_node` loops sequentially. Replace with LangGraph
-  `Send` fan-out: one InstructorSelector invocation per recommended course,
-  run concurrently, results merged via the existing `_merge_dicts` reducer on
-  `instructor_assignments`.
-- Pattern: a conditional edge from verifier returns
-  `[Send("instructor_one", {"course": code}) for code in plan]`.
-- Tests: 3 courses → 3 Send dispatches → all 3 assignments present.
+`project/course_planner/evals/`: 7 deterministic scorers (no LLM-judge) —
+`no_hallucination`, `no_time_conflicts`, `labs_paired`, `unit_cap`,
+`titles_correct`, `open_req_coverage`, `no_injection_leak`. Run an A/B:
+```bash
+cd project/course_planner && python -m evals.run_eval --engine both
+```
+Tests: `test_eval_scorers.py` (25, offline).
 
-**STEP D — Checkpointing / resumability**
-- Add a checkpointer (`langgraph.checkpoint.memory.MemorySaver` for dev;
-  `langgraph.checkpoint.sqlite.SqliteSaver` backed by `data/app.db` for prod).
-- Compile graph with `checkpointer=...`; invoke with
-  `config={"configurable": {"thread_id": <session_id>}}`.
-- Enables: resume an interrupted plan; human-in-the-loop interrupt before
-  committing a plan that drops a course.
-- Tests: interrupt after planner, resume, assert state continuity.
+### 2.3 Still open
 
-**STEP E — Wire to HTTP (after A–D stable)**
-- New route `POST /api/plan/v2` in `project/api/routers/plan.py` calling
-  `run_multi_agent_plan`. Gate behind env flag `MULTI_AGENT_PLAN=1` or a
-  per-request `?engine=v2`. Keep `/api/plan` (legacy) as default.
+- **R6 — calendar slot-click suggestion popover**: not started (spec in
+  AGENTS.md §R6). Current slot-click only prefills a chat message.
+- **Real instructor ratings**: replace the seed CSV placeholders.
+- **Frontend on `/api/plan/v2`**: the web app still calls legacy `/api/plan`;
+  the multi-agent engine is backend-only / opt-in.
 
 ---
 
@@ -176,9 +157,18 @@ Files:
 | R1 lab co-requirement pairing | ✅ done | `_pair_lab_corequirements` |
 | R2 prefer double-tagged Core/GE | ✅ done | `★` in schedule block + category index |
 | R3 same conversation = same snapshot | ✅ done | `handlePlanGenerated` in-place update |
-| R4 Educational Enrichment: highest-rated, enrichment tag only | ⏳ partial | depends on R5 ratings; restrict to `core integrations::` tag |
-| R5 best-rated instructor + comparison table | ⏳ in progress | STEP A above |
-| R6 calendar slot click → suggestion popover (no chat noise) | ⏳ not started | spec in AGENTS.md §R6; needs `POST /api/plan/suggest_for_slot` + `<SlotSuggestionPopover/>` |
+| R4 Educational Enrichment: highest-rated, enrichment tag only | ⏳ partial | ratings loader exists; enrichment-tag scoping still loose |
+| R5 best-rated instructor + comparison table | ✅ done (seed data) | multi-agent picker ranks by rating; **real RMP data TODO** |
+| R6 calendar slot click → suggestion popover | ⏳ not started | needs `POST /api/plan/suggest_for_slot` + `<SlotSuggestionPopover/>` |
+| R7 follow-up edits are targeted diffs | ✅ done | `_reconcile_followup_edit` + `_named_removal_codes`; `test_followup_swap.py` |
+
+### 3.1 Recent fixes not to regress
+- **Units from catalog**: `course_units_for` overrides LLM-invented units
+  (CSEN 122=4, 122L=1) in both planning agents; `test_course_units_override.py`.
+- **Manual "+ Add course"**: `GET /api/courses` (746 courses) +
+  `AddCoursePicker.tsx` add courses (and lab partner) directly, no AI.
+- **New Plan** always gives feedback (message + view switch + focus).
+- **Lab grouping** in chat summary (lab nested under its lecture).
 
 ---
 
@@ -234,32 +224,37 @@ project/
     main.py                          FastAPI app + router mounts
     middleware/rate_limit.py         in-memory token-bucket limiter (RT#1)
     routers/
-      plan.py                        POST /api/plan (legacy single-shot)
+      plan.py                        /api/plan (legacy) + /api/plan/v2 (multi-agent) + review/resume
+      courses.py                     GET /api/courses (catalog for manual "+ Add course")
       four_year_plan.py              POST /api/four-year-plan
       upload.py                      POST /api/upload/transcript
       memory.py                      GET/DELETE /api/memory/{uid}
       auth.py                        login/register + Google OAuth
+                                     (NOTE: workday.py was REMOVED)
   course_planner/
     agents/
       planning_agent.py              run_planning_agent (LEGACY, canonical)
       four_year_planning_agent.py    run_four_year_plan_agent
       memory_agent.py                flat-file memory store
-      multi_agent/                   NEW LangGraph system (§2)
-        tools.py  graph.py  __init__.py
+      multi_agent/                   LangGraph engine (§2) — tools/graph/planner_react
+    evals/                           plan-quality scorers + A/B runner (§2.2)
     utils/
-      scu_course_schedule_xlsx.py    schedule/category/title/conflict helpers
-      academic_progress_xlsx.py      Workday xlsx parser
+      scu_course_schedule_xlsx.py    schedule/category/title/units/ratings/list_offered_courses
+      academic_progress_xlsx.py      Academic Progress xlsx parser
+    data/instructor_ratings.csv      instructor ratings (seed placeholders — replace)
     SCU_Find_Course_Sections.xlsx    next-term schedule (source of truth)
     View_My_Academic_Progress.xlsx   sample transcript
     tests/                           pytest + vitest live here together
   web/src/
-    App.tsx                          root state, login hydration, handlers
+    App.tsx                          root state + handlers; takes {userId, onSignOut} props
+                                     (auth lifted OUT of App by teammate refactor)
     components/
       ChatPanel.tsx                  chat + manual Academic Progress upload
+      AddCoursePicker.tsx            "+ Add course" searchable dropdown (manual add)
       CalendarView.tsx               "This Quarter" weekly grid (R6 target)
       FourYearPlanView.tsx           4-year grid (completed gray + recommended)
-      LeftPanel.tsx                  login/register, sessions, New Plan
-    api/client.ts                    fetch wrappers
+      LeftPanel.tsx                  sessions list + New Plan (login moved out)
+    api/client.ts                    fetch wrappers (incl. listCourses)
     types/index.ts                   shared TS types
 AGENTS.md                            domain rules (READ FIRST)
 HANDOFF.md                           this file
