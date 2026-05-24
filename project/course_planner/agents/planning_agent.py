@@ -22,6 +22,7 @@ from utils.scu_course_schedule_xlsx import (
     course_units_for,
     detect_time_conflicts,
     load_category_course_index,
+    load_core_integrations_course_set,
     load_course_titles_index,
     load_course_units_index,
     load_instructor_ratings,
@@ -828,6 +829,15 @@ _OPEN_REQ_STRIP_PREFIXES = (
 )
 _OPEN_REQ_PAREN_RE = re.compile(r"\s*\([^)]*\)\s*")
 
+# R4 ── Educational Enrichment scoping ────────────────────────────────────────
+# Maximum number of open-requirement candidates shown to the LLM per slot.
+# Keeps the prompt concise and prevents the model picking a mediocre option.
+_OPEN_REQ_CANDIDATE_LIMIT = 5
+
+# Substring that identifies an Educational Enrichment requirement in the
+# normalised Workday requirement text.
+_EDUCATIONAL_ENRICHMENT_MARKER = "educational enrichment"
+
 
 def _normalize_open_req_text(req_text: str) -> str:
     """Strip 'Core: ENGR: ' prefixes and parenthetical details from a requirement string.
@@ -845,6 +855,29 @@ def _normalize_open_req_text(req_text: str) -> str:
     return text.lower()
 
 
+def _best_candidate_rating(
+    course_code: str,
+    schedule_index: dict,
+    ratings: dict,
+) -> float:
+    """Return the highest known instructor rating for any section of *course_code*.
+
+    Returns -1.0 when no rated instructor data is available so that courses
+    with ratings sort above those without.
+    """
+    best = -1.0
+    for k in planned_section_keys(course_code):
+        entry = schedule_index.get(k) or {}
+        for name in entry.get("instructors", []):
+            rec = ratings.get(name) or ratings.get((name or "").lower())
+            if rec and rec.get("rating") is not None:
+                try:
+                    best = max(best, float(rec["rating"]))
+                except (TypeError, ValueError):
+                    pass
+    return best
+
+
 def _resolve_open_requirement(
     req_text: str,
     category_index: dict[str, list[str]],
@@ -854,6 +887,12 @@ def _resolve_open_requirement(
 
     Uses the category→course index built from Course Tags in the schedule xlsx.
     Falls back to substring matching when there is no exact key hit.
+
+    R4 enhancements:
+    - Educational Enrichment requirements are restricted to courses tagged
+      ``Core Integrations ::`` (not the broader Pathways pool).
+    - All candidate lists are sorted by best instructor rating (descending)
+      before being returned, then capped at ``_OPEN_REQ_CANDIDATE_LIMIT``.
     """
     if not category_index or not req_text:
         return []
@@ -873,7 +912,23 @@ def _resolve_open_requirement(
                         candidates.append(c)
 
     # Filter to courses actually offered next term
-    return [c for c in candidates if any(k in schedule_index for k in planned_section_keys(c))]
+    candidates = [c for c in candidates if any(k in schedule_index for k in planned_section_keys(c))]
+
+    # R4a: Educational Enrichment — restrict to Core Integrations tagged courses only
+    if _EDUCATIONAL_ENRICHMENT_MARKER in norm:
+        integrations_set = load_core_integrations_course_set()
+        if integrations_set:
+            candidates = [c for c in candidates if c in integrations_set]
+
+    # R4b: Sort by best instructor rating descending; unrated courses go last
+    ratings = load_instructor_ratings()
+    candidates.sort(
+        key=lambda c: _best_candidate_rating(c, schedule_index, ratings),
+        reverse=True,
+    )
+
+    # R4c: Cap list length so the LLM sees only top options
+    return candidates[:_OPEN_REQ_CANDIDATE_LIMIT]
 
 
 def _build_schedule_block(

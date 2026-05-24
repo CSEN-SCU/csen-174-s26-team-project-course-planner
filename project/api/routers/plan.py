@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from agents.gemini_client import get_genai_client
 from agents.memory_agent import list_for_user
+from agents.orchestrator import _redact_pii
 from agents.planning_agent import (
     _FALLBACK_CONVERSATIONAL_REPLY,
     _sanitize_user_text,
@@ -160,7 +161,7 @@ def create_plan(body: PlanRequest) -> dict[str, Any]:
         try:
             items = list_for_user(body.user_id.strip())
             memory_snippets = [
-                str(it.get("content") or "")
+                _redact_pii(str(it.get("content") or ""))
                 for it in items[:12]
                 if str(it.get("content") or "").strip()
             ] or None
@@ -245,7 +246,7 @@ def _load_memory_snippets(user_id: str) -> list[str] | None:
     except ValueError:
         return None
     snippets = [
-        str(it.get("content") or "")
+        _redact_pii(str(it.get("content") or ""))
         for it in items[:12]
         if str(it.get("content") or "").strip()
     ]

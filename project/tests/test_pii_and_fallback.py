@@ -5,16 +5,35 @@ things go off the happy path:
 
 1. Memory snippets retrieved from the store are scrubbed for emails / SSNs /
    phone numbers *before* they are injected into a Gemini prompt.
+   This covers both the orchestrator path (``orchestrator.plan_for_user``)
+   and the direct API-router path (``POST /api/plan``).
 2. ``memory_agent.embed`` falls back to a deterministic hash-based vector
    when ``GEMINI_API_KEY`` is missing, so writes never block users.
 """
 
 from __future__ import annotations
 
+import importlib
+import json
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
 import pytest
 
 from agents import memory_agent, orchestrator, planning_agent
 from auth import users_db
+
+_API_DIR = Path(__file__).resolve().parents[1] / "api"
+
+
+def _load_api_main(monkeypatch, tmp_path):
+    if str(_API_DIR) not in sys.path:
+        sys.path.insert(0, str(_API_DIR))
+    monkeypatch.setenv("COURSE_PLANNER_DB", str(tmp_path / "pii_api.db"))
+    monkeypatch.setenv("COURSE_PLANNER_MEMORY_DIR", str(tmp_path / "memory"))
+    sys.modules.pop("main", None)
+    return importlib.import_module("main")
 
 
 def _stub_planning(monkeypatch, captured: list[str]):
@@ -102,3 +121,80 @@ def test_embed_handles_empty_string():
     vec = memory_agent.embed("")
     assert len(vec) == 768
     assert all(x == 0.0 for x in vec)
+
+
+# ── API-router path: memory snippets must be redacted before reaching Gemini ──
+
+
+def test_api_plan_router_redacts_pii_in_memory_before_prompt(monkeypatch, tmp_path):
+    """POST /api/plan must scrub PII from stored memory before injecting into the
+    Gemini prompt, even when bypassing the orchestrator layer.
+
+    Regression guard: plan.py previously passed raw memory snippets to
+    run_planning_agent without calling _redact_pii.
+    """
+    from fastapi.testclient import TestClient
+
+    captured_prompts: list[str] = []
+    plan_reply = json.dumps(
+        {
+            "recommended": [
+                {"course": "COEN 174", "title": "x", "category": "Core", "units": 4, "reason": "ok"}
+            ],
+            "total_units": 4,
+            "advice": "ok",
+            "assistant_reply": "ok",
+        }
+    )
+
+    class _Models:
+        def generate_content(self, model, contents, config):  # noqa: D401
+            captured_prompts.append(contents)
+            return SimpleNamespace(text=plan_reply)
+
+    class _Client:
+        models = _Models()
+
+    # 1. Set up an isolated DB + memory store and create a test user.
+    monkeypatch.setenv("COURSE_PLANNER_DB", str(tmp_path / "pii_api.db"))
+    mem_dir = tmp_path / "memory"
+    mem_dir.mkdir()
+    monkeypatch.setenv("COURSE_PLANNER_MEMORY_DIR", str(mem_dir))
+    from db.migrate import migrate
+
+    migrate(str(tmp_path / "pii_api.db"))
+    uid = users_db.create_user("pii_user", "pii@example.com")
+
+    # 2. Write a memory snippet containing PII into the user's store.
+    memory_agent.write(
+        uid,
+        "preference",
+        "Contact advisor.lee@scu.edu or call +1 (408) 555-9876 about COEN 174",
+    )
+
+    # 3. Load the app and wire the stub Gemini client.
+    main = _load_api_main(monkeypatch, tmp_path)
+    monkeypatch.setattr("routers.plan.get_genai_client", lambda **_kw: _Client())
+    monkeypatch.setattr(planning_agent, "get_genai_client", lambda **_kw: _Client())
+
+    with TestClient(main.app) as client:
+        resp = client.post(
+            "/api/plan",
+            json={
+                "missing_details": [{"course": "COEN 174", "category": "Core", "units": 4}],
+                "user_preference": "easy quarter",
+                "user_id": str(uid),
+            },
+        )
+
+    assert resp.status_code == 200
+
+    # 4. The combined prompt must NOT contain raw PII.
+    full_prompt = " ".join(str(p) for p in captured_prompts)
+    assert "advisor.lee@scu.edu" not in full_prompt, "email PII leaked into LLM prompt"
+    assert "555-9876" not in full_prompt, "phone PII leaked into LLM prompt"
+    # Redaction placeholders must appear instead.
+    assert "[redacted-email]" in full_prompt
+    assert "[redacted-phone]" in full_prompt
+    # Course codes must survive redaction.
+    assert "COEN 174" in full_prompt
