@@ -69,8 +69,8 @@ export default function App({ userId, onSignOut }: AppProps) {
     slotIndex: number;
     startMin: number;
     endMin: number;
-    topPx: number;
-    leftPx: number;
+    clientX: number;
+    clientY: number;
   } | null>(null);
 
   // Load academic progress + past plan snapshots for this user
@@ -448,22 +448,17 @@ export default function App({ userId, onSignOut }: AppProps) {
     setDeleteDataNotice(null);
   }, [deleteDataBusy]);
 
-  const handleSlotClick = useCallback((dayIndex: number, slotIndex: number) => {
+  const handleSlotClick = useCallback((dayIndex: number, slotIndex: number, clientX: number, clientY: number) => {
     const startMin = CALENDAR_START_HOUR * 60 + slotIndex * 30;
     const endMin = startMin + 30; // 30-minute slot
-
-    // Calculate popover position (approximate, relative to calendar)
-    // This will be refined when we have the actual click event position
-    const topPx = slotIndex * 50; // ~50px per slot (approximate)
-    const leftPx = dayIndex * 140 + 80; // ~140px per day column + some offset
 
     setSlotPopoverData({
       dayIndex,
       slotIndex,
       startMin,
       endMin,
-      topPx,
-      leftPx,
+      clientX,
+      clientY,
     });
     setSlotPopoverOpen(true);
   }, []);
@@ -535,8 +530,8 @@ export default function App({ userId, onSignOut }: AppProps) {
                 excluded_courses={effectiveCodes}
                 onAddCourse={handleAddFromSlotSuggestion}
                 onClose={() => setSlotPopoverOpen(false)}
-                top_px={slotPopoverData.topPx}
-                left_px={slotPopoverData.leftPx}
+                client_x={slotPopoverData.clientX}
+                client_y={slotPopoverData.clientY}
               />
             )}
           </div>
