@@ -331,13 +331,14 @@ export default function App({ userId, onSignOut }: AppProps) {
     [effectiveRecommended],
   );
 
-  const handleGenerateFourYearPlan = useCallback(async () => {
+  const handleGenerateFourYearPlan = useCallback(async (preferences: string) => {
     if (!missingDetails.length || fourYearGenerating) return;
     setFourYearGenerating(true);
     try {
       const result = await generateFourYearPlan(
         missingDetails,
         userId ?? "anonymous",
+        preferences.trim() || undefined,
       );
       const plan = result as FourYearPlan;
       setFourYearPlan(plan);
