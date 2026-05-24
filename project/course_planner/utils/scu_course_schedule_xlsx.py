@@ -896,6 +896,18 @@ _LAB_PAIR_SUBJECTS = frozenset(
 )
 
 
+def clear_caches() -> None:
+    """Drop process-level caches over the schedule / catalog files.
+
+    Call after ``SCU_Find_Course_Sections.xlsx`` or
+    ``data/instructor_ratings.csv`` is replaced so the next read reflects the
+    new data without a server restart. Only the ``@lru_cache`` loaders in this
+    module hold state; the other loaders re-read on every call.
+    """
+    load_core_integrations_course_set.cache_clear()
+    load_instructor_ratings.cache_clear()
+
+
 def list_offered_courses(path: Path | None = None) -> list[dict[str, Any]]:
     """Return every distinct course offered next term, shaped for the manual
     "+ Add course" picker AND for direct placement on the calendar.
