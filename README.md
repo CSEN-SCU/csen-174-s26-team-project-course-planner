@@ -66,6 +66,17 @@ Memory retrieve + planning_agent (Gemini)  ←  preferences + gap + memory + pre
 Professor Agent (RMP) → React frontend (calendar / 4-year grid)
 ```
 
+### Prerequisites
+
+| Tool | Version | Notes |
+|------|---------|-------|
+| Python | **3.12** | matches CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)); backend + agents |
+| Node.js | **≥ 20.12** (CI uses 20.19) | frontend (Vite) |
+| npm | bundled with Node | installs frontend deps |
+
+A virtual environment is recommended for the backend
+(`python3 -m venv .venv && source .venv/bin/activate` before `pip install`).
+
 ### Run locally
 
 Backend:
