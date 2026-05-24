@@ -1,16 +1,11 @@
 # instructor_ratings.csv — instructor quality data for R5 (best-section picker)
 #
-# PROVENANCE / HONESTY NOTE:
-#   The rows below with source="seed_placeholder" are NON-AUTHORITATIVE
-#   placeholders used only to exercise the ranking mechanism in tests and
-#   dev. They are NOT real RateMyProfessor / SCU course-evaluation data and
-#   MUST NOT be shown to students as factual ratings.
-#
-#   Before this feature ships to users:
-#     1. Replace placeholders with real data (RMP scrape or SCU eval export).
-#     2. Set source to "rmp" | "scu_eval" | "manual" with a date.
-#     3. Any instructor not present here resolves to rating=None
-#        (source="unavailable") and the picker falls back to a stable choice.
+# PROVENANCE:
+#   Scraped from RateMyProfessors.com on 2026-05-23 for
+#   Santa Clara University (school id 882).
+#   Source column: "rmp" = live RMP data.
+#   Instructors absent from RMP are not listed here; they resolve to
+#   rating=None at runtime (InstructorSelector falls back to a stable choice).
 #
 # Columns:
 #   instructor_name          exact name as it appears in the schedule xlsx
@@ -19,13 +14,439 @@
 #   would_take_again_pct     0-100
 #   source                   provenance tag
 instructor_name,rating,difficulty,would_take_again_pct,source
-Weijia Shang,3.4,3.6,62,seed_placeholder
-Shoba Krishnan,4.1,2.9,81,seed_placeholder
-Michael Schimpf,4.6,2.2,90,seed_placeholder
-David Coad,4.3,2.5,85,seed_placeholder
-Maura Tarnoff,3.9,3.0,74,seed_placeholder
-Diana Gibson,4.0,2.8,78,seed_placeholder
-Ahmed Amer,4.4,3.1,88,seed_placeholder
-Amelia Fuller,4.5,2.6,92,seed_placeholder
-Yuhong Liu,4.2,3.2,80,seed_placeholder
-Nam Ling,3.7,3.4,69,seed_placeholder
+Stacey Ritter,4.0,4.0,68,rmp
+Joseph Maglione,4.9,3.1,100,rmp
+Joe Maglione,4.9,3.1,100,rmp
+Don Rath,5.0,1.0,100,rmp
+Stephen Carter,2.3,3.8,25,rmp
+Christopher Paisley,4.6,4.3,70,rmp
+Chris Paisley,4.6,4.3,70,rmp
+Christine Lebar,3.8,3.6,60,rmp
+Steven Draeger,3.5,3.5,100,rmp
+Haidan Li,3.5,3.4,54,rmp
+Matthew Cedergren,3.0,4.2,46,rmp
+Siqi Li,5.0,3.0,100,rmp
+Colin Koutney,0.0,0.0,-1,rmp
+Guido van Drunen,5.0,3.0,100,rmp
+Aaron Melman,3.1,4.6,64,rmp
+Magda Metwally,3.9,3.0,79,rmp
+Robert Kleinhenz,2.5,4.3,41,rmp
+Francisco Villarroya Alvarez,0.0,0.0,-1,rmp
+Maia Dedrick,5.0,3.0,100,rmp
+Lee Panich,4.7,2.6,100,rmp
+Samantha Grace,2.7,3.7,36,rmp
+Sam Grace,2.7,3.7,36,rmp
+Ryan Anderson,1.7,4.3,17,rmp
+Julia Alejandra Morales Fontanilla,4.5,3.0,50,rmp
+Nathan Anderson,2.6,3.5,45,rmp
+Carolyn Trist,2.6,3.7,31,rmp
+James McKenna,5.0,1.6,100,rmp
+Veronica Miranda,4.1,2.6,75,rmp
+Mohammed Kadalah,5.0,1.7,100,rmp
+Margaret Wander,0.0,0.0,-1,rmp
+Heather Clydesdale,3.5,4.2,55,rmp
+Blake DeMaria,3.4,4.3,0,rmp
+Andrea Pappas,3.8,3.0,62,rmp
+Robert Detweiler,3.0,4.0,0,rmp
+Kelly Detweiler,0.0,0.0,-1,rmp
+Takeshi Moro,4.7,2.3,100,rmp
+Renee Billingslea,4.5,2.4,100,rmp
+Francisco Jimenez,4.4,3.6,50,rmp
+Pancho Jimenez,2.1,3.7,25,rmp
+Ryan Carrington,0.0,0.0,-1,rmp
+Ryan Reynolds,4.2,2.8,67,rmp
+Prashanth Asuri,4.8,2.2,-1,rmp
+Ismail Araci,0.0,0.0,-1,rmp
+Zhiwen Zhang,3.7,2.2,67,rmp
+Unyoung Kim,4.3,3.5,100,rmp
+Justen Whittall,3.2,3.6,31,rmp
+Erin Schwartz,4.1,2.9,89,rmp
+Michelle McCully,4.3,3.2,83,rmp
+Dawn Hart,2.6,3.6,50,rmp
+Christelle Sabatier,3.7,4.0,60,rmp
+Michelle Badura,5.0,3.0,100,rmp
+Leilani Miller,2.5,3.5,0,rmp
+Giorgio Lagna,4.3,2.4,86,rmp
+Elizabeth Dahlhoff,2.7,4.3,67,rmp
+Virginia Matzek,4.1,3.7,50,rmp
+Desiree Forsythe,5.0,3.0,100,rmp
+Brody Sandel,5.0,3.0,100,rmp
+Brian Bayless,5.0,2.7,100,rmp
+Laura Cocas,3.5,4.1,64,rmp
+Angel Islas,2.0,4.2,22,rmp
+Katherine Saxton,5.0,1.7,100,rmp
+Craig Stephens,3.5,3.1,60,rmp
+Timothy Harris,4.3,2.3,95,rmp
+Tim Harris,4.3,2.3,95,rmp
+Abha Singhvi,2.4,3.8,44,rmp
+Michael Smith,4.2,3.6,80,rmp
+Jim Burns,5.0,2.0,100,rmp
+Ahmed Rubaie,3.8,3.2,60,rmp
+Michael Holubar,3.8,3.4,79,rmp
+Mike Holubar,3.8,3.4,79,rmp
+Craig Martin,0.0,0.0,-1,rmp
+Christopher Norris,5.0,1.0,100,rmp
+Chris Norris,5.0,1.0,100,rmp
+Michael Polacek,4.0,3.0,67,rmp
+Stephen McKay,5.0,2.0,100,rmp
+Brian Thomas,5.0,2.7,100,rmp
+Marshall Mort,4.9,4.0,88,rmp
+Michael Dana,4.9,3.6,97,rmp
+Reginald Duhe,0.0,0.0,-1,rmp
+Michael Aquilina,2.2,3.1,31,rmp
+Brett Yokom,3.0,3.0,50,rmp
+Anisha Weber,5.0,1.0,100,rmp
+Brenda Versteeg,0.0,0.0,-1,rmp
+Hisham Said,5.0,2.5,100,rmp
+Laura Doyle,4.6,1.8,100,rmp
+Mohaddeseh Peyro,4.7,2.2,100,rmp
+Reynaud Serrette,3.0,4.8,50,rmp
+Amy Shachter,3.8,2.6,62,rmp
+Meaghan Deegan,5.0,3.0,100,rmp
+Hoda Mirafzal,2.7,4.1,41,rmp
+Grace Stokes,2.7,4.2,27,rmp
+Raymond Gipson,4.0,3.6,75,rmp
+Robin Grotjahn,5.0,2.6,100,rmp
+Steven Suljak,4.3,3.6,100,rmp
+Michael Carrasco,4.1,3.4,71,rmp
+Brian McNelis,4.2,3.5,71,rmp
+Benjamin Stokes,4.1,3.8,71,rmp
+Amelia Fuller,4.1,3.4,33,rmp
+Beatrice Ruhland,3.9,3.2,88,rmp
+Ian Carter-O'Connell,0.0,0.0,-1,rmp
+Paul Abbyad,3.6,3.1,100,rmp
+Linda Brunauer,4.1,3.9,84,rmp
+Eric Tillman,4.9,3.4,100,rmp
+Korin Wheeler,4.7,3.0,100,rmp
+Hsin-hung Yeh,5.0,1.3,100,rmp
+Yujie Ge,4.5,2.6,100,rmp
+Brett Solomon,2.9,2.8,50,rmp
+Brita Bookser,0.0,0.0,-1,rmp
+Omar Davila,5.0,2.8,100,rmp
+Elizabeth Day,4.8,1.7,100,rmp
+Carolynn Roncaglia,4.8,2.3,100,rmp
+Daniel Turkeltaub,3.6,4.2,100,rmp
+John Heath,4.6,3.8,78,rmp
+Jordan Cohen,4.7,3.3,100,rmp
+Nicholas Lindberg,5.0,2.0,100,rmp
+Lissa Crofton-Sleigh,3.8,4.3,50,rmp
+Paul Soukup,3.6,3.4,78,rmp
+Andrew Ishak,4.1,2.7,86,rmp
+Rohit Chopra,4.0,2.8,70,rmp
+Hsin-I Cheng,3.1,3.0,43,rmp
+Jennifer Braddock,0.0,0.0,-1,rmp
+Melissa Brown,1.0,4.3,0,rmp
+Lisa Davis,4.4,2.2,80,rmp
+Sreela Sarkar,4.4,2.5,100,rmp
+Laura Ellingson,4.7,2.6,80,rmp
+Amy Eriksson,5.0,1.3,100,rmp
+Nicole Opper,4.8,2.0,100,rmp
+Nico Opper,4.8,2.0,100,rmp
+Charles Raphael,4.6,2.9,67,rmp
+Chad Raphael,4.6,2.9,67,rmp
+Smita Ghosh,3.9,3.6,80,rmp
+Natalie Linnell,2.0,4.0,22,rmp
+Sara Krehbiel,3.8,4.2,62,rmp
+Hien Vu,4.4,3.3,81,rmp
+Venkatesh Srinivasan,3.3,3.5,50,rmp
+Shiva Houshmand,4.2,3.3,84,rmp
+Tiantian Chen,1.9,3.8,21,rmp
+Hayang Kim,2.5,3.1,32,rmp
+Angela Musurlian,3.3,2.9,59,rmp
+Silvia Figueira,4.2,2.4,80,rmp
+Oana Ignat,3.3,2.5,75,rmp
+Xiang Li,3.1,2.9,36,rmp
+William Dana,2.1,4.5,25,rmp
+Will Dana,2.1,4.5,25,rmp
+Michael Hartglass,3.6,4.2,67,rmp
+Mike Hartglass,3.6,4.2,67,rmp
+George Schaeffer,4.9,2.5,100,rmp
+Yan Cui,4.1,2.4,71,rmp
+Michael Schimpf,5.0,2.0,75,rmp
+Farokh Eskafi,2.9,3.3,46,rmp
+Weijia Shang,2.8,3.3,30,rmp
+Andrew Wolfe,2.4,3.0,40,rmp
+Andy Wolfe,2.4,3.0,40,rmp
+Yi Fang,4.5,2.9,75,rmp
+Keyvan Moataghed,4.3,2.7,73,rmp
+Navid Shaghaghi,3.9,3.3,76,rmp
+Ying Liu,3.6,3.6,75,rmp
+Krishna Murthy Kattiyan Ramamoorthy,5.0,3.2,100,rmp
+Krishna Kattiyan Ramamoorthy,5.0,3.2,100,rmp
+Xiao Li,3.1,2.9,36,rmp
+Darren Atkinson,4.1,3.6,79,rmp
+Ahmed Amer,3.8,3.0,81,rmp
+Pauline Kanter,0.0,0.0,-1,rmp
+Karyn Connell,3.9,3.6,-1,rmp
+David Popalisky,2.3,4.0,0,rmp
+Dat Tran,5.0,2.8,100,rmp
+Burak Kurkcu,3.3,3.8,57,rmp
+Radhika Grover,4.5,2.0,88,rmp
+Kurt Schab,2.5,4.5,50,rmp
+Adham Naji,2.9,4.1,50,rmp
+Aleksandar Zecevic,4.2,4.1,62,rmp
+Maryam Khanbaghi,3.3,3.6,60,rmp
+Sally Wood,2.4,3.6,29,rmp
+Shoba Krishnan,4.4,3.8,75,rmp
+Maria Kyrarini,4.9,3.8,96,rmp
+Audrey Guo,4.4,3.0,90,rmp
+Satoshi Fukuda,4.0,1.0,0,rmp
+Patricia Cameron-Loyd,3.8,2.6,69,rmp
+Damian Park,3.3,3.3,54,rmp
+Orkhan Hasanaliyev,3.2,3.3,52,rmp
+Sofia Kotsiri,4.6,2.7,93,rmp
+Zoey (Zhengzheng) Wang,4.5,2.5,83,rmp
+Gabriela Dobrescu,3.7,3.2,58,rmp
+Kevin Chiu,1.5,4.5,62,rmp
+Adrien Bouguen,1.8,3.2,20,rmp
+Michael Kevane,4.1,3.4,100,rmp
+Hui Huang,3.8,2.8,67,rmp
+Serguei Maliar,3.1,3.9,31,rmp
+Jennifer Faria,0.0,0.0,-1,rmp
+Jacquelyn Hendricks,4.9,2.3,94,rmp
+Lamia Benyoussef,5.0,2.5,100,rmp
+Melissa Donegan,3.3,3.5,67,rmp
+Mathew Gomes,3.0,1.5,50,rmp
+Matt Gomes,3.0,1.5,50,rmp
+Kai Harris,4.3,3.0,67,rmp
+Mostafa Jalal,4.0,2.0,72,rmp
+Miah Jeffra,4.9,3.6,97,rmp
+David Keaton,3.5,3.0,62,rmp
+Denise Krane,3.1,3.7,67,rmp
+Michael Lasley,4.9,2.0,100,rmp
+Margarita Levantovskaya,3.5,4.0,50,rmp
+Aparajita Nanda,4.4,1.9,100,rmp
+Robin Tremblay-McGaw,3.3,2.8,62,rmp
+Daniel B. Summerhill,5.0,2.3,100,rmp
+Maura Tarnoff,4.0,2.4,67,rmp
+Jose Villagrana,4.6,1.6,100,rmp
+Amna Yusuf,4.8,2.1,88,rmp
+David Coad,4.6,2.1,85,rmp
+Loring Pfeiffer,2.8,2.8,48,rmp
+Supurna Dasgupta,3.0,4.0,38,rmp
+Cruz Medina,4.7,2.3,100,rmp
+Allia Griffin,5.0,2.6,100,rmp
+Brian Thorstenson,5.0,1.6,100,rmp
+Raghavendra Morusupalli,4.9,1.8,100,rmp
+Rao Morusupalli,4.9,1.8,100,rmp
+Jessica Kuczenski,3.3,2.8,43,rmp
+Jes Kuczenski,3.3,2.8,43,rmp
+Melissa Cefkin,2.2,3.8,25,rmp
+Matthew Gaudet,3.7,2.7,67,rmp
+Kathryn Moles,4.6,2.6,89,rmp
+Katia Moles,4.6,2.6,89,rmp
+Bob Schaffer,4.8,2.4,89,rmp
+Katherine Sun,0.0,0.0,-1,rmp
+Kathy Sun,0.0,0.0,-1,rmp
+Keith Yocam,5.0,1.5,100,rmp
+Shane Rogers,4.0,1.0,-1,rmp
+Theodore Grudin,5.0,1.5,100,rmp
+Ted Grudin,5.0,1.5,100,rmp
+Matthew Driscoll,3.8,2.8,75,rmp
+Matt Driscoll,3.8,2.8,75,rmp
+Christopher Bacon,2.8,2.8,33,rmp
+Nicolas Hernandez,5.0,3.0,100,rmp
+Iris Stewart-Frey,4.3,3.5,100,rmp
+Charles Gabbe,5.0,2.7,100,rmp
+C.J. Gabbe,5.0,2.7,100,rmp
+Paul Schutz,4.8,2.9,100,rmp
+Jesica Fernandez,4.8,1.5,100,rmp
+Christopher Tirres,3.7,2.7,67,rmp
+Sakina Hughes,2.8,2.1,46,rmp
+Anthony Hazard,5.0,2.0,93,rmp
+James Lai,4.6,3.0,94,rmp
+Anna Sampaio,3.7,2.8,88,rmp
+Bryson White,5.0,2.0,100,rmp
+Ye Cai,5.0,2.4,100,rmp
+Samuel Lee,4.8,2.2,100,rmp
+Nitin Barve,4.0,3.0,50,rmp
+Manish Tewari,3.0,3.0,52,rmp
+Tony Nguyen,4.7,2.3,83,rmp
+Karl Motey,3.8,3.6,60,rmp
+Meir Statman,3.8,2.0,100,rmp
+Keziah Poole,0.0,0.0,-1,rmp
+Jeffrey Burkholder,5.0,2.0,100,rmp
+Jimia Boutouba,3.4,2.6,100,rmp
+Michelle Velasquez-Potts,5.0,1.0,100,rmp
+Mukta Sharangpani,5.0,3.0,100,rmp
+Diana Gibson,3.3,3.5,44,rmp
+Claudia Moutray,4.9,2.1,94,rmp
+Sharmila Lodhia,4.4,2.8,100,rmp
+Naomi Andrews,4.4,2.8,88,rmp
+Haruka Umetsu Cho,5.0,2.0,100,rmp
+Marwan Daoud Hanania,5.0,1.9,100,rmp
+Barbara Molony,4.5,2.7,88,rmp
+Harry Odamtten,3.9,2.3,70,rmp
+Thomas Turley,4.3,2.8,87,rmp
+Gregory Wigmore,4.9,2.3,94,rmp
+Greg Wigmore,4.9,2.3,94,rmp
+Megan Gudgeirsson,3.0,4.0,47,rmp
+Meg Gudgeirsson,3.0,4.0,47,rmp
+Paul Mariani,4.1,2.1,94,rmp
+Mateo Carrillo,3.6,2.8,80,rmp
+Jeannette Alden Estruth,0.0,0.0,-1,rmp
+Matthew Newsom Kerr,2.6,3.3,20,rmp
+Eric Yang,3.5,3.7,69,rmp
+Michele Parker,3.7,2.2,71,rmp
+Maria Bertola,4.5,3.8,33,rmp
+Marie Bertola,4.5,3.8,33,rmp
+Evelyn Ferraro,3.8,3.5,75,rmp
+Laurie Poe,4.5,3.3,82,rmp
+Corey Irving,2.4,3.8,31,rmp
+Luvreet Sangha,4.0,3.1,74,rmp
+Vaishavi Sharma,2.8,3.6,40,rmp
+Shilpa Dasgupta,3.0,4.0,38,rmp
+Mary Long,2.7,3.3,29,rmp
+Linda Burks,1.8,4.4,10,rmp
+Dennis Smolarski,3.6,3.3,64,rmp
+Gayathri Chakravarthy,3.9,3.2,69,rmp
+Preeti Mohindru,3.5,2.8,71,rmp
+Robert Bekes,3.2,3.3,41,rmp
+Chi-Yun Hsu,3.8,3.6,58,rmp
+Anh Thai Nhan,3.2,4.2,80,rmp
+Mehdi Ahmadi,3.0,4.3,40,rmp
+Shamil Asgarli,4.6,3.1,84,rmp
+Norman Paris,4.0,3.7,68,rmp
+Byron Walden,2.9,3.4,47,rmp
+Mona Musa,4.2,3.3,85,rmp
+Priya Babu,2.5,3.2,36,rmp
+Glenn Appleby,3.2,4.0,52,rmp
+Nicolette Meshkat,4.0,3.4,80,rmp
+Fiona Ji,3.0,3.9,56,rmp
+Vahideh Abaeian,4.6,1.4,100,rmp
+Long Le,4.3,2.0,75,rmp
+Deirdre Frontczak,3.1,3.3,52,rmp
+Michael Santoro,2.0,3.4,23,rmp
+Manuel Velasquez,2.8,4.0,57,rmp
+Francine Gordon,2.8,3.8,57,rmp
+Esther Sackett,4.0,2.3,75,rmp
+Adele Xing,0.0,0.0,-1,rmp
+Vyas Sreenivas,2.0,5.0,0,rmp
+Sriram Sundararajan,4.0,3.7,67,rmp
+Sarah Cabral,5.0,1.2,100,rmp
+Rebecca Chae,4.9,2.9,100,rmp
+Patrick Williams,5.0,2.5,100,rmp
+Jang Won Choi,4.5,3.2,89,rmp
+Jangwon Choi,4.5,3.2,89,rmp
+Mahum Jafer Hussain,0.0,0.0,-1,rmp
+Mahum Hussain,0.0,0.0,-1,rmp
+Charles Byers,4.5,2.9,88,rmp
+Sujata Ramnarayan,3.0,2.5,50,rmp
+Aditi Bajaj,4.5,2.0,100,rmp
+Peng Liu,4.0,2.7,67,rmp
+Teresa McCollough,3.8,2.6,50,rmp
+Carl Schultz,0.0,0.0,-1,rmp
+Jason Gallardo,5.0,1.4,100,rmp
+Anthony Rivera,5.0,1.0,100,rmp
+Scot Hanna-Weir,5.0,1.1,100,rmp
+Ray Furuta,2.5,2.0,25,rmp
+Yingying Wang,1.9,3.9,23,rmp
+Nihal Sahan,3.3,2.8,52,rmp
+Sumana Sur,3.2,2.8,57,rmp
+David Zimbra,3.5,3.1,73,rmp
+Yasin Ceran,4.3,2.5,100,rmp
+Thunyarat Amornpetchkul,5.0,2.5,100,rmp
+Xuan Tan,2.3,2.3,33,rmp
+Homi Fatemi,4.6,2.7,100,rmp
+Da Qi Ren,0.0,0.0,-1,rmp
+Daniel Ren,0.0,0.0,-1,rmp
+Richard Schaffzin,3.6,3.9,65,rmp
+Xiang Wan,4.0,2.5,83,rmp
+Michele Samorani,4.0,3.5,75,rmp
+Amber Xiaoyan Liu,3.4,2.2,80,rmp
+Ying Zhang,4.0,3.0,100,rmp
+Dinkar Jain,3.0,3.0,50,rmp
+Gangshu Cai,4.0,3.3,71,rmp
+Madeline Cronin,4.5,2.2,91,rmp
+Robert Shanklin,4.2,2.8,91,rmp
+Scott LaBarge,4.6,2.7,80,rmp
+Justin Clardy,2.1,2.8,33,rmp
+Erin Bradfield,3.3,3.2,50,rmp
+Matthew Izor,3.2,3.4,52,rmp
+Jeffrey Steele,4.7,3.3,88,rmp
+Jeff Steele,4.7,3.3,88,rmp
+Erick Ramirez,4.7,3.2,90,rmp
+Tyler van Wulven,3.6,3.8,58,rmp
+Meilin Chinn,4.5,3.2,94,rmp
+Nathan Lackey,4.3,2.0,100,rmp
+Lawrence Nelson,4.0,3.8,57,rmp
+Kimberly Dill,4.6,2.9,87,rmp
+Christopher Kulp,3.3,3.4,64,rmp
+Micah Lattanner,5.0,2.5,100,rmp
+Sheila Yuter,3.0,2.3,40,rmp
+Alice Villatoro,3.3,3.7,67,rmp
+Kristin Kulas,4.3,3.6,80,rmp
+Nathan Williams,4.8,3.4,94,rmp
+Bachana Lomsadze,3.6,3.8,67,rmp
+Omid Ahmadi-Gorgi,4.6,2.1,89,rmp
+John Jameson,4.1,3.1,80,rmp
+Hassan Alshal,5.0,3.5,100,rmp
+Joseph Connell,4.8,3.3,100,rmp
+Roxana Flacau,4.2,3.3,82,rmp
+Christopher Weber,3.3,4.2,52,rmp
+Chris Weber,3.3,4.2,52,rmp
+Shan Wu,1.8,4.4,16,rmp
+Betty Young,4.2,3.8,67,rmp
+My Phuong Le,2.0,3.3,33,rmp
+Anne Baker,3.8,4.0,65,rmp
+Vivien Leung,4.9,1.9,100,rmp
+Thomas Meredith,3.6,2.3,67,rmp
+Kenneth Faulve-Montojo,3.8,2.7,92,rmp
+Jesilyn Faust,4.7,2.3,100,rmp
+Diana Morlang,4.3,3.1,82,rmp
+Eric Mosinger,4.8,3.1,90,rmp
+Peter Minowitz,4.2,3.8,70,rmp
+Dennis Gordon,4.3,2.3,100,rmp
+Matthew Harrigan,4.5,3.0,84,rmp
+Jennifer Frihauf,4.4,3.2,91,rmp
+Barbara O'Brien,3.9,3.2,79,rmp
+Kieran Sullivan,3.4,3.4,46,rmp
+Jui Bhagwat,3.4,2.8,62,rmp
+Kirsten Read,4.0,2.3,71,rmp
+Michelle Rivers,0.0,0.0,-1,rmp
+Matthew Bell,3.6,3.9,67,rmp
+Timothy Urdan,4.0,3.0,75,rmp
+Tim Urdan,4.0,3.0,75,rmp
+Thomas Plante,4.0,2.5,71,rmp
+Lang Chen,4.4,3.4,82,rmp
+Birgit Koopmann-Holm,4.5,3.1,100,rmp
+Gaurika Mehta,5.0,1.5,100,rmp
+Daniel Morgan,4.1,3.1,81,rmp
+Akiba Lerner,4.1,2.9,71,rmp
+Philip Riley,2.6,3.4,29,rmp
+Kevin Chaves,4.3,3.7,75,rmp
+David Gray,4.4,2.0,94,rmp
+Thao Nguyen,4.7,2.3,83,rmp
+Elizabeth Drescher,2.0,3.4,17,rmp
+Karl Lampley,3.3,2.6,58,rmp
+Jaime Wright,3.5,3.0,50,rmp
+James Bennett,3.6,2.9,0,rmp
+Cathleen Chopra-McGowan,4.5,2.1,87,rmp
+Roberto Mata,2.8,2.3,56,rmp
+Cara Chiaraluce,4.6,2.4,90,rmp
+Laura Robinson,4.5,1.7,86,rmp
+Margaret Hunter,5.0,2.0,100,rmp
+Molly King,5.0,3.0,100,rmp
+Patrick Lopez-Aguado,3.1,2.5,43,rmp
+Yu Rim Kim,5.0,1.8,100,rmp
+Yurim Kim,5.0,1.8,100,rmp
+Kayce Davis,4.5,2.3,91,rmp
+Maricela Portillo Loayza,4.5,1.9,90,rmp
+Maria Bauluz,2.3,3.7,31,rmp
+Abel Cruz Flores,5.0,2.7,100,rmp
+Victor Quiroz,4.0,3.0,100,rmp
+Jose Ortigas,4.8,2.5,100,rmp
+Alberto Ribas-Casasayas,3.9,3.3,50,rmp
+Sally Vance-Trembath,3.9,2.1,71,rmp
+Lynn Hillberg,3.4,1.9,60,rmp
+Robert Scholla,4.3,3.2,73,rmp
+Nicholas Hayes-Mota,4.9,3.3,100,rmp
+Eugene Schlesinger,5.0,2.5,100,rmp
+David DeCosse,4.0,2.5,-1,rmp
+Aldo Billingslea,3.7,3.2,71,rmp
+Jeffrey Bracco,3.7,2.6,100,rmp
+Lazlo Ilya Pearlman,4.3,2.0,83,rmp
+Kimberly Hill,4.9,1.7,100,rmp
+Heather Kenyon,3.7,2.0,67,rmp
+Erik Sunderman,5.0,1.0,100,rmp
+Mitchell Ost,0.0,0.0,-1,rmp
