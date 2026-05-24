@@ -29,7 +29,7 @@ function formatCourseTime(startMin: number, endMin: number): string {
 export type CalendarViewProps = {
   recommendedCourses: Record<string, unknown>[] | null;
   onRemoveCourse?: (idx: number) => void;
-  onSlotClick?: (dayIndex: number, slotIndex: number) => void;
+  onSlotClick?: (dayIndex: number, slotIndex: number, clientX: number, clientY: number) => void;
 };
 
 export function CalendarView({ recommendedCourses, onRemoveCourse, onSlotClick }: CalendarViewProps) {
@@ -114,7 +114,7 @@ export function CalendarView({ recommendedCourses, onRemoveCourse, onSlotClick }
                     key={slotIndex}
                     className={`group w-full border-b border-neutral-100 transition ${onSlotClick ? "hover:bg-red-50/50 cursor-pointer" : ""}`}
                     style={{ height: SLOT_HEIGHT_PX }}
-                    onClick={() => onSlotClick?.(dayIndex, slotIndex)}
+                    onClick={(e) => onSlotClick?.(dayIndex, slotIndex, e.clientX, e.clientY)}
                   >
                     {onSlotClick && (
                       <span className="block text-center text-lg font-light text-neutral-300 opacity-0 group-hover:opacity-100 leading-none select-none" style={{ paddingTop: 4 }}>+</span>
