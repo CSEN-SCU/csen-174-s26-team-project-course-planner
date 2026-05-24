@@ -29,6 +29,32 @@ if str(_API_ROOT) not in sys.path:
 if str(_TESTS_DIR) not in sys.path:
     sys.path.insert(0, str(_TESTS_DIR))
 
+_API_DIR = _PROJECT_ROOT / "api"
+if str(_API_DIR) not in sys.path:
+    sys.path.insert(0, str(_API_DIR))
+
+
+@pytest.fixture(autouse=True)
+def _fresh_rate_limiter():
+    """Isolate tests from the module-global limiter (shared IP bucket across TestClient calls)."""
+    from middleware.rate_limit import RateLimiter, RouteLimits, set_limiter
+
+    generous = RouteLimits(
+        per_minute_ip=10_000,
+        per_minute_user=10_000,
+        max_concurrent_per_user=100,
+    )
+    set_limiter(
+        RateLimiter(
+            limits={
+                "plan": generous,
+                "four_year_plan": generous,
+            }
+        )
+    )
+    yield
+    set_limiter(RateLimiter())
+
 
 def pytest_configure(config):
     config.addinivalue_line(
