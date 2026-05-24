@@ -182,12 +182,12 @@ teammates via PRs (#26 #27 #28) and direct commits.
 | 1 | Rate limiting on planning endpoints | ✅ merged (`4322cbb`) — `middleware/rate_limit.py`; verified live (429s) |
 | 2 | Session/memory restoration after login | ✅ effectively done (parsedRows + memory hydration, singleton kinds) |
 | 3 | Workday sync auth + URL allowlist + error scrubbing | Removed for v1; manual upload is the only Academic Progress ingestion path |
-| 4 | New Plan reset clears all state | ⚠️ verify — `handleNewPlan` clears most; add a Vitest test to pin it |
+| 4 | New Plan reset clears all state | ✅ done — `handleNewPlan` now also resets `fourYearGenerating` + `slotPopoverOpen/Data`; 7 Vitest tests cover the full reset contract |
 | 5 | 4-year plan blind to electives/goals | ⏳ schema split done in agent (electives/goals params); UI inputs + endpoint wiring may be incomplete — verify `four_year_plan.py` + `FourYearPlanView.tsx` |
 | 6 | 4-year plan intermittently empty | ✅ merged (`0850dc9`) — structured errors |
 | 7 | Prompt injection via user_preference | ✅ merged (`1b1e6b1` + teammate `b083746`) — `_sanitize_user_text`, output denylist |
 | 8 | System-prompt exfiltration | ⚠️ partial — `_SYSTEM_PROMPT_LEAK_PHRASES` + `_contains_system_prompt_leak` exist in `planning_agent.py`; confirm it's applied to `advice`/`assistant_reply` and add the `GET /api/diagnostics/leak_attempts` admin endpoint (not yet present) |
-| RAI | Responsible-AI: data disclosure, PII scrub, lifecycle | ✅ partial — Data Disclosure page merged (PRs #26/#27); PII scrub util + "Delete my data" endpoint still TODO |
+| RAI | Responsible-AI: data disclosure, PII scrub, lifecycle | ✅ done — Data Disclosure page (PRs #26/#27); `sanitize_parsed_rows` strips grades before storage; `DELETE /auth/user/{id}/data` wipes memory file + SQLite row + purges storage, wired to "Delete my data" UI in `SiteFooter` → `DeleteUserDataConfirm` → `App.handleConfirmDeleteUserData` |
 
 > The 9 background red-team subagents I launched earlier mostly hit the API
 > rate limit and produced little; the merged fixes above came from teammate
