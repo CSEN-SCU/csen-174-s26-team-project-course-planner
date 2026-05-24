@@ -1,10 +1,21 @@
 /**
  * Test that App.handleNewPlan resets the correct state.
  * RT#4: Verify that clicking "New Plan" clears chat/plan state but preserves transcript upload state.
+ *
+ * REGRESSION PINS (RT#4)
+ * ─────────────────────
+ * These tests are intentional "pins" against silent regressions in handleNewPlan.
+ * If handleNewPlan ever accidentally clears fileUploaded / missingDetails,
+ * or stops clearing planResult / courses / activeSessionId, these tests will fail.
+ *
+ * State contract enforced here:
+ *   MUST be cleared   → planResult, sessionCalendarRecommended (≡ course count 0),
+ *                        localOverride, activeSessionId, messages (reset to NEW_PLAN_TEXT)
+ *   MUST be preserved → fileUploaded, missingDetails, planSnapshots history
  */
 
 import React from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import App from "../../web/src/App";
@@ -36,6 +47,8 @@ vi.mock("../../web/src/components/ChatPanel", () => ({
         <div data-testid="messages-count">{props.messages.length}</div>
         <div data-testid="latest-message">{props.messages[props.messages.length - 1]?.content || "empty"}</div>
         <div data-testid="plan-result">{props.planResult === null ? "null" : "set"}</div>
+        <div data-testid="file-uploaded">{props.fileUploaded ? "true" : "false"}</div>
+        <div data-testid="missing-details-count">{props.missingDetails.length}</div>
       </div>
     );
   },
@@ -76,10 +89,43 @@ vi.mock("../../web/src/components/SiteFooter", () => ({
   SiteFooter: () => null,
 }));
 
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Inject a plan into App state the same way ChatPanel does in production:
+ * 1. setPlanResult(plan)      — sets planResult, drives the calendar
+ * 2. onPlanGenerated(plan, …) — saves the snapshot in LeftPanel history
+ */
+async function injectPlan(courses: string[]) {
+  expect(lastChatProps).not.toBeNull();
+  const plan: Record<string, unknown> = {
+    recommended: courses.map((c) => ({ course: c, units: 4 })),
+    total_units: courses.length * 4,
+  };
+  const msgs = [{ id: "m0", role: "assistant" as const, content: "Here is your plan." }];
+  await act(async () => {
+    lastChatProps!.setPlanResult(plan);
+    lastChatProps!.onPlanGenerated(plan, msgs);
+  });
+}
+
+/** Mark the user as having uploaded a transcript via the setFileUploaded callback. */
+async function markFileUploaded() {
+  expect(lastChatProps).not.toBeNull();
+  await act(async () => {
+    lastChatProps!.setFileUploaded(true);
+    lastChatProps!.setMissingDetails([{ label: "Major", value: "CSEN" }]);
+  });
+}
+
+// ── tests ────────────────────────────────────────────────────────────────────
+
 describe("App.handleNewPlan state reset (RT#4)", () => {
   beforeEach(() => {
     lastChatProps = null;
   });
+
+  // ── baseline ──────────────────────────────────────────────────────────────
 
   it("initializes with WELCOME_TEXT", async () => {
     render(<App userId="test-user" onSignOut={() => {}} />);
@@ -173,6 +219,149 @@ describe("App.handleNewPlan state reset (RT#4)", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("four-year-view")).toHaveAttribute("data-generating", "false");
+    });
+  });
+
+  // ── REGRESSION PINS ───────────────────────────────────────────────────────
+  // These catch silent regressions where handleNewPlan either stops clearing
+  // something it should, or starts clearing something it must not.
+
+  it("[pin] planResult is cleared after New Plan (was set)", async () => {
+    const user = userEvent.setup();
+    render(<App userId="test-user" onSignOut={() => {}} />);
+
+    // Wait for initial render so ChatPanel props are captured
+    await waitFor(() => expect(lastChatProps).not.toBeNull());
+
+    // Inject a plan to put planResult into a non-null state
+    await injectPlan(["CSEN 12", "CSEN 20", "MATH 11"]);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("plan-result")).toHaveTextContent("set");
+    });
+
+    // Click "New Plan"
+    const newPlanBtn = screen.getByRole("button", { name: /new plan/i });
+    await user.click(newPlanBtn);
+
+    // PIN: planResult must be null after reset
+    await waitFor(() => {
+      expect(screen.getByTestId("plan-result")).toHaveTextContent("null");
+    });
+  });
+
+  it("[pin] course list is cleared after New Plan (was non-empty)", async () => {
+    const user = userEvent.setup();
+    render(<App userId="test-user" onSignOut={() => {}} />);
+
+    await waitFor(() => expect(lastChatProps).not.toBeNull());
+
+    // Inject a 3-course plan → CalendarView should show 3 courses
+    await injectPlan(["CSEN 12", "CSEN 20", "MATH 11"]);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-view")).toHaveAttribute("data-course-count", "3");
+    });
+
+    // Click "New Plan"
+    const newPlanBtn = screen.getByRole("button", { name: /new plan/i });
+    await user.click(newPlanBtn);
+
+    // PIN: course count must be 0 after reset
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-view")).toHaveAttribute("data-course-count", "0");
+    });
+  });
+
+  it("[pin] fileUploaded is PRESERVED after New Plan", async () => {
+    const user = userEvent.setup();
+    render(<App userId="test-user" onSignOut={() => {}} />);
+
+    await waitFor(() => expect(lastChatProps).not.toBeNull());
+
+    // Mark transcript as uploaded
+    await markFileUploaded();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("file-uploaded")).toHaveTextContent("true");
+    });
+
+    // Click "New Plan"
+    const newPlanBtn = screen.getByRole("button", { name: /new plan/i });
+    await user.click(newPlanBtn);
+
+    // PIN: fileUploaded MUST NOT be cleared — user's transcript persists across plans
+    await waitFor(() => {
+      expect(screen.getByTestId("file-uploaded")).toHaveTextContent("true");
+    });
+  });
+
+  it("[pin] missingDetails is PRESERVED after New Plan", async () => {
+    const user = userEvent.setup();
+    render(<App userId="test-user" onSignOut={() => {}} />);
+
+    await waitFor(() => expect(lastChatProps).not.toBeNull());
+
+    // Inject academic details
+    await markFileUploaded();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("missing-details-count")).toHaveTextContent("1");
+    });
+
+    // Click "New Plan"
+    const newPlanBtn = screen.getByRole("button", { name: /new plan/i });
+    await user.click(newPlanBtn);
+
+    // PIN: missingDetails MUST NOT be cleared — same student, new quarter plan
+    await waitFor(() => {
+      expect(screen.getByTestId("missing-details-count")).toHaveTextContent("1");
+    });
+  });
+
+  it("[pin] plan history (snapshots) is PRESERVED after New Plan", async () => {
+    const user = userEvent.setup();
+    render(<App userId="test-user" onSignOut={() => {}} />);
+
+    await waitFor(() => expect(lastChatProps).not.toBeNull());
+
+    // Inject a plan — this saves a snapshot
+    await injectPlan(["CSEN 12", "CSEN 20", "MATH 11"]);
+
+    // Snapshot appears as a session in LeftPanel
+    await waitFor(() => {
+      expect(screen.getByText(/Plan · 3 courses/i)).toBeInTheDocument();
+    });
+
+    // Click "New Plan"
+    const newPlanBtn = screen.getByRole("button", { name: /new plan/i });
+    await user.click(newPlanBtn);
+
+    // PIN: history must survive — only current session is reset
+    await waitFor(() => {
+      expect(screen.getByText(/Plan · 3 courses/i)).toBeInTheDocument();
+    });
+  });
+
+  it("[pin] messages reset to a single NEW_PLAN_TEXT entry (no stale messages)", async () => {
+    const user = userEvent.setup();
+    render(<App userId="test-user" onSignOut={() => {}} />);
+
+    await waitFor(() => expect(lastChatProps).not.toBeNull());
+
+    // Inject a plan which also sets messages
+    await injectPlan(["CSEN 12"]);
+
+    // Click "New Plan"
+    const newPlanBtn = screen.getByRole("button", { name: /new plan/i });
+    await user.click(newPlanBtn);
+
+    // PIN: exactly one message (the NEW_PLAN_TEXT reset message), no residual chat history
+    await waitFor(() => {
+      expect(screen.getByTestId("messages-count")).toHaveTextContent("1");
+      expect(screen.getByTestId("latest-message")).toHaveTextContent(
+        "Started a new plan. Upload your Academic Progress file or describe your preferences for next quarter."
+      );
     });
   });
 });
