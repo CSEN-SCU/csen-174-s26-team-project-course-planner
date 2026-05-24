@@ -23,8 +23,15 @@ from __future__ import annotations
 import pytest
 
 from utils.scu_course_schedule_xlsx import (
+    _find_schedule_path,
     _parse_course_tag_codes,
     load_category_course_index,
+)
+
+_XLSX_MISSING = _find_schedule_path(None) is None
+_xlsx_skip = pytest.mark.skipif(
+    _XLSX_MISSING,
+    reason="SCU_Find_Course_Sections.xlsx not present in this environment",
 )
 
 
@@ -85,11 +92,13 @@ def cat_idx() -> dict[str, list[str]]:
     return load_category_course_index()
 
 
+@_xlsx_skip
 def test_index_loads_non_empty(cat_idx):
     """Schedule xlsx must contain Course Tags column with parseable rows."""
     assert cat_idx, "Course Tags index unexpectedly empty"
 
 
+@_xlsx_skip
 def test_index_has_user_open_requirements(cat_idx):
     """The four open Core requirements the live transcript shipped with
     (RTC 3, ELSJ, Advanced Writing, Arts) must all map to ≥1 candidate."""
@@ -98,6 +107,7 @@ def test_index_has_user_open_requirements(cat_idx):
     assert cat_idx.get("advanced writing"), "no candidates for Advanced Writing"
 
 
+@_xlsx_skip
 def test_sctr_128_is_double_tagged(cat_idx):
     """SCTR 128 satisfies both RTC 3 and ELSJ — this double-tag is the
     feature the user surfaced repeatedly ("可以更快毕业啊")."""

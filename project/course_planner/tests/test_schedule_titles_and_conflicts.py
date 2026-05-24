@@ -33,8 +33,15 @@ import pytest
 
 from agents import planning_agent
 from utils.scu_course_schedule_xlsx import (
+    _find_schedule_path,
     course_title_for,
     detect_time_conflicts,
+)
+
+_XLSX_MISSING = _find_schedule_path(None) is None
+_xlsx_skip = pytest.mark.skipif(
+    _XLSX_MISSING,
+    reason="SCU_Find_Course_Sections.xlsx not present in this environment",
 )
 
 
@@ -121,6 +128,7 @@ def test_course_title_returns_none_for_unknown_code():
     assert course_title_for("MATH 99", titles) is None
 
 
+@_xlsx_skip
 def test_course_title_real_xlsx_has_correct_csen_122_title():
     """End-to-end against the checked-in schedule xlsx — guards against
     regression on the original bug where the LLM mislabelled CSEN 122L."""
