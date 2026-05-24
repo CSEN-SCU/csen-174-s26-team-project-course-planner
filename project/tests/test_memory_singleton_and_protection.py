@@ -119,9 +119,16 @@ def test_plan_outcome_is_not_singleton(temp_memory_dir):
 
 def test_never_compact_kinds_constant_is_set_correctly():
     nc = memory_agent._NEVER_COMPACT_KINDS
+    # Singletons that contain structured JSON the frontend parses directly
+    # must always be protected from compaction.
     assert "parsed_rows" in nc
     assert "academic_progress" in nc
-    assert "plan_outcome" in nc
+    # S2 fix: plan_outcome is plain text, NOT structured JSON, so it IS
+    # eligible for LLM-summarisation compaction.  Assert it's absent.
+    assert "plan_outcome" not in nc, (
+        "plan_outcome was re-added to _NEVER_COMPACT_KINDS — that would re-introduce "
+        "the unbounded memory growth bug (S2). Remove it from the set."
+    )
 
 
 def test_compact_items_skips_protected_kinds(monkeypatch):

@@ -49,6 +49,14 @@ export async function uploadTranscript(file: File, userId?: string) {
   return data;
 }
 
+/**
+ * Set VITE_USE_PLAN_V2=1 to route the plan request through the LangGraph
+ * multi-agent engine (POST /api/plan/v2) instead of the legacy single-shot
+ * planner (POST /api/plan).  Both endpoints return the same response shape so
+ * the rest of the UI requires no changes.
+ */
+const _USE_PLAN_V2 = (import.meta.env.VITE_USE_PLAN_V2 as string | undefined) === "1";
+
 export async function generatePlan(
   missing_details: any[],
   user_preference: string,
@@ -59,7 +67,8 @@ export async function generatePlan(
     completed_course_codes?: string[];
   },
 ) {
-  const res = await fetch(`${API_BASE}/plan`, {
+  const endpoint = _USE_PLAN_V2 ? `${API_BASE}/plan/v2` : `${API_BASE}/plan`;
+  const res = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
