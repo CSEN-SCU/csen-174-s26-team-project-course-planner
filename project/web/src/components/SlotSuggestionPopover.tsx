@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { suggestCoursesForSlot, type CourseSuggestion } from "../api/client";
 
 export type SlotSuggestionPopoverProps = {
@@ -17,7 +17,7 @@ export type SlotSuggestionPopoverProps = {
 
 export function SlotSuggestionPopover({
   day_index,
-  slot_index,
+  slot_index: _slot_index,
   start_min,
   end_min,
   missing_details,
