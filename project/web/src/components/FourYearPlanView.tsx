@@ -509,8 +509,8 @@ export function FourYearPlanView({
                 onChange={(e) => setPreferences(e.target.value)}
                 placeholder={
                   "Tell the planner about your elective interests and any extra goals.\n" +
-                  "Examples: "I enjoy machine learning and want to take AI electives." " +
-                  ""I prefer a light senior year." "Interested in entrepreneurship or ethics courses.""
+                  "Examples: “I enjoy machine learning and want to take AI electives.” " +
+                  "“I prefer a light senior year.” “Interested in entrepreneurship or ethics courses.”"
                 }
                 rows={3}
                 className="w-full resize-none rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-700 placeholder:text-neutral-400 focus:border-[var(--scu-red)] focus:outline-none focus:ring-1 focus:ring-[var(--scu-red)]"
