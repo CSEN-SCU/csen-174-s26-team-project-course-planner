@@ -21,8 +21,11 @@ import pytest
 _TESTS_DIR = Path(__file__).resolve().parent
 _PROJECT_ROOT = _TESTS_DIR.parent
 _APP_ROOT = _PROJECT_ROOT / "course_planner"
+_API_ROOT = _PROJECT_ROOT / "api"
 if str(_APP_ROOT) not in sys.path:
     sys.path.insert(0, str(_APP_ROOT))
+if str(_API_ROOT) not in sys.path:
+    sys.path.insert(0, str(_API_ROOT))
 if str(_TESTS_DIR) not in sys.path:
     sys.path.insert(0, str(_TESTS_DIR))
 
@@ -32,6 +35,24 @@ def pytest_configure(config):
         "markers",
         "requires_schedule_xlsx: needs project/course_planner/SCU_Find_Course_Sections.xlsx",
     )
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """Reset the global rate-limiter singleton before every test.
+
+    ``Depends(limit("plan"))`` calls ``get_limiter()`` at *request* time, so
+    all tests that hit plan routes through any FastAPI app share the same
+    ``_LIMITER`` bucket state.  Without this fixture, tests accumulate enough
+    plan-route hits to exhaust the per-IP bucket (default: 10/min) and later
+    tests in the same session get unexpected 429 responses.
+    """
+    try:
+        from middleware.rate_limit import RateLimiter, set_limiter
+        set_limiter(RateLimiter())
+    except ImportError:
+        pass  # not all test sub-suites have the api on sys.path; safe to skip
+    yield
 
 
 @pytest.fixture()
