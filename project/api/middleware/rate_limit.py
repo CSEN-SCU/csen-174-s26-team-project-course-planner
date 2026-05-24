@@ -75,11 +75,13 @@ class RouteLimits:
 
 
 # Defaults match the rate-limit spec in the security review:
-#   /api/plan           — 10/min per IP, 20/min per user, max 2 concurrent
-#   /api/four-year-plan —  5/min per IP, 10/min per user, max 1 concurrent
+#   /api/plan              — 10/min per IP, 20/min per user, max 2 concurrent
+#   /api/four-year-plan    —  5/min per IP, 10/min per user, max 1 concurrent
+#   /api/plan/suggest_for_slot — lightweight lookup; much higher limit
 DEFAULT_LIMITS: Dict[str, RouteLimits] = {
     "plan": RouteLimits(per_minute_ip=10, per_minute_user=20, max_concurrent_per_user=2),
     "four_year_plan": RouteLimits(per_minute_ip=5, per_minute_user=10, max_concurrent_per_user=1),
+    "slot_suggest": RouteLimits(per_minute_ip=60, per_minute_user=120, max_concurrent_per_user=4),
 }
 
 

@@ -57,14 +57,14 @@ export function AddCoursePicker({ existingCodes, onAdd }: AddCoursePickerProps) 
   const filtered = useMemo(() => {
     if (!courses) return [];
     const q = query.trim().toLowerCase();
-    const base = q
-      ? courses.filter(
-          (c) =>
-            c.course.toLowerCase().includes(q) ||
-            (c.title ?? "").toLowerCase().includes(q),
-        )
-      : courses;
-    return base.slice(0, 50); // cap the rendered list for performance
+    if (!q) return []; // show hint instead of unfiltered list
+    return courses
+      .filter(
+        (c) =>
+          c.course.toLowerCase().includes(q) ||
+          (c.title ?? "").toLowerCase().includes(q),
+      )
+      .slice(0, 50); // cap the rendered list for performance
   }, [courses, query]);
 
   return (
@@ -92,7 +92,12 @@ export function AddCoursePicker({ existingCodes, onAdd }: AddCoursePickerProps) 
           <div className="max-h-72 overflow-y-auto">
             {loading && <p className="p-3 text-xs text-neutral-400">Loading courses…</p>}
             {error && <p className="p-3 text-xs text-red-600">{error}</p>}
-            {!loading && !error && filtered.length === 0 && (
+            {!loading && !error && query.trim() === "" && (
+              <p className="p-3 text-xs text-neutral-400">
+                Type a course code or name to search {courses ? `(${courses.length} courses)` : ""}…
+              </p>
+            )}
+            {!loading && !error && query.trim() !== "" && filtered.length === 0 && (
               <p className="p-3 text-xs text-neutral-400">No matching courses.</p>
             )}
             {!loading &&

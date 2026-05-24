@@ -28,6 +28,11 @@ function errFromBody(data: unknown): string {
       )
       .join("; ");
   }
+  // Structured rate-limit error: { detail: { error: "rate_limited", retry_after_seconds: N } }
+  if (d && typeof d === "object" && (d as Record<string, unknown>).error === "rate_limited") {
+    const wait = (d as Record<string, unknown>).retry_after_seconds;
+    return `Too many requests — please wait ${wait} second${wait === 1 ? "" : "s"} and try again.`;
+  }
   return JSON.stringify(data);
 }
 

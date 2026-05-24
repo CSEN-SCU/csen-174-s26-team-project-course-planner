@@ -413,7 +413,7 @@ class SlotSuggestionRequest(BaseModel):
     exclude_codes: list[str] = Field(default_factory=list, description="Codes to exclude")
 
 
-@router.post("/suggest_for_slot", dependencies=[Depends(limit("plan"))])
+@router.post("/suggest_for_slot", dependencies=[Depends(limit("slot_suggest"))])
 def suggest_for_slot(body: SlotSuggestionRequest) -> dict[str, Any]:
     """Suggest up to 5 courses that fit a calendar slot and open requirements (R6).
 
