@@ -455,7 +455,7 @@ export default function App({ userId, onSignOut }: AppProps) {
 
   const handleSlotClick = useCallback((dayIndex: number, slotIndex: number, clientX: number, clientY: number) => {
     const startMin = CALENDAR_START_HOUR * 60 + slotIndex * 30;
-    const endMin = startMin + 30; // 30-minute slot
+    const endMin = startMin + 90; // 90-min window covers typical 50–75 min class lengths
 
     setSlotPopoverData({
       dayIndex,
