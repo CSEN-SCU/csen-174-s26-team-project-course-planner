@@ -1,10 +1,8 @@
 ## Our Target: SCU Course Planner
 
-> **Historical note (2026-05):** Workday auto-sync described in some sections below was removed from v1. Students upload Academic Progress manually. See [`outdated-features.md`](outdated-features.md).
-
 ### Summary
 
-Our target is a course-planning assistant for Santa Clara University students: it ingests Academic Progress exports and uses Gemini-backed agents to recommend next-term schedules, four-year plans, and conversational help. We reviewed the public repository layout (`project/api`, `project/web`, `project/course_planner`), the FastAPI routes and routers, the Vite/React client, and agent prompt construction in `planning_agent.py` and related modules. We exercised the deployed or locally running application through the chat UI, repeated API-style actions such as rapid regeneration, and manual prompt-injection strings.
+Our target is a course-planning assistant for Santa Clara University students: it ingests Academic Progress exports, optionally syncs Workday, and uses Gemini-backed agents to recommend next-term schedules, four-year plans, and conversational help. We reviewed the public repository layout (`project/api`, `project/web`, `project/course_planner`), the FastAPI routes and routers, the Vite/React client, and agent prompt construction in `planning_agent.py` and related modules. We exercised the deployed or locally running application through the chat UI, repeated API-style actions such as rapid regeneration, and manual prompt-injection strings.
 
 Screenshots in `docs/img/` document UI failures, empty plans, Workday sync errors, and model behavior under adversarial prompts. Cursor-assisted code review complemented dynamic testing to tie each finding to concrete surfaces such as routes, lack of auth or rate limits, and prompt assembly.
 
