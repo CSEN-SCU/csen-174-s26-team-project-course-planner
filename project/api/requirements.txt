@@ -1,0 +1,2 @@
+# Render / local API installs from project/api — delegate to unified lockfile.
+-r ../requirements.txt

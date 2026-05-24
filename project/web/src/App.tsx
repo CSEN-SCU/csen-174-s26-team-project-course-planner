@@ -17,7 +17,7 @@ import { DeleteUserDataConfirm } from "./components/DeleteUserDataConfirm";
 import { SlotSuggestionPopover } from "./components/SlotSuggestionPopover";
 import { clearLocalSession } from "./auth/session";
 import { SiteFooter } from "./components/SiteFooter";
-import { CALENDAR_START_HOUR, WEEKDAY_LABELS } from "./types";
+import { CALENDAR_START_HOUR } from "./types";
 
 const WELCOME_TEXT =
   "Upload your Academic Progress file or describe your preferences to get started.";
