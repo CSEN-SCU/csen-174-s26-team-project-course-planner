@@ -27,7 +27,13 @@ def _load_api_main(monkeypatch, tmp_path):
     monkeypatch.setenv("COURSE_PLANNER_DB", str(tmp_path / "plan_injection.db"))
     monkeypatch.setenv("COURSE_PLANNER_MEMORY_DIR", str(tmp_path / "memory"))
     sys.modules.pop("main", None)
-    return importlib.import_module("main")
+    main = importlib.import_module("main")
+    # Each test gets a fresh token-bucket limiter so earlier tests that call
+    # /api/plan don't exhaust the 10 req/min per-IP limit and cause 429s here.
+    # rate_limit.py documents this pattern: use set_limiter() in tests.
+    from middleware import rate_limit  # noqa: PLC0415
+    monkeypatch.setattr(rate_limit, "_LIMITER", rate_limit.RateLimiter())
+    return main
 
 
 def _stub_client(captured_prompts: list[str], reply: dict):

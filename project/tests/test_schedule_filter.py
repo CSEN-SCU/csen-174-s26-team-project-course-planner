@@ -11,15 +11,13 @@ Covers:
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-_ROOT = Path(__file__).resolve().parents[1]
-if str(_ROOT) not in sys.path:
-    sys.path.insert(0, str(_ROOT))
+# sys.path is configured by conftest.py (adds project/course_planner/ so that
+# `utils`, `agents`, `auth`, etc. are importable as top-level packages).
+# No manual path manipulation needed here.
 
 from utils.scu_course_schedule_xlsx import (
     _parse_days,
