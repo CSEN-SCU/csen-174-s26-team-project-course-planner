@@ -2,82 +2,60 @@
 
 This document tracks capabilities that are **no longer part of the intended v1 product** but may still exist in code, specs, or older docs. Use it when cleaning up kanban items or updating README / AGENTS.
 
-**Last updated:** 2026-05-21 (team decision: Google-only sign-in; no Workday auto-sync)
-
-**Planner fixes (2026-05-21):** Completed-course filtering, unit enrichment, and lab lecture pairing were added in `planning_agent.py` — see git history for `test_planning_postprocess.py`.
+**Last updated:** 2026-05-23 (Google-only sign-in; manual Academic Progress upload; Workday auto-sync out of v1 scope)
 
 ---
 
 ## 1. Username / password sign-in
 
-| Status | **Removed from UI** (2026-05-21). Backend endpoints may still exist. |
-|--------|------------------------------------------------------------------------|
+| Status | **Removed** from UI and API (2026-05-21). |
+|--------|-------------------------------------------|
 
 ### What it was
 
-- Log in / Register tabs with username + password in the left sidebar (Streamlit era) and, briefly, on the React home page (“Sign in with username instead”).
+- Log in / Register tabs with username + password (Streamlit era and early React).
 - API: `POST /api/auth/login`, `POST /api/auth/register`.
 
 ### Current product direction
 
 - **Google OAuth only** on the landing page (`Continue with Google`).
+- SQLite `users` table stores OAuth-linked identities only (no bcrypt passwords).
 
-### Where it still appears (cleanup candidates)
+### Historical sources
 
-| Location | What it says |
-|----------|----------------|
-| `project/api/routers/auth.py` | `login`, `register` routes |
-| `project/course_planner/auth/users_db.py` | SQLite users + bcrypt passwords |
-| `project/course_planner/specs/01-user-authentication.md` | Full spec for username/password tabs (Streamlit-era) |
-| `project/course_planner/AGENTS.md` | “login/register via streamlit-authenticator” |
-| `docs/sprint-1-testing.md` | Password hashing / salt tests (still valid for **stored** accounts if any exist) |
-
-### Sources (how we know it was planned)
-
-- **Conversation / product:** User request (2026-05-21) to drop username/password from the home page.
-- **Repo history:** `LeftPanel.tsx` previously had login/register tabs; `UsernameAuthPanel.tsx` was added for the landing page then removed.
-- **Spec:** `project/course_planner/specs/01-user-authentication.md` (behaviors 3–7 describe registration and login tabs).
+- `UsernameAuthPanel.tsx` removed; `specs/01-user-authentication.md` removed.
+- See git history around `f27fe3b` / `6fffaa8`.
 
 ---
 
 ## 2. Workday Playwright auto-sync (“Sync from Workday”)
 
-| Status | **Removed for v1** — manual Academic Progress Excel upload is the supported path. |
-|--------|------------------------------------------------------------------------------------|
+| Status | **Out of v1 scope** — not shipped. Manual Academic Progress Excel upload is the supported path. |
+|--------|------------------------------------------------------------------------------------------------|
 
 ### What it was
 
-- Button in the chat panel to scrape academic progress from Workday via Playwright (`POST /api/workday/sync`, poll `/api/workday/status/{job_id}`).
+- Button to scrape academic progress from Workday via Playwright (`POST /api/workday/sync`, poll status).
 - Alternative to uploading an `.xlsx` / `.xlsm` Academic Progress export.
 
 ### Current product direction
 
-- Students **upload** the Workday export file (manual export). See **Academic Progress Export Tutorial** in the footer (`#/academic-progress-export-tutorial`).
-- Home page no longer says “sync Workday” under the Google button.
+- Students **upload** the Workday export file. See **Academic Progress Export Tutorial** in the footer (`#/academic-progress-export-tutorial`).
+- **`playwright` remains in `project/requirements.txt`** so a teammate can experiment with scraper code in a branch without re-adding the dependency; the live app does not expose sync endpoints today.
 
-### Removed surfaces
+### Removed from production (2026-05)
 
 | Location | What was removed |
 |----------|------------------|
-| `project/web/src/components/ChatPanel.tsx` | Workday sync button, status bar, polling, and sync messages |
+| `project/web/src/components/ChatPanel.tsx` | Workday sync button and polling |
 | `project/web/src/api/client.ts` | `startWorkdaySync`, `pollWorkdayStatus` |
 | `project/api/routers/workday.py` | Sync + status endpoints |
-| `project/api/main.py` | `workday` router mount |
-| `project/api/middleware/rate_limit.py` | `workday_sync` rate-limit bucket |
-| `project/course_planner/utils/workday_scraper.py` | Playwright scraper |
-| `project/course_planner/requirements.txt` | `playwright` dependency |
+| `project/course_planner/utils/workday_scraper.py` | Playwright scraper implementation |
 
-### Sources
+### Related (still valid — not deprecated)
 
-- **User decision (2026-05-21):** “we are not doing that anymore” (Workday sync); keep tagline that mentions avoiding the “Workday maze” (positioning only).
-- **HANDOFF.md:** legacy references to `SCU_WORKDAY_URL` and the Playwright sync branch were removed.
-- **Sprint retro:** `docs/sprint-1-retro.md` — shipped Workday auto-sync in Sprint 1.
-- **AGENTS.md:** Does not mandate Workday sync; R3/R6 focus on memory and calendar UX.
-
-### Related (still valid)
-
-- **Manual Workday export tutorial** — `AcademicProgressExportTutorialPage.tsx` + images under `project/web/src/img/Workday_tutorial_*.png`. This is **not** deprecated; it teaches export, not browser automation.
-- Copy “`.xlsx or .xlsm export from Workday`” in `ChatPanel.tsx` — accurate for upload flow.
+- **Manual Workday export tutorial** — `AcademicProgressExportTutorialPage.tsx` + `Workday_tutorial_*.png`.
+- Copy “`.xlsx or .xlsm export from Workday`” in the upload UI.
 
 ---
 
@@ -86,10 +64,7 @@ This document tracks capabilities that are **no longer part of the intended v1 p
 | Status | **Superseded** by React + FastAPI (`project/web`, `project/api`). |
 |--------|---------------------------------------------------------------------|
 
-### Sources
-
-- `project/course_planner/AGENTS.md` — `streamlit run main.py`, Streamlit theme.
-- `project/course_planner/main.py` — legacy entry (if still present).
+Removed in git history (`696097a`): `main.py`, `streamlit_auth.py`, `scu_theme.py`, Streamlit-only tests.
 
 ---
 
@@ -97,19 +72,16 @@ This document tracks capabilities that are **no longer part of the intended v1 p
 
 | Status | **Updated** in `project/web/src/index.css`. |
 
-Previous UI used `#c8102e` / `#8b0000`. Official references:
-
-- Santa Clara red: `#A32035`
-- Bronco red: `#862633` (footer background)
+Santa Clara red: `#A32035` · Bronco red (footer): `#862633`
 
 ---
 
 ## Suggested cleanup order (kanban-friendly)
 
-1. Workday sync UI + API — removed for v1; keep manual export tutorial.
-2. Remove or document-only `POST /auth/login` and `/auth/register` if no non-Google users needed.
-3. Archive or mark `specs/01-user-authentication.md` as Streamlit-legacy.
-4. `HANDOFF.md` / `README.md` data-flow diagrams — updated to upload-only.
+1. ~~Workday sync UI + API~~ — removed from v1; keep manual export tutorial.
+2. ~~Password login~~ — removed; Google OAuth only.
+3. Consolidate tests under `project/tests/` (done 2026-05-23).
+4. Keep README / AGENTS / HANDOFF aligned with FastAPI + React stack.
 
 ---
 
@@ -117,6 +89,6 @@ Previous UI used `#c8102e` / `#8b0000`. Official references:
 
 When deprecating a feature:
 
-1. Add a row under the right section with **status**, **sources** (PR, retro, user chat, spec path).
+1. Add a row with **status**, **sources** (PR, retro, user chat, spec path).
 2. List **files to change** before deleting code.
 3. Note what **replaces** it for students (e.g. upload + tutorial link).

@@ -15,26 +15,35 @@ import pytest
 
 from agents import planning_agent
 from utils import scu_course_schedule_xlsx as sx
+from support import schedule_xlsx_available
+
+
+def _require_units_index():
+    if not schedule_xlsx_available():
+        pytest.skip("SCU_Find_Course_Sections.xlsx not available")
+    idx = sx.load_course_units_index()
+    if not idx:
+        pytest.skip("SCU_Find_Course_Sections.xlsx not available")
+    return idx
 
 
 # ── loader + lookup ──────────────────────────────────────────────────────────
 
 
 def test_units_index_loads_from_real_xlsx():
-    idx = sx.load_course_units_index()
-    assert idx, "shipped schedule xlsx failed to load units"
+    idx = _require_units_index()
     assert sx.course_units_for("CSEN 122", idx) == 4
     assert sx.course_units_for("CSEN 122L", idx) == 1
 
 
 def test_units_csen_coen_alias():
-    idx = sx.load_course_units_index()
+    idx = _require_units_index()
     # CSEN/COEN are mirrored; both resolve to the same units.
     assert sx.course_units_for("COEN 122", idx) == sx.course_units_for("CSEN 122", idx)
 
 
 def test_units_for_unknown_returns_none():
-    idx = sx.load_course_units_index()
+    idx = _require_units_index()
     assert sx.course_units_for("ZZZZ 9000", idx) is None
 
 

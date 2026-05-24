@@ -21,7 +21,7 @@ Frontend (Vite + React, separate terminal):
 cd project/web && npm run dev    # http://localhost:5173
 ```
 
-Python tests: `cd project/course_planner && python3 -m pytest tests/`
+Python tests: `cd project && python3 -m pytest tests/`
 Vitest tests: `cd project && npm test`
 
 ---
@@ -46,7 +46,7 @@ Examples: `CSEN 20 + CSEN 20L`, `CSEN 194 + CSEN 194L`, `ECEN 153 + ECEN 153L`.
   `course=None` and the codes are embedded in the requirement text.
 - CSEN ↔ COEN aliases are mirrored in `planned_section_keys` in
   `project/course_planner/utils/scu_course_schedule_xlsx.py`.
-- Tests: `tests/test_lab_pairing.py`, `tests/test_lab_pairing_workday_format.py`.
+- Tests: `tests/test_lab_pairing.py`, `tests/test_lab_pairing_academic_progress_export_format.py`.
 
 ### R2 — Prefer double-tagged Core / GE courses  ✅ implemented
 

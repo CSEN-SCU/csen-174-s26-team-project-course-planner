@@ -10,7 +10,6 @@
     "test:ismael": "vitest run tests/ismael",
     "test:jason": "vitest run tests/jason",
     "test:joey": "vitest run tests/api",
-    "test:jiasheng": "vitest run tests/api/ai_generated/sprint1",
     "test:pytest": "python3 -m pytest tests/"
   },
   "devDependencies": {

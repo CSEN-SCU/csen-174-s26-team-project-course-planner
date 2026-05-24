@@ -35,8 +35,9 @@ python -m pytest tests/
 
 ## Install dependencies
 ```bash
-cd project/api
-pip install -r requirements.txt -r ../course_planner/requirements.txt
+cd project
+pip install -r requirements.txt
+# or from project/api: pip install -r requirements.txt  (shim to ../requirements.txt)
 ```
 Voice transcription uses the `SpeechRecognition` package and **Google’s speech API over the network** when you click **Transcribe recording → preferences**.
 

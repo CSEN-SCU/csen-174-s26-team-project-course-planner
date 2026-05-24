@@ -9,8 +9,10 @@
 node_modules/
 *.log
 dist/
-prototypes/Jason/data/
 .vite/
+
+# Local prototype checkouts (removed from git; ignore if recreated locally)
+prototypes/
 
 # OS / editor noise
 .DS_Store
@@ -23,12 +25,7 @@ __pycache__/
 # Local Python virtual environment (installed packages + interpreter links)
 .venv/
 
-# Prototype uploads / personal exports (do not commit)
-prototypes/jiasheng/data/uploads/
-prototypes/jiasheng/View_My_Academic_Progress.xlsx
-prototypes/jiasheng/~$*.xlsx
-
-# Course planner academic exports (personal)
+# Course planner academic exports (personal — not committed)
 course_planner/View_My_Academic_Progress.xlsx
 course_planner/~$*.xlsx
 project/course_planner/View_My_Academic_Progress.xlsx

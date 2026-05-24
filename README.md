@@ -23,17 +23,17 @@ Two services compose the app:
 | Path | Stack | Role |
 |------|-------|------|
 | [`project/api/`](project/api/) | FastAPI + Python agents | REST API for auth, Academic Progress upload, plan generation, four-year plan, memory CRUD |
-| [`project/web/`](project/web/) | React + Vite + Tailwind | SPA: login + chat + calendar + 4-year grid |
+| [`project/web/`](project/web/) | React + Vite + Tailwind | SPA: Google sign-in + chat + calendar + 4-year grid |
 | [`project/course_planner/`](project/course_planner/) | Python package | Shared **agents**, **SQLite + sqlite-vec**, **auth/users_db**, and **xlsx parsers** used by the FastAPI service |
 
 ### Current implementation
 
 | Area | Module | What it does |
 |------|--------|----------------|
-| Auth | `project/api/routers/auth.py`, `project/course_planner/auth/users_db.py`, `auth/google_oauth.py` | Username/password (bcrypt + SQLite) plus Google OAuth |
+| Auth | `project/api/routers/auth.py`, `project/course_planner/auth/users_db.py`, `auth/google_oauth.py` | **Google OAuth** sign-in; SQLite stores OAuth-linked user ids |
 | Database | `project/course_planner/db/connection.py`, `db/migrate.py`, `db/schema.sql` | SQLite at `project/course_planner/data/app.db` (gitignored): `users`, `memory_items`, **sqlite-vec** `memory_vec` for embeddings |
 | Memory (RAG) | `project/course_planner/agents/memory_agent.py` | **Gemini `text-embedding-004`** (fallback hash vectors if no API key); `write` / `retrieve` / list / delete — **scoped by `user_id`** |
-| Orchestration | `project/course_planner/agents/orchestrator.py` | `plan_for_user`: retrieve memory → **planning_agent** → write summary; **PII redaction** on retrieved snippets before the LLM |
+| Orchestration | `project/api/routers/plan.py`, `agents/memory_agent.py` | Plan routes load memory, call **planning_agent**, write outcomes back; `orchestrator.py` wraps the same flow for tests |
 | Planning | `project/course_planner/agents/planning_agent.py` | **Gemini** structured JSON: `recommended`, `total_units`, `advice`, **`assistant_reply`**. **Lecture+lab pairs** (e.g. CSEN 194 + CSEN 194L) when both appear in the gap; retries / fallback models; **`meta` / `warnings` / per-course `alternatives`**. Prompt-injection sanitiser on user text |
 | Four-year plan | `project/course_planner/agents/four_year_planning_agent.py` | Multi-quarter graduation grid; surfaces open Core/GE candidates via Course-Tags index; typed `EmptyPlanError` / `InconsistentPlanError` |
 | Requirement parsing | `project/course_planner/utils/academic_progress_xlsx.py` | Parses DegreeWorks export; builds `missing_details` and `parsed_rows` |
@@ -61,10 +61,8 @@ Requirement Parser → missing_details + parsed_rows
         ↓
 [FastAPI /api/plan or /api/four-year-plan]
         ↓
-Orchestrator.plan_for_user  ←  SQLite memory (retrieve / write)
-        ↓
-Planning Agent (Gemini)     ←  preferences + gap + memory + previous_plan
-        ↓  (post-process: lab pairing, title override, conflict check)
+Memory retrieve + planning_agent (Gemini)  ←  preferences + gap + memory + previous_plan
+        ↓  (post-process: lab pairing, title override, conflict check, unit enrichment)
 Professor Agent (RMP) → React frontend (calendar / 4-year grid)
 ```
 
@@ -74,7 +72,7 @@ Backend:
 
 ```bash
 cd project/api
-pip install -r requirements.txt -r ../course_planner/requirements.txt
+pip install -r requirements.txt    # shim → project/requirements.txt
 cp .env.example .env   # set GEMINI_API_KEY, GOOGLE_CLIENT_ID/SECRET, etc.
 uvicorn main:app --reload --port 8000 \
   --reload-dir . \
@@ -205,10 +203,11 @@ The LLM produces the plan; the scorers judge it deterministically.
 | [`product-vision.md`](product-vision.md) | Product vision + HMW |
 | [`problem_framing_canvas.md`](problem_framing_canvas.md) | Problem Framing Canvas |
 | [`architecture/architecture.md`](architecture/architecture.md) | C4 diagrams |
+| [`docs/data-sources.md`](docs/data-sources.md) | Academic Progress upload vs quarterly schedule xlsx |
+| [`docs/outdated-features.md`](docs/outdated-features.md) | Deprecated features (password login, Workday auto-sync, Streamlit) |
 | [`project/api/`](project/api/) | FastAPI service (auth, upload, plan, four-year-plan, memory) |
 | [`project/web/`](project/web/) | React + Vite frontend |
-| [`prototypes/`](prototypes/) | Teammate divergent prototypes |
 
 ## Secrets
 
-Do not commit `.env` files. Use `project/course_planner/.env.example` or `prototypes/<name>/.env.example` as templates.
+Do not commit `.env` files. Use `project/api/.env.example` and `project/course_planner/.env.example` as templates.

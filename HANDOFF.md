@@ -34,7 +34,7 @@ cd project/web && npm run dev          # http://localhost:5173
 
 ```bash
 # Python
-cd project/course_planner && python3 -m pytest tests/
+cd project && python3 -m pytest tests/
 # Vitest (frontend)
 cd project && npm test
 ```

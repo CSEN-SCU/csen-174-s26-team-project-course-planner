@@ -15,7 +15,7 @@ full product description, architecture, and run instructions.
 ```bash
 # From repo root
 cd project/api
-pip install -r requirements.txt -r ../course_planner/requirements.txt
+pip install -r requirements.txt    # shim → ../requirements.txt
 cp .env.example .env   # GEMINI_API_KEY, GOOGLE_CLIENT_ID/SECRET, ...
 uvicorn main:app --reload --port 8000 \
   --reload-dir . \
