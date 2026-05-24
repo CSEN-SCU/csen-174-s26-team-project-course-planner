@@ -51,7 +51,17 @@ vi.mock("../../web/src/components/CalendarView", () => ({
 }));
 
 vi.mock("../../web/src/components/FourYearPlanView", () => ({
-  FourYearPlanView: () => <div data-testid="four-year-view" />,
+  FourYearPlanView: (props: { isGenerating?: boolean }) => (
+    <div data-testid="four-year-view" data-generating={String(!!props.isGenerating)} />
+  ),
+}));
+
+vi.mock("../../web/src/components/SlotSuggestionPopover", () => ({
+  SlotSuggestionPopover: (props: { onClose?: () => void }) => (
+    <div data-testid="slot-suggestion-popover">
+      <button onClick={props.onClose}>close</button>
+    </div>
+  ),
 }));
 
 vi.mock("../../web/src/components/AddCoursePicker", () => ({
@@ -137,6 +147,32 @@ describe("App.handleNewPlan state reset (RT#4)", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("calendar-view")).toHaveAttribute("data-course-count", "0");
+    });
+  });
+
+  it("slot-suggestion popover is not rendered on initial load", async () => {
+    render(<App userId="test-user" onSignOut={() => {}} />);
+
+    // slotPopoverOpen starts false — the popover must not be mounted
+    await waitFor(() => {
+      expect(screen.queryByTestId("slot-suggestion-popover")).not.toBeInTheDocument();
+    });
+  });
+
+  it("clicking 'New Plan' resets fourYearGenerating so the 4-year tab shows data-generating=false", async () => {
+    const user = userEvent.setup();
+    render(<App userId="test-user" onSignOut={() => {}} />);
+
+    // Click "New Plan" — fourYearGenerating must be false regardless of prior state
+    const newPlanBtn = await screen.findByRole("button", { name: /new plan/i });
+    await user.click(newPlanBtn);
+
+    // Switch to 4-year tab so FourYearPlanView is mounted
+    const fourYearBtn = screen.getByRole("button", { name: /4-year plan/i });
+    await user.click(fourYearBtn);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("four-year-view")).toHaveAttribute("data-generating", "false");
     });
   });
 });

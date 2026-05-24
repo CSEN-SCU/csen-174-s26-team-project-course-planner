@@ -256,12 +256,16 @@ export default function App({ userId, onSignOut }: AppProps) {
   }, [userId, activeSessionId, planSnapshots]);
 
   const handleNewPlan = useCallback(() => {
-    // Keep missingDetails, fileUploaded, planSnapshots — only reset current chat.
+    // Keep missingDetails, fileUploaded, parsedRows, planSnapshots — only reset current chat.
     setLocalOverride(null);
     setPlanResult(null);
     setSessionCalendarRecommended(null);
     setFourYearPlan(null);
+    setFourYearGenerating(false);
     setActiveSessionId(null);
+    // Close any open slot-suggestion popover so it doesn't linger across plans.
+    setSlotPopoverOpen(false);
+    setSlotPopoverData(null);
     // Always give visible feedback, even from an already-empty state:
     // distinct message, switch to the calendar tab, and focus the chat input.
     setMessages([{ id: `m-new-${Date.now()}`, role: "assistant", content: NEW_PLAN_TEXT }]);
