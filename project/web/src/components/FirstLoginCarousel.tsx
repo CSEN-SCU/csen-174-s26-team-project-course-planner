@@ -35,9 +35,9 @@ export function FirstLoginCarousel({ open, onFinish }: FirstLoginCarouselProps) 
         role="dialog"
         aria-modal="true"
         aria-labelledby="first-login-carousel-title"
-        className="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-white/70 bg-white shadow-2xl"
+        className="relative flex w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-white/70 bg-white shadow-2xl"
       >
-        <div className="shrink-0 bg-[var(--scu-bronco-red)] px-6 py-4 sm:px-8">
+        <div className="flex min-h-[4.5rem] shrink-0 items-center justify-center bg-[var(--scu-bronco-red)] px-6 py-4 sm:px-8">
           <h1
             id="first-login-carousel-title"
             className="text-center text-xl font-bold tracking-tight text-white sm:text-2xl"
@@ -46,9 +46,9 @@ export function FirstLoginCarousel({ open, onFinish }: FirstLoginCarouselProps) 
           </h1>
         </div>
 
-        <div className="min-h-[24rem] overflow-y-auto px-6 py-8 sm:px-8">
+        <div className="h-[32rem] shrink-0 overflow-y-auto px-6 py-8 sm:px-8">
           {step === 0 && (
-            <div className="flex min-h-[18rem] items-center justify-center">
+            <div className="flex h-full items-center justify-center">
               <p className="max-w-xl text-center text-lg leading-8 text-neutral-700">
                 Welcome to SCU Course Planner, please read through the following information before
                 you get started.
@@ -79,7 +79,7 @@ export function FirstLoginCarousel({ open, onFinish }: FirstLoginCarouselProps) 
           )}
         </div>
 
-        <div className="flex items-center justify-between gap-4 border-t border-neutral-100 bg-neutral-50 px-6 py-4 sm:px-8">
+        <div className="flex shrink-0 items-center justify-between gap-4 border-t border-neutral-100 bg-neutral-50 px-6 py-4 sm:px-8">
           <div className="flex gap-2" aria-label="Carousel progress">
             {Array.from({ length: TOTAL_STEPS }).map((_, index) => (
               <span
@@ -130,7 +130,7 @@ function LinkStep({
   linkText: string;
 }) {
   return (
-    <div className="mx-auto flex max-w-xl flex-col items-center justify-center py-10 text-center">
+    <div className="mx-auto flex h-full max-w-xl flex-col items-center justify-center text-center">
       <p className="text-lg leading-8 text-neutral-700">{body}</p>
       <a
         href={href}
