@@ -37,22 +37,13 @@ export function FirstLoginCarousel({ open, onFinish }: FirstLoginCarouselProps) 
         aria-labelledby="first-login-carousel-title"
         className="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-white/70 bg-white shadow-2xl"
       >
-        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[var(--scu-red)] via-[#c99a2e] to-[var(--scu-bronco-red)]" />
-        <div className="flex items-center justify-between border-b border-neutral-100 px-6 py-4 sm:px-8">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--scu-red)]">
-              Getting Started
-            </p>
-            <h1
-              id="first-login-carousel-title"
-              className="mt-1 text-2xl font-bold tracking-tight text-[var(--scu-text)] sm:text-3xl"
-            >
-              {title}
-            </h1>
-          </div>
-          <p className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-500">
-            {step + 1} of {TOTAL_STEPS}
-          </p>
+        <div className="shrink-0 bg-[var(--scu-bronco-red)] px-6 py-4 sm:px-8">
+          <h1
+            id="first-login-carousel-title"
+            className="text-center text-xl font-bold tracking-tight text-white sm:text-2xl"
+          >
+            {title}
+          </h1>
         </div>
 
         <div className="min-h-[24rem] overflow-y-auto px-6 py-8 sm:px-8">
