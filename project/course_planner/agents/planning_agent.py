@@ -1574,9 +1574,8 @@ def suggest_courses_for_slot(
     meeting_start = section_info.get("meeting_start_min")
     meeting_end = section_info.get("meeting_end_min")
 
-    # Check if the course meets on this day and overlaps the time slot
-    day_char = "MTWRF"[day_index] if day_index < 5 else None
-    if not day_char or day_char not in meeting_days:
+    # meeting_days is a list of weekday ints (0=Mon..4=Fri) — compare on int.
+    if day_index >= 5 or day_index not in meeting_days:
       continue
 
     # Check for time overlap
