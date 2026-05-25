@@ -1,0 +1,163 @@
+import { useEffect, useState } from "react";
+import { DataDisclosureContent } from "./DataDisclosureContent";
+import {
+  ACADEMIC_PROGRESS_TUTORIAL_HREF,
+  COURSE_PLANNER_TUTORIAL_HREF,
+} from "../lib/routes";
+
+type FirstLoginCarouselProps = {
+  open: boolean;
+  onFinish: () => void;
+};
+
+const TOTAL_STEPS = 4;
+
+export function FirstLoginCarousel({ open, onFinish }: FirstLoginCarouselProps) {
+  const [step, setStep] = useState(0);
+
+  useEffect(() => {
+    if (open) setStep(0);
+  }, [open]);
+
+  if (!open) return null;
+
+  const isLastStep = step === TOTAL_STEPS - 1;
+  const title = [
+    "Welcome to SCU Course Planner",
+    "Data Disclosure",
+    "Academic Progress Export",
+    "SCU Course Planner Tutorial",
+  ][step];
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[rgba(18,18,18,0.62)] px-4 py-6 backdrop-blur-sm">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="first-login-carousel-title"
+        className="relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-white/70 bg-white shadow-2xl"
+      >
+        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[var(--scu-red)] via-[#c99a2e] to-[var(--scu-bronco-red)]" />
+        <div className="flex items-center justify-between border-b border-neutral-100 px-6 py-4 sm:px-8">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--scu-red)]">
+              Getting Started
+            </p>
+            <h1
+              id="first-login-carousel-title"
+              className="mt-1 text-2xl font-bold tracking-tight text-[var(--scu-text)] sm:text-3xl"
+            >
+              {title}
+            </h1>
+          </div>
+          <p className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-500">
+            {step + 1} of {TOTAL_STEPS}
+          </p>
+        </div>
+
+        <div className="min-h-[24rem] overflow-y-auto px-6 py-8 sm:px-8">
+          {step === 0 && (
+            <div className="grid gap-8 sm:grid-cols-[1fr_0.78fr] sm:items-center">
+              <div>
+                <p className="text-lg leading-8 text-neutral-700">
+                  Welcome to SCU Course Planner. This quick intro explains how your data is used
+                  and points you to the export and tutorial guides before you build your first plan.
+                </p>
+              </div>
+              <div className="rounded-3xl border border-red-100 bg-gradient-to-br from-red-50 to-white p-6 shadow-inner">
+                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--scu-red)]">
+                  Plan with context
+                </p>
+                <p className="mt-4 text-4xl font-bold text-[var(--scu-text)]">SCU</p>
+                <p className="mt-1 text-sm text-neutral-500">Course Planner</p>
+              </div>
+            </div>
+          )}
+
+          {step === 1 && (
+            <div className="[&_h2]:text-sm [&_li]:text-sm [&_p]:text-sm">
+              <DataDisclosureContent />
+            </div>
+          )}
+
+          {step === 2 && (
+            <LinkStep
+              body="Export your Workday Academic Progress report so the planner can understand which requirements are still open."
+              href={ACADEMIC_PROGRESS_TUTORIAL_HREF}
+              linkText="Open Academic Progress Export Tutorial"
+            />
+          )}
+
+          {step === 3 && (
+            <LinkStep
+              body="Learn the basic workflow for uploading progress, chatting with the planner, and building a schedule."
+              href={COURSE_PLANNER_TUTORIAL_HREF}
+              linkText="Open SCU Course Planner Tutorial"
+            />
+          )}
+        </div>
+
+        <div className="flex items-center justify-between gap-4 border-t border-neutral-100 bg-neutral-50 px-6 py-4 sm:px-8">
+          <div className="flex gap-2" aria-label="Carousel progress">
+            {Array.from({ length: TOTAL_STEPS }).map((_, index) => (
+              <span
+                key={index}
+                className={`h-2.5 rounded-full transition-all ${
+                  index === step ? "w-8 bg-[var(--scu-red)]" : "w-2.5 bg-neutral-300"
+                }`}
+              />
+            ))}
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setStep((current) => Math.max(0, current - 1))}
+              disabled={step === 0}
+              className="rounded-full border border-neutral-300 px-5 py-2 text-sm font-semibold text-neutral-600 transition hover:border-neutral-400 hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (isLastStep) {
+                  onFinish();
+                } else {
+                  setStep((current) => Math.min(TOTAL_STEPS - 1, current + 1));
+                }
+              }}
+              className="rounded-full bg-[var(--scu-red)] px-6 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--scu-dark-red)]"
+            >
+              {isLastStep ? "Start" : "Next"}
+            </button>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function LinkStep({
+  body,
+  href,
+  linkText,
+}: {
+  body: string;
+  href: string;
+  linkText: string;
+}) {
+  return (
+    <div className="mx-auto flex max-w-xl flex-col items-center justify-center py-10 text-center">
+      <p className="text-lg leading-8 text-neutral-700">{body}</p>
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className="mt-8 inline-flex rounded-full bg-[var(--scu-red)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--scu-dark-red)]"
+      >
+        {linkText}
+      </a>
+    </div>
+  );
+}

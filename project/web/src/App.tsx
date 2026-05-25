@@ -14,6 +14,7 @@ import { FourYearPlanView } from "./components/FourYearPlanView";
 import { LeftPanel, type MemorySessionRow } from "./components/LeftPanel";
 import type { FourYearPlan, ParsedRow } from "./types";
 import { DeleteUserDataConfirm } from "./components/DeleteUserDataConfirm";
+import { FirstLoginCarousel } from "./components/FirstLoginCarousel";
 import { SlotSuggestionPopover } from "./components/SlotSuggestionPopover";
 import { clearLocalSession } from "./auth/session";
 import { SiteFooter } from "./components/SiteFooter";
@@ -23,6 +24,7 @@ const WELCOME_TEXT =
   "Upload your Academic Progress file or describe your preferences to get started.";
 const NEW_PLAN_TEXT =
   "Started a new plan. Upload your Academic Progress file or describe your preferences for next quarter.";
+const INTRO_SEEN_KEY_PREFIX = "scu_planner_intro_seen:";
 
 export type AppProps = {
   userId: string;
@@ -62,6 +64,7 @@ export default function App({ userId, onSignOut }: AppProps) {
   const [deleteDataOpen, setDeleteDataOpen] = useState(false);
   const [deleteDataBusy, setDeleteDataBusy] = useState(false);
   const [deleteDataNotice, setDeleteDataNotice] = useState<string | null>(null);
+  const [firstLoginCarouselOpen, setFirstLoginCarouselOpen] = useState(false);
   // Slot suggestion popover state (R6)
   const [slotPopoverOpen, setSlotPopoverOpen] = useState(false);
   const [slotPopoverData, setSlotPopoverData] = useState<{
@@ -133,6 +136,10 @@ export default function App({ userId, onSignOut }: AppProps) {
         setPlanSnapshots(loadedSnaps);
       })
       .catch(() => { /* ignore */ });
+  }, [userId]);
+
+  useEffect(() => {
+    setFirstLoginCarouselOpen(!hasSeenFirstLoginCarousel(userId));
   }, [userId]);
 
   // Base calendar data from current session or plan result
@@ -453,6 +460,11 @@ export default function App({ userId, onSignOut }: AppProps) {
     setDeleteDataNotice(null);
   }, [deleteDataBusy]);
 
+  const handleFinishFirstLoginCarousel = useCallback(() => {
+    markFirstLoginCarouselSeen(userId);
+    setFirstLoginCarouselOpen(false);
+  }, [userId]);
+
   const handleSlotClick = useCallback((dayIndex: number, slotIndex: number, clientX: number, clientY: number) => {
     const startMin = CALENDAR_START_HOUR * 60 + slotIndex * 30;
     const endMin = startMin + 90; // 90-min window covers typical 50–75 min class lengths
@@ -476,6 +488,10 @@ export default function App({ userId, onSignOut }: AppProps) {
         error={deleteDataNotice}
         onConfirm={() => void handleConfirmDeleteUserData()}
         onCancel={handleCancelDeleteUserData}
+      />
+      <FirstLoginCarousel
+        open={firstLoginCarouselOpen}
+        onFinish={handleFinishFirstLoginCarousel}
       />
       <div className="flex min-h-0 flex-1 overflow-hidden">
       <LeftPanel
@@ -569,7 +585,31 @@ export default function App({ userId, onSignOut }: AppProps) {
         setParsedRows={setParsedRows}
       />
       </div>
-      <SiteFooter userId={userId} onDeleteUserData={() => setDeleteDataOpen(true)} />
+      <SiteFooter
+        userId={userId}
+        onDeleteUserData={() => setDeleteDataOpen(true)}
+        onOpenHelp={() => setFirstLoginCarouselOpen(true)}
+      />
     </div>
   );
+}
+
+function introSeenKey(userId: string): string {
+  return `${INTRO_SEEN_KEY_PREFIX}${userId}`;
+}
+
+function hasSeenFirstLoginCarousel(userId: string): boolean {
+  try {
+    return window.localStorage.getItem(introSeenKey(userId)) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function markFirstLoginCarouselSeen(userId: string): void {
+  try {
+    window.localStorage.setItem(introSeenKey(userId), "true");
+  } catch {
+    /* If storage is unavailable, still let the user continue in this tab. */
+  }
 }
