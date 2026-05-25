@@ -9,10 +9,8 @@
 node_modules/
 *.log
 dist/
+prototypes/Jason/data/
 .vite/
-
-# Local prototype checkouts (removed from git; ignore if recreated locally)
-prototypes/
 
 # OS / editor noise
 .DS_Store
@@ -25,12 +23,25 @@ __pycache__/
 # Local Python virtual environment (installed packages + interpreter links)
 .venv/
 
-# Course planner academic exports (personal — not committed)
+# Prototype uploads / personal exports (do not commit)
+prototypes/jiasheng/data/uploads/
+prototypes/jiasheng/View_My_Academic_Progress.xlsx
+prototypes/jiasheng/~$*.xlsx
+
+# Course planner academic exports (personal)
 course_planner/View_My_Academic_Progress.xlsx
 course_planner/~$*.xlsx
 project/course_planner/View_My_Academic_Progress.xlsx
 project/course_planner/SCU_Find_Course_Sections.xlsx
 project/course_planner/~$*.xlsx
+
+# Workday auto-pull prototype (branch): the persistent Playwright login profile
+# (canonically project/course_planner/.workday_profile/) holds Workday cookies +
+# session — NEVER commit (security critical). The bare pattern matches the
+# profile dir at any depth as a safety net; *.xlsx.tmp covers the pull scripts'
+# atomic download/replace temp files.
+.workday_profile/
+project/course_planner/*.xlsx.tmp
 
 # Course planner local SQLite database (per-user accounts + memory).
 # Ignore the directory CONTENTS (so user data / app.db stay out of git) but

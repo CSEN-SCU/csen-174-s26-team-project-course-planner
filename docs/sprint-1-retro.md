@@ -2,7 +2,7 @@
 
 ## What went well in Sprint 1?
 
-In Sprint 1, we built a sustainable development workflow for the project. We first organized our project ideas and split work ownership into multiple systems, as defined at the bottom of `architecture/architecture.md`. We then set up the testing suite (now consolidated under **`project/tests/`**) so that we could automatically validate our work. Lastly, we began to work on the features and functionality of the project with a new frontend and backend that will be used for the final product. On the AI implementation side, we made schedule generation more operationally robust: explicit handling when the model provider is misconfigured or overloaded, tests that encode the expected contract, and a path to extend planning features without breaking existing behavior.
+In Sprint 1, we built a sustainable development workflow for the project. We first organized our project ideas and split work ownership into multiple systems, as defined at the bottom of `architecture/architecture.md`. We then set up the testing suite in the `project/course_planner/tests` folder so that we could automatically validate our work. Lastly, we began to work on the features and functionality of the project with a new frontend and backend that will be used for the final product. On the AI implementation side, we made schedule generation more operationally robust: explicit handling when the model provider is misconfigured or overloaded, tests that encode the expected contract, and a path to extend planning features without breaking existing behavior.
 
 
 ## What could be improved?

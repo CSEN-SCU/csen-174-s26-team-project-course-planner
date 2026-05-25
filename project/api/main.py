@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+from contextlib import asynccontextmanager
 
 # Resolve course_planner package root (sibling of this api directory).
 _API_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -28,13 +29,15 @@ from db.migrate import migrate
 from middleware.rate_limit import RateLimitExceeded
 from routers import auth, courses, diagnostics, four_year_plan, memory, plan, upload, voice
 
-app = FastAPI(title="SCU Course Planner API")
 
-
-@app.on_event("startup")
-def _migrate_database_on_startup() -> None:
-    """Render starts uvicorn directly, so the API must prepare SQLite itself."""
+@asynccontextmanager
+async def _lifespan(app: FastAPI):  # noqa: ARG001
+    """Run one-time startup work (DB migration) before the server begins serving."""
     migrate()
+    yield
+
+
+app = FastAPI(title="SCU Course Planner API", lifespan=_lifespan)
 
 
 @app.exception_handler(RateLimitExceeded)
