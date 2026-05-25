@@ -8,37 +8,37 @@ import step5Img from "../img/Workday_tutorial_5.png";
 const STEPS = [
   {
     number: 1,
-    text: "Login to your Workday account.",
+    text: "After logging in to Workday, click the Academics button",
     image: step1Img,
-    alt: "Workday welcome page with Academics highlighted in Your Top Apps",
+    alt: "A screenshot of the Workday homepage, with the Academics button highlighted",
   },
   {
     number: 2,
-    text: "Click on the View My Academic Progress button.",
+    text: "Click on the View My Academic Progress button",
     image: step2Img,
-    alt: "Academics page with View My Academic Progress highlighted in the sidebar",
+    alt: "A screenshot of the Workday academics page, with the View My Academic Progress button highlighted",
   },
   {
     number: 3,
-    text: "Click Ok.",
+    text: "Click OK",
     image: step3Img,
-    alt: "View My Academic Progress confirmation dialog with OK highlighted",
+    alt: "A screenshot of the View My Academic Progress page, with the OK button highlighted",
   },
   {
     number: 4,
-    text: "Click the small box with an X icon.",
+    text: "Click the small box with an X icon",
     image: step4Img,
-    alt: "View My Academic Progress page with the Excel export icon highlighted",
+    alt: "A screenshot of the View My Academic Progress page, with the small box with an X icon highlighted",
   },
   {
     number: 5,
-    text: "Click Download.",
+    text: "Click Download",
     image: step5Img,
-    alt: "Export Document dialog with the Download button highlighted",
+    alt: "A screenshot of the Export Document dialog, with the Download button highlighted",
   },
   {
     number: 6,
-    text: "Upload this file into SCU Course Planner to receive more tailored advice.",
+    text: "Upload this file into SCU Course Planner to receive more tailored advice",
   },
 ] as const;
 
