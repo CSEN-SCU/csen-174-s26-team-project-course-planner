@@ -47,7 +47,7 @@ export function SiteFooter({ userId, onDeleteUserData, onOpenHelp }: SiteFooterP
               |
             </span>
             <button type="button" onClick={onDeleteUserData} className={linkClass}>
-              Delete user data
+              Delete User Data
             </button>
           </>
         )}

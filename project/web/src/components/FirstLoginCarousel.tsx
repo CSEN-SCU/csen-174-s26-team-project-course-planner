@@ -67,7 +67,7 @@ export function FirstLoginCarousel({ open, onFinish }: FirstLoginCarouselProps) 
 
           {step === 1 && (
             <div className="[&_h2]:text-sm [&_li]:text-sm [&_p]:text-sm">
-              <DataDisclosureContent />
+              <DataDisclosureContent showDeleteDataLink />
             </div>
           )}
 

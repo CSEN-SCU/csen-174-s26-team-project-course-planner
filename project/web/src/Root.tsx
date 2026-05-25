@@ -27,7 +27,7 @@ export function Root() {
   }, []);
 
   if (route === DATA_DISCLOSURE_PATH) {
-    return <DataDisclosurePage />;
+    return <DataDisclosurePage isLoggedIn={Boolean(userId)} />;
   }
   if (route === ACADEMIC_PROGRESS_TUTORIAL_PATH) {
     return <AcademicProgressExportTutorialPage />;
