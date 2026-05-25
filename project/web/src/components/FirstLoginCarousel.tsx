@@ -57,20 +57,11 @@ export function FirstLoginCarousel({ open, onFinish }: FirstLoginCarouselProps) 
 
         <div className="min-h-[24rem] overflow-y-auto px-6 py-8 sm:px-8">
           {step === 0 && (
-            <div className="grid gap-8 sm:grid-cols-[1fr_0.78fr] sm:items-center">
-              <div>
-                <p className="text-lg leading-8 text-neutral-700">
-                  Welcome to SCU Course Planner. This quick intro explains how your data is used
-                  and points you to the export and tutorial guides before you build your first plan.
-                </p>
-              </div>
-              <div className="rounded-3xl border border-red-100 bg-gradient-to-br from-red-50 to-white p-6 shadow-inner">
-                <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--scu-red)]">
-                  Plan with context
-                </p>
-                <p className="mt-4 text-4xl font-bold text-[var(--scu-text)]">SCU</p>
-                <p className="mt-1 text-sm text-neutral-500">Course Planner</p>
-              </div>
+            <div className="flex min-h-[18rem] items-center justify-center">
+              <p className="max-w-xl text-center text-lg leading-8 text-neutral-700">
+                Welcome to SCU Course Planner, please read through the following information before
+                you get started.
+              </p>
             </div>
           )}
 
@@ -82,7 +73,7 @@ export function FirstLoginCarousel({ open, onFinish }: FirstLoginCarouselProps) 
 
           {step === 2 && (
             <LinkStep
-              body="Export your Workday Academic Progress report so the planner can understand which requirements are still open."
+              body="You will need to export your Academic Progress Report from Workday so the planner can understand your remaining requirements. Click the button below to read a tutorial on how to export if you need instructions on how to do it."
               href={ACADEMIC_PROGRESS_TUTORIAL_HREF}
               linkText="Open Academic Progress Export Tutorial"
             />
