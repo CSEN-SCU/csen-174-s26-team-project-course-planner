@@ -1,8 +1,6 @@
 # Part 1: Overview
 
-> **Historical note (2026-05):** Tests now live under **`project/tests/`** (pytest + Vitest). Paths below that mention `project/course_planner/tests` describe Sprint 1 as it was written.
-
-This week we worked on setting up the tests that will be used for Test Driven Development throughout the course of the project. We each wrote tests based on ownership as assigned in `architecture/architecture.md`. Tests can be found in the `project/tests` folder and are labeled by owner subfolders or topical `test_*.py` files.
+This week we worked on setting up the tests that will be used for Test Driven Development throughout the course of the project. We each wrote tests based on ownership as assigned in `architecture/architecture.md`. Tests can be found in the `project/course_planner/tests` folder and are labeled by who created them. 
 
 
 # Part 2: Red -> Green Tests

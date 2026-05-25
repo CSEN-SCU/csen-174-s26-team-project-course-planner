@@ -35,25 +35,34 @@ if str(_API_DIR) not in sys.path:
 
 
 @pytest.fixture(autouse=True)
-def _fresh_rate_limiter():
-    """Isolate tests from the module-global limiter (shared IP bucket across TestClient calls)."""
-    from middleware.rate_limit import RateLimiter, RouteLimits, set_limiter
+def _reset_rate_limiter():
+    """Reset the global rate-limiter before every test (shared IP bucket across TestClient)."""
+    try:
+        from middleware.rate_limit import RateLimiter, RouteLimits, set_limiter
 
-    generous = RouteLimits(
-        per_minute_ip=10_000,
-        per_minute_user=10_000,
-        max_concurrent_per_user=100,
-    )
-    set_limiter(
-        RateLimiter(
-            limits={
-                "plan": generous,
-                "four_year_plan": generous,
-            }
+        generous = RouteLimits(
+            per_minute_ip=10_000,
+            per_minute_user=10_000,
+            max_concurrent_per_user=100,
         )
-    )
+        set_limiter(
+            RateLimiter(
+                limits={
+                    "plan": generous,
+                    "four_year_plan": generous,
+                    "slot_suggest": generous,
+                }
+            )
+        )
+    except ImportError:
+        pass
     yield
-    set_limiter(RateLimiter())
+    try:
+        from middleware.rate_limit import RateLimiter, set_limiter
+
+        set_limiter(RateLimiter())
+    except ImportError:
+        pass
 
 
 def pytest_configure(config):
@@ -61,24 +70,6 @@ def pytest_configure(config):
         "markers",
         "requires_schedule_xlsx: needs project/course_planner/SCU_Find_Course_Sections.xlsx",
     )
-
-
-@pytest.fixture(autouse=True)
-def _reset_rate_limiter():
-    """Reset the global rate-limiter singleton before every test.
-
-    ``Depends(limit("plan"))`` calls ``get_limiter()`` at *request* time, so
-    all tests that hit plan routes through any FastAPI app share the same
-    ``_LIMITER`` bucket state.  Without this fixture, tests accumulate enough
-    plan-route hits to exhaust the per-IP bucket (default: 10/min) and later
-    tests in the same session get unexpected 429 responses.
-    """
-    try:
-        from middleware.rate_limit import RateLimiter, set_limiter
-        set_limiter(RateLimiter())
-    except ImportError:
-        pass  # not all test sub-suites have the api on sys.path; safe to skip
-    yield
 
 
 @pytest.fixture()
