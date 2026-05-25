@@ -88,7 +88,7 @@ it "on a schedule," wrap it in cron/launchd; note it still needs a valid session
 written xlsx is **not** served until the caches clear. Either:
 
 - **Restart the API** (prototype default), or
-- `POST /api/courses/refresh` — if/once that cache-clearing endpoint is added.
+- `POST /api/courses/refresh` — clears schedule ``lru_cache`` + ``GET /api/courses`` cache.
 
 ### The login profile (security)
 

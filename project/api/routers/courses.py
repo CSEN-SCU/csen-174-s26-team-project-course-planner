@@ -17,7 +17,7 @@ from typing import Any
 
 from fastapi import APIRouter
 
-from utils.scu_course_schedule_xlsx import list_offered_courses
+from utils.scu_course_schedule_xlsx import clear_schedule_caches, list_offered_courses
 
 router = APIRouter()
 
@@ -31,3 +31,12 @@ def _cached_courses() -> list[dict[str, Any]]:
 def get_courses() -> dict[str, Any]:
     courses = _cached_courses()
     return {"courses": courses, "count": len(courses)}
+
+
+@router.post("/refresh")
+def refresh_courses() -> dict[str, Any]:
+    """Clear schedule caches so the next ``GET /api/courses`` reads the on-disk xlsx."""
+    clear_schedule_caches()
+    _cached_courses.cache_clear()
+    courses = _cached_courses()
+    return {"ok": True, "count": len(courses)}
