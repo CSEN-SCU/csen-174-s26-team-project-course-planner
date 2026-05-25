@@ -43,6 +43,55 @@ def _minimal_progress_xlsx(*, include_grade: bool = True) -> bytes:
     return buf.getvalue()
 
 
+def _sample_layout_progress_xlsx() -> bytes:
+    """Matches on-disk View_My_Academic_Progress.xlsx preamble + column labels."""
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["", "", "", "Satisfied With", None, None, None])
+    ws.append(
+        [
+            "Requirement",
+            "Status",
+            "Remaining",
+            "Registrations Used",
+            "Academic Period",
+            "Units",
+            "Grade",
+        ]
+    )
+    ws.append(
+        [
+            "University Requirement: GPA",
+            "Satisfied",
+            None,
+            None,
+            None,
+            None,
+            None,
+        ]
+    )
+    ws.append(
+        [
+            "Major Requirement: CSEN 10",
+            "Satisfied",
+            None,
+            "CSEN 10 - Intro",
+            "Fall 2024 Quarter",
+            4,
+            "A",
+        ]
+    )
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def test_parse_finds_requirement_after_preamble_row():
+    data = parse_academic_progress_xlsx(_sample_layout_progress_xlsx())
+    assert len(data["detail_rows"]) >= 2
+    assert any(r.get("course_code") == "CSEN 10" for r in data["detail_rows"])
+
+
 def test_parse_omits_grade_from_detail_rows():
     data = parse_academic_progress_xlsx(_minimal_progress_xlsx(include_grade=True))
     for row in data["detail_rows"]:

@@ -54,6 +54,49 @@ def registration_to_course_code(cell: str | None) -> str | None:
     return f"{subj} {num}"
 
 
+def _column_map(header_row: tuple[Any, ...]) -> dict[str, int] | None:
+    """Map Workday header labels to column indices (layout varies by export)."""
+    headers = [str(c).strip() if c is not None else "" for c in header_row]
+
+    def _idx(*names: str) -> int | None:
+        for name in names:
+            if name in headers:
+                return headers.index(name)
+        return None
+
+    req = _idx("Requirement")
+    if req is None:
+        return None
+    status = _idx("Status")
+    return {
+        "requirement": req,
+        "status": status if status is not None else req + 1,
+        "remaining": _idx("Remaining"),
+        "registration": _idx("Registration", "Registrations Used", "Registrations"),
+        "period": _idx("Academic Period", "Period"),
+        "units": _idx("Units"),
+    }
+
+
+def _cell(row: tuple[Any, ...], index: int | None) -> Any:
+    if index is None or index >= len(row):
+        return None
+    return row[index]
+
+
+def _find_progress_sheet(wb: Any) -> tuple[Any, dict[str, int] | None]:
+    """Return the worksheet and column map for the first sheet with a Requirement header."""
+    for name in wb.sheetnames:
+        ws = wb[name]
+        for row in ws.iter_rows(max_row=40, values_only=True):
+            if not row:
+                continue
+            colmap = _column_map(row)
+            if colmap is not None:
+                return ws, colmap
+    return wb.active, None
+
+
 def parse_academic_progress_xlsx(xlsx_bytes: bytes) -> dict[str, Any]:
     """Parse SCU View My Academic Progress export (single-column sheet layout).
 
@@ -61,7 +104,8 @@ def parse_academic_progress_xlsx(xlsx_bytes: bytes) -> dict[str, Any]:
     ``not_satisfied`` summarizes blocks still Not Satisfied;
     ``course_codes`` lists all parsed codes from registration rows (unique, sorted).
     """
-    wb = load_workbook(BytesIO(xlsx_bytes), read_only=True, data_only=True)
+    # Workday exports break openpyxl read_only (rows collapse to a single cell); use normal load.
+    wb = load_workbook(BytesIO(xlsx_bytes), read_only=False, data_only=True)
     detail_rows: list[dict[str, Any]] = []
     not_satisfied: list[dict[str, Any]] = []
     all_codes: list[str] = []
@@ -69,27 +113,34 @@ def parse_academic_progress_xlsx(xlsx_bytes: bytes) -> dict[str, Any]:
     requirement_status: dict[str, str] = {}
 
     try:
-        ws = wb.active
-        it = ws.iter_rows(values_only=True)
+        ws, colmap = _find_progress_sheet(wb)
+        if colmap is None:
+            return {
+                "detail_rows": [],
+                "not_satisfied": [],
+                "course_codes": [],
+                "requirement_status": {},
+                "requirement_status_counts": {},
+            }
 
         header_found = False
-        for row in it:
+        for row in ws.iter_rows(values_only=True):
             if not header_found:
-                if row and row[0] == "Requirement":
+                if _column_map(row) is not None:
                     header_found = True
                 continue
             if row is None or all(c is None or str(c).strip() == "" for c in row[:4]):
                 continue
 
-            requirement = row[0] if row[0] is not None else ""
-            status = row[1] if row[1] is not None else ""
-            remaining = row[2] if len(row) > 2 else None
-            registration = row[3] if len(row) > 3 else None
-            period = row[4] if len(row) > 4 else None
-            units = row[5] if len(row) > 5 else None
-            # Column 7 (grade) is intentionally ignored — never stored or returned.
+            requirement = _cell(row, colmap["requirement"])
+            status = _cell(row, colmap["status"])
+            remaining = _cell(row, colmap["remaining"])
+            registration = _cell(row, colmap["registration"])
+            period = _cell(row, colmap["period"])
+            units = _cell(row, colmap["units"])
+            # Grade column is intentionally ignored — never stored or returned.
 
-            rq = str(requirement).strip()
+            rq = str(requirement).strip() if requirement is not None else ""
             if not rq:
                 continue
             st = str(status).strip()

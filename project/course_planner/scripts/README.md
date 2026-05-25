@@ -21,11 +21,13 @@ scraper was removed on 2026-05-23 (see [`docs/outdated-features.md`](../../../do
 `playwright` was kept in `project/requirements.txt` so this safer approach could
 be re-attempted on a branch.
 
-### Prototype boundary — read first
+### Trigger: CLI or in-app button (local API only)
 
-- **Trigger is a CLI command, not an in-app button.** A web page cannot launch a
-  local browser, so the student/admin runs the script from a terminal. (The
-  student still logs in themselves — the script just opens the browser for them.)
+- **Chat panel — “Sync from Workday”** (when `GET /api/workday/available` is
+  true): starts the same headed pull in a background thread on the machine
+  running FastAPI. The student completes SSO + Duo in the popped-up Chromium
+  window. Disabled on servers without Playwright (`SCU_WORKDAY_PULL_ENABLED=0`).
+- **CLI** (below): same flow from a terminal — useful for cron or debugging.
 - **Zero credential handling.** We never see, type, or store SCU passwords. The
   only persisted state is a local login profile at
   `project/course_planner/.workday_profile/`, which is **gitignored**.

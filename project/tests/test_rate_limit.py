@@ -187,7 +187,12 @@ def test_anonymous_concurrency_is_unbounded(limiter):
 
 def test_default_limits_match_review_spec():
     """The defaults protect LLM-backed and slot-suggestion routes."""
-    assert set(DEFAULT_LIMITS) == {"plan", "four_year_plan", "slot_suggest"}
+    assert set(DEFAULT_LIMITS) == {
+        "plan",
+        "four_year_plan",
+        "slot_suggest",
+        "workday_sync",
+    }
     assert DEFAULT_LIMITS["plan"].per_minute_ip == 10
     assert DEFAULT_LIMITS["plan"].per_minute_user == 20
     assert DEFAULT_LIMITS["plan"].max_concurrent_per_user == 2

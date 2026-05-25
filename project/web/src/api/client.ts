@@ -36,6 +36,40 @@ function errFromBody(data: unknown): string {
   return JSON.stringify(data);
 }
 
+export async function getWorkdayPullAvailable(): Promise<boolean> {
+  const res = await fetch(`${API_BASE}/workday/available`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(errFromBody(data));
+  return Boolean((data as { available?: boolean }).available);
+}
+
+export async function startWorkdaySync(user_id: string): Promise<{ job_id: string }> {
+  const res = await fetch(`${API_BASE}/workday/sync`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_id }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(errFromBody(data));
+  return data as { job_id: string };
+}
+
+export async function pollWorkdayStatus(job_id: string, user_id: string) {
+  const q = new URLSearchParams({ user_id });
+  const res = await fetch(
+    `${API_BASE}/workday/status/${encodeURIComponent(job_id)}?${q}`,
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(errFromBody(data));
+  return data as {
+    status: string;
+    label: string;
+    missing_details?: unknown[];
+    parsed_rows?: unknown[];
+    error?: string;
+  };
+}
+
 export async function uploadTranscript(file: File, userId?: string) {
   const formData = new FormData();
   formData.append("file", file);

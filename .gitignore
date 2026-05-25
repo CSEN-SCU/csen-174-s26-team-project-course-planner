@@ -42,6 +42,7 @@ project/course_planner/~$*.xlsx
 # atomic download/replace temp files.
 .workday_profile/
 project/course_planner/*.xlsx.tmp
+project/course_planner/.workday_debug_last.xlsx
 
 # Course planner local SQLite database (per-user accounts + memory).
 # Ignore the directory CONTENTS (so user data / app.db stay out of git) but
