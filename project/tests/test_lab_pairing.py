@@ -155,6 +155,9 @@ def test_run_planning_agent_auto_pairs_and_recomputes_total(monkeypatch):
         planning_agent, "load_schedule_section_index",
         lambda: _fake_schedule("CSEN 194", "CSEN 194L", "COEN 194", "COEN 194L", "PHIL 11"),
     )
+    # Prevent real xlsx unit/title overrides from changing stub values
+    monkeypatch.setattr(planning_agent, "load_course_units_index", lambda: {})
+    monkeypatch.setattr(planning_agent, "load_course_titles_index", lambda: {})
 
     out = planning_agent.run_planning_agent(
         missing_details=[
@@ -191,6 +194,9 @@ def test_run_planning_agent_does_not_pair_when_lab_not_in_gap(monkeypatch):
         planning_agent, "load_schedule_section_index",
         lambda: _fake_schedule("CSEN 194", "COEN 194"),
     )
+    # Prevent real xlsx unit/title overrides from changing stub values
+    monkeypatch.setattr(planning_agent, "load_course_units_index", lambda: {})
+    monkeypatch.setattr(planning_agent, "load_course_titles_index", lambda: {})
 
     out = planning_agent.run_planning_agent(
         missing_details=[

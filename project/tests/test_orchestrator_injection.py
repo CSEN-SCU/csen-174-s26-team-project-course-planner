@@ -113,6 +113,10 @@ def test_prompt_prefix_respects_char_budget(monkeypatch, alice, reply):
 
     captured: list[str] = []
     _patch_client(monkeypatch, captured, reply)
+    # Use empty schedule so the schedule block does not appear between the
+    # memory block and "STUDENT REQUIREMENTS" and inflate the measurement.
+    monkeypatch.setattr(planning_agent, "load_schedule_section_index", lambda: {})
+    monkeypatch.setattr(planning_agent, "load_category_course_index", lambda: {})
 
     orchestrator.plan_for_user(
         alice,
@@ -154,6 +158,9 @@ def test_oversized_single_snippet_drops_block_gracefully(monkeypatch, alice, rep
 def test_no_injection_block_when_no_memory(monkeypatch, alice, reply):
     captured: list[str] = []
     _patch_client(monkeypatch, captured, reply)
+    # Empty schedule so the prompt has no schedule block between memory and STUDENT REQUIREMENTS.
+    monkeypatch.setattr(planning_agent, "load_schedule_section_index", lambda: {})
+    monkeypatch.setattr(planning_agent, "load_category_course_index", lambda: {})
 
     orchestrator.plan_for_user(
         alice,

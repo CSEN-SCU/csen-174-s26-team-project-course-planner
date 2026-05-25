@@ -41,14 +41,19 @@ class JasonPlanningAgentProviderFallbackTests(unittest.TestCase):
 
         fake_client = SimpleNamespace(models=SimpleNamespace(generate_content=fake_generate_content))
 
+        _sched = {("CSE", "130"): {}}
         with patch.dict("os.environ", {"GEMINI_API_KEY": "test-key", "GEMINI_MODEL": "primary"}, clear=True):
             with patch.object(planning_agent, "get_genai_client", return_value=fake_client):
                 with patch.object(planning_agent, "FALLBACK_MODELS", ("fallback",)):
                     with patch.object(planning_agent.time, "sleep", return_value=None):
-                        result = planning_agent.run_planning_agent(
-                            [{"course": "CSE 130", "category": "Core", "units": 4}],
-                            "balanced workload",
-                        )
+                        with patch.object(planning_agent, "load_schedule_section_index", return_value=_sched):
+                            with patch.object(planning_agent, "load_category_course_index", return_value={}):
+                                with patch.object(planning_agent, "load_course_units_index", return_value={}):
+                                    with patch.object(planning_agent, "load_course_titles_index", return_value={}):
+                                        result = planning_agent.run_planning_agent(
+                                            [{"course": "CSE 130", "category": "Core", "units": 4}],
+                                            "balanced workload",
+                                        )
 
         self.assertEqual(attempts["primary"], 3)
         self.assertEqual(call_models, ["primary", "primary", "primary", "fallback"])
