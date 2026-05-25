@@ -66,3 +66,47 @@ def test_compaction_preserves_recent_rows_and_tags_summary(monkeypatch, alice):
     assert any("note-13-unique-marker" in r["content"] for r in rows)
     assert any("note-12-unique-marker" in r["content"] for r in rows)
     assert _body_bytes_for_user(alice) <= 900
+
+
+# ── S2: plan_outcome compaction ──────────────────────────────────────────────
+
+
+def test_plan_outcome_is_compacted_when_file_grows(monkeypatch, alice):
+    """plan_outcome entries must be eligible for LLM-summarisation compaction
+    (S2 fix).  Previously _NEVER_COMPACT_KINDS blocked them, causing the file
+    to grow without bound across many plan runs.
+    """
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.setenv("MEMORY_COMPACTION_TRIGGER_BYTES", "900")
+    monkeypatch.setenv("MEMORY_COMPACTION_BATCH", "4")
+    monkeypatch.setenv("MEMORY_COMPACTION_PROTECT_RECENT", "2")
+
+    # Simulate many plan runs by writing a plan_outcome per "run".
+    chunk = "p" * 110
+    for i in range(14):
+        memory_agent.write(
+            alice,
+            "plan_outcome",
+            f"PREF: morning\nGAP: CSEN {100 + i}\nPLAN: CSEN {100 + i} | total_units=4\n{chunk}",
+        )
+
+    # File must be under budget after compaction
+    assert _body_bytes_for_user(alice) <= 900, (
+        "plan_outcome entries were not compacted — _NEVER_COMPACT_KINDS still "
+        "includes plan_outcome"
+    )
+
+    # At least one compaction summary note should exist
+    rows = memory_agent.list_for_user(alice)
+    assert any(r["kind"] == "note" for r in rows), (
+        "expected a compaction summary note after many plan_outcome writes"
+    )
+
+
+def test_plan_outcome_not_in_never_compact_kinds():
+    """Guard: plan_outcome must NOT be listed in _NEVER_COMPACT_KINDS (S2)."""
+    assert "plan_outcome" not in memory_agent._NEVER_COMPACT_KINDS, (
+        "plan_outcome was re-added to _NEVER_COMPACT_KINDS — revert that change "
+        "to keep S2 fix active"
+    )

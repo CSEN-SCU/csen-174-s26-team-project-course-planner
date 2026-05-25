@@ -387,7 +387,8 @@ def main(argv: list[str] | None = None) -> int:
     context = None
     try:
         context, page = wb.launch(PROFILE_DIR)
-        wb.wait_for_login(page)
+        page = wb.wait_for_login(page)
+        print("Exporting Find Course Sections to Excel…", flush=True)
 
         def _navigate(pg: Any) -> None:
             navigate_find_course_sections(

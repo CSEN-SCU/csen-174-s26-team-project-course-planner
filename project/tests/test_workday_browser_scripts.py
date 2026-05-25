@@ -30,7 +30,13 @@ from scripts import _workday_browser as wb  # noqa: E402
 
 
 def test_public_api_exported():
-    assert wb.__all__ == ["launch", "wait_for_login", "export_to_excel"]
+    assert wb.__all__ == [
+        "launch",
+        "wait_for_login",
+        "export_to_excel",
+        "export_controls_visible",
+        "export_document_modal_visible",
+    ]
     for name in wb.__all__:
         assert callable(getattr(wb, name))
 
@@ -42,14 +48,18 @@ def test_launch_signature():
 
 def test_wait_for_login_signature():
     sig = inspect.signature(wb.wait_for_login)
-    assert list(sig.parameters) == ["page", "timeout_s"]
+    params = list(sig.parameters)
+    assert params[:3] == ["page", "timeout_s", "poll_hint_s"]
+    assert "progress_cb" in params
     timeout_s = sig.parameters["timeout_s"]
     assert timeout_s.kind is inspect.Parameter.KEYWORD_ONLY
     assert timeout_s.default == 300
 
 
 def test_export_to_excel_signature():
-    assert list(inspect.signature(wb.export_to_excel).parameters) == ["page", "navigate"]
+    params = list(inspect.signature(wb.export_to_excel).parameters)
+    assert params[:2] == ["page", "navigate"]
+    assert "on_poll" in params
 
 
 # ── launch: profile dir + persistent-context options ─────────────────────────
@@ -123,13 +133,14 @@ def _fake_page(url="", pages=None):
     page = SimpleNamespace()
     page.url = url
     page.context = SimpleNamespace(pages=pages if pages is not None else [page])
+    page.bring_to_front = lambda: None
     return page
 
 
 def test_wait_for_login_returns_when_logged_in(monkeypatch, capsys):
     monkeypatch.setattr(wb.time, "sleep", lambda _s: pytest.fail("should not sleep"))
     page = _fake_page(url="https://www.myworkday.com/scu/d/home.htmld")
-    assert wb.wait_for_login(page) is None
+    assert wb.wait_for_login(page) is page
     assert "log in" in capsys.readouterr().out.lower()
 
 
@@ -145,7 +156,7 @@ def test_wait_for_login_detects_workday_in_secondary_tab(monkeypatch):
     sso = _fake_page(url="https://login.scu.edu/sso")
     workday = _fake_page(url="https://www.myworkday.com/scu/d/home.htmld")
     sso.context.pages = [sso, workday]
-    assert wb.wait_for_login(sso) is None
+    assert wb.wait_for_login(sso) is workday
 
 
 # ── export_to_excel ──────────────────────────────────────────────────────────
@@ -190,11 +201,28 @@ class _FakeExportPage:
     def wait_for_selector(self, *_a, **_k):
         return None  # selector "found"
 
+    def wait_for_event(self, event, **_kw):
+        if event == "download":
+            return _FakeDownload(self._download_path)
+        raise wb.PWTimeout(event)
+
+    def get_by_text(self, *_a, **_k):
+        raise wb.PWTimeout("no modal")
+
+    def get_by_role(self, *_a, **_k):
+        raise wb.PWTimeout("no modal")
+
+    def locator(self, *_a, **_k):
+        raise wb.PWTimeout("no modal")
+
     def expect_download(self, *_a, **_k):
         return _DownloadCtx(_FakeDownload(self._download_path))
 
     def click(self, *_a, **_k):
         pass
+
+    def evaluate(self, *_a, **_k):
+        return False
 
 
 def test_export_to_excel_runs_navigate_and_returns_bytes(tmp_path):
@@ -246,7 +274,7 @@ class _NoExportPage:
 def test_export_to_excel_raises_when_no_control_found():
     page = _NoExportPage()
     with pytest.raises(RuntimeError, match="Export to Excel"):
-        wb.export_to_excel(page, lambda _pg: None)
+        wb.export_to_excel(page, lambda _pg: None, poll_timeout_s=2)
     assert page.screenshot_calls == 1  # debug screenshot attempted
 
 

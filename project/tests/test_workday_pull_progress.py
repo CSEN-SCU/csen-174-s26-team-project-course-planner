@@ -76,15 +76,49 @@ def test_on_academic_progress_page_heading_match():
     assert wpp._on_academic_progress_page(page) is True
 
 
+def test_on_academic_progress_page_rejects_academics_hub_title():
+    page = _page_with_title("Academics", heading="Your Apps")
+    assert wpp._on_academic_progress_page(page) is False
+
+
 def test_on_academic_progress_page_rejects_unrelated():
     page = _page_with_title("Find Course Sections", heading="Course Catalog")
+    assert wpp._on_academic_progress_page(page) is False
+
+
+def test_on_academic_progress_page_false_while_student_modal_open(monkeypatch):
+    page = _page_with_title("View My Academic Progress", heading="View My Academic Progress")
+    monkeypatch.setattr(wpp, "_student_selection_modal_visible", lambda _p: True)
     assert wpp._on_academic_progress_page(page) is False
 
 
 def test_ensure_on_task_skips_goto_when_already_there(monkeypatch):
     page = _page_with_title("View My Academic Progress")
     page.goto = pytest.fail  # type: ignore[attr-defined]
+    monkeypatch.setattr(wpp, "_finalize_report_page", lambda _p: True)
     wpp._ensure_on_task(page)  # should return without navigating
+
+
+def test_ensure_on_task_prefers_home_academics_app(monkeypatch):
+    page = _page_with_title("Workday Home", heading="Dashboard")
+    order: list[str] = []
+
+    monkeypatch.setattr(
+        wpp,
+        "_try_home_academics_app",
+        lambda _p: order.append("home") or True,
+    )
+    monkeypatch.setattr(
+        wpp,
+        "_try_sidebar_menu",
+        lambda _p: order.append("sidebar") or True,
+    )
+    page.goto = pytest.fail  # type: ignore[attr-defined]
+    page.wait_for_timeout = lambda *_a, **_k: None  # type: ignore[attr-defined]
+    monkeypatch.setattr(wpp, "_finalize_report_page", lambda _p: False)
+    monkeypatch.setattr(wpp, "_wait_for_workday_content", lambda _p: None)
+    wpp._ensure_on_task(page)
+    assert order == ["home"]
 
 
 def test_ensure_on_task_raises_when_navigation_fails(monkeypatch):
@@ -92,6 +126,10 @@ def test_ensure_on_task_raises_when_navigation_fails(monkeypatch):
     page.goto = lambda *_a, **_k: None  # type: ignore[attr-defined]
     page.wait_for_load_state = lambda *_a, **_k: None  # type: ignore[attr-defined]
     page.wait_for_timeout = lambda *_a, **_k: None  # type: ignore[attr-defined]
+    monkeypatch.setattr(wpp, "_finalize_report_page", lambda _p: False)
+    monkeypatch.setattr(wpp, "_wait_for_workday_content", lambda _p: None)
+    monkeypatch.setattr(wpp, "_try_home_academics_app", lambda _p: False)
+    monkeypatch.setattr(wpp, "_try_sidebar_menu", lambda _p: False)
     monkeypatch.setattr(wpp, "_try_search_for_report", lambda _p: False)
     with pytest.raises(RuntimeError, match="View My Academic Progress"):
         wpp._ensure_on_task(page, task_url=wpp.TASK_URL)
@@ -107,7 +145,7 @@ def test_main_save_mode_writes_file(tmp_path, monkeypatch):
         return fake_bytes
 
     monkeypatch.setattr(wpp, "launch", lambda _p: (_NoCloseContext(), object()))
-    monkeypatch.setattr(wpp, "wait_for_login", lambda _page: None)
+    monkeypatch.setattr(wpp, "wait_for_login", lambda page: page)
     monkeypatch.setattr(wpp, "export_to_excel", lambda _page, _nav: _fake_pull())
 
     out = tmp_path / "progress.xlsx"
@@ -115,20 +153,12 @@ def test_main_save_mode_writes_file(tmp_path, monkeypatch):
     assert out.read_bytes() == fake_bytes
 
 
-def test_main_upload_failure_returns_1(monkeypatch):
-    monkeypatch.setattr(wpp, "launch", lambda _p: (_NoCloseContext(), object()))
-    monkeypatch.setattr(wpp, "wait_for_login", lambda _page: None)
-    monkeypatch.setattr(
-        wpp,
-        "export_to_excel",
-        lambda _page, _nav: _minimal_progress_xlsx(),
-    )
+def test_main_pull_failure_returns_2(monkeypatch):
+    def _boom(*_a, **_kw):
+        raise ConnectionError("browser down")
 
-    def _boom(**_kw):
-        raise ConnectionError("API down")
-
-    monkeypatch.setattr(wpp, "_post_transcript", _boom)
-    assert wpp.main(["--user-id", "u-test"]) == 1
+    monkeypatch.setattr(wpp, "pull_academic_progress", _boom)
+    assert wpp.main(["--user-id", "u-test"]) == 2
 
 
 def test_main_login_timeout_returns_2(monkeypatch):
