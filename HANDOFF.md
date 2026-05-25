@@ -293,7 +293,10 @@ HANDOFF.md                           this file
 6. ~~Full suite green~~ ✅ (broken `test_schedule_filter` + `test_orchestrator_injection` hardened)
 7. ~~`tsc --noEmit` clean~~ ✅
 
-**Remaining stretch items** (not blocking):
-- Wire frontend to `/api/plan/v2` (currently legacy `/api/plan` only).
-- `plan_outcome` memory compaction (accumulates indefinitely).
-- Upgrade system-prompt leak detection from substring to LLM-judge.
+**Stretch items — all complete ✅**
+
+| # | Item | How |
+|---|------|-----|
+| S1 | Wire frontend to `/api/plan/v2` | `VITE_USE_PLAN_V2=1` env var in `web/src/api/client.ts` routes `generatePlan` to the multi-agent endpoint; test in `tests/app/plan-v2-routing.test.ts` |
+| S2 | `plan_outcome` memory compaction | Removed `plan_outcome` from `_NEVER_COMPACT_KINDS` in `memory_agent.py`; old plan summaries are now LLM-compacted like `preference`/`note` entries; tests in `test_memory_compaction.py` + guard in `test_memory_singleton_and_protection.py` |
+| S3 | LLM-judge leak detection | Added `_llm_judge_system_prompt_leak()` in `planning_agent.py`; activated by `SYS_LEAK_LLM_JUDGE=1`; catches paraphrases/translations that substring denylist misses; falls back gracefully if API unavailable; 8 tests in `test_llm_judge_leak_detection.py` |

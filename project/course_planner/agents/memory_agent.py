@@ -23,6 +23,11 @@ When total stored body bytes exceed ``MEMORY_COMPACTION_TRIGGER_BYTES``,
 ``write`` rewrites the file so the oldest eligible rows merge into one
 ``note`` (Gemini summary when a key is set, else excerpt join); the newest
 ``MEMORY_COMPACTION_PROTECT_RECENT`` rows are never merged away.
+
+Kinds exempt from compaction: ``academic_progress`` and ``parsed_rows``
+(structured JSON the frontend parses directly, singleton per user).
+``plan_outcome`` entries contain plain text and ARE eligible for LLM
+summarisation so the file doesn't grow unboundedly across many plan runs.
 """
 
 from __future__ import annotations
@@ -70,7 +75,12 @@ _SINGLETON_KINDS = frozenset(("academic_progress", "parsed_rows"))
 
 # Never include these kinds in the text-summarization compaction batches —
 # their JSON structure must remain intact so the frontend can parse them.
-_NEVER_COMPACT_KINDS = frozenset(("academic_progress", "parsed_rows", "plan_outcome"))
+# NOTE: plan_outcome is intentionally *excluded* from this set so that old
+# plan summaries can be merged by the LLM compactor.  plan_outcome content
+# is plain text (PREF/GAP/PLAN lines), not structured JSON, so compaction
+# is safe.  academic_progress and parsed_rows are singletons that contain
+# transcript JSON the frontend parses directly — they must never be merged.
+_NEVER_COMPACT_KINDS = frozenset(("academic_progress", "parsed_rows"))
 
 _BLOCK_RE = re.compile(
     r"^<<<MEMORY (.+?)>>>\n(.*?)<<<END_MEMORY>>>\s*",
@@ -339,10 +349,11 @@ def _shrink_until_under_budget(
     """Trim the longest UTF-8 bodies until total is at or below ``trigger``.
 
     Entries whose kind is in ``_NEVER_COMPACT_KINDS`` (academic_progress,
-    parsed_rows, plan_outcome) are NEVER truncated — their content is
-    structured JSON that must remain parseable for the frontend.  If only
-    protected entries remain and they still exceed the budget, the file is
-    left oversized rather than corrupting the data.
+    parsed_rows) are NEVER truncated — their content is structured JSON that
+    must remain parseable for the frontend.  plan_outcome entries contain
+    plain text and are eligible for both LLM summarisation and body trimming.
+    If only protected entries remain and they still exceed the budget, the
+    file is left oversized rather than corrupting the data.
     """
     if _total_body_bytes(items) <= trigger:
         return items, False
