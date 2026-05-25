@@ -1,13 +1,16 @@
 """Course catalog listing for the manual "+ Add course" picker.
 
-GET /api/courses  → {"courses": [ {course, title, units, professor,
-                    meeting_days, meeting_start_min, meeting_end_min,
-                    lab_partner}, ... ]}
+GET /api/courses          → {"courses": [ {course, title, units, professor,
+                            meeting_days, meeting_start_min, meeting_end_min,
+                            lab_partner}, ... ]}
+POST /api/courses/refresh → drop the catalog caches so a replaced schedule
+                            xlsx is served without a server restart.
 
 The list is the next-term schedule (from the Find Course Sections xlsx),
 deduplicated by (subject, number). The frontend fetches it once and
 filters client-side; selecting a course adds it directly to the plan
-without an LLM round-trip.
+without an LLM round-trip. The result is cached at process scope, so when
+the schedule xlsx is replaced the cache must be invalidated via /refresh.
 """
 
 from __future__ import annotations
