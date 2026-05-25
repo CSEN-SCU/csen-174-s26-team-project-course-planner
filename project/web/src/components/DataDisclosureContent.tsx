@@ -12,18 +12,18 @@ export function DataDisclosureContent({ showDeleteDataLink = false }: DataDisclo
         <ul className="list-disc space-y-1 pl-5 text-neutral-600">
           <li>
             <strong>Academic Progress Data</strong> - Remaining course requirements parsed
-            from uploaded Academic Progress xlsx. Names, grades, and GPA are stripped
-            before storage.
+            from uploaded Academic Progress reports. Names and grades are stripped
+            before sotring.
           </li>
           <li>
-            <strong>Course Plan Snapshots</strong> - Generate Schedules are stored for future use by users.
+            <strong>Course Plan Snapshots</strong> - Generate Schedules are stored for your future reference and use.
           </li>
           <li>
             <strong>Preferences and Notes</strong> - Summaries of scheduling preferences
-            you share in the chat are stored for futurer recommendations.
+            you share in the chat are stored for future recommendations.
           </li>
           <li>
-            <strong>Google Account Identifier</strong> — Google Account identifier stored for account association.
+            <strong>Google Account Identifier</strong> - Google Account identifier stored for account association.
           </li>
         </ul>
       </section>
@@ -32,7 +32,7 @@ export function DataDisclosureContent({ showDeleteDataLink = false }: DataDisclo
         <h1 className="mb-2 font-semibold text-[var(--scu-text)]">How your Data is Processed</h1>
         <p className="text-neutral-600">
           Course planning requests, including your remaining requirements and stated preferences,
-          are sent to Google's Gemini API to generate schedule recommendations.
+          are processed using Google's Gemini API to generate schedule recommendations.
         </p>
       </section>
 
