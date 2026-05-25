@@ -896,6 +896,17 @@ _LAB_PAIR_SUBJECTS = frozenset(
 )
 
 
+def clear_schedule_caches() -> None:
+    """Drop in-process schedule caches after ``SCU_Find_Course_Sections.xlsx`` is replaced.
+
+    ``list_offered_courses`` reads the xlsx on each call, but ``load_core_integrations_course_set``
+    and ``load_instructor_ratings`` are ``lru_cache``-d. Pair with
+    ``courses._cached_courses.cache_clear()`` in the API router.
+    """
+    load_core_integrations_course_set.cache_clear()
+    load_instructor_ratings.cache_clear()
+
+
 def list_offered_courses(path: Path | None = None) -> list[dict[str, Any]]:
     """Return every distinct course offered next term, shaped for the manual
     "+ Add course" picker AND for direct placement on the calendar.
