@@ -54,6 +54,22 @@ export async function startWorkdaySync(user_id: string): Promise<{ job_id: strin
   return data as { job_id: string };
 }
 
+/**
+ * Start a shared Find Course Sections catalog pull. Overwrites the catalog for
+ * all users, so callers should confirm with the user first. Poll with
+ * {@link pollWorkdayStatus} (the same job store); the done job carries `count`.
+ */
+export async function startWorkdaySectionsSync(user_id: string): Promise<{ job_id: string }> {
+  const res = await fetch(`${API_BASE}/workday/sync-sections`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_id }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(errFromBody(data));
+  return data as { job_id: string };
+}
+
 export async function pollWorkdayStatus(job_id: string, user_id: string) {
   const q = new URLSearchParams({ user_id });
   const res = await fetch(
@@ -66,6 +82,10 @@ export async function pollWorkdayStatus(job_id: string, user_id: string) {
     label: string;
     missing_details?: unknown[];
     parsed_rows?: unknown[];
+    // Find Course Sections jobs report the catalog size + term instead.
+    count?: number;
+    term?: string;
+    level?: string;
     error?: string;
   };
 }

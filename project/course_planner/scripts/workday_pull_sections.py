@@ -28,6 +28,7 @@ import os
 import re
 import sys
 import tempfile
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -67,7 +68,10 @@ if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
 from scripts import _workday_browser as wb  # noqa: E402
-from utils.scu_course_schedule_xlsx import list_offered_courses  # noqa: E402
+from utils.scu_course_schedule_xlsx import (  # noqa: E402
+    clear_schedule_caches,
+    list_offered_courses,
+)
 
 # ── Paths & exit codes (cron-friendly) ───────────────────────────────────────
 
@@ -344,6 +348,110 @@ def navigate_find_course_sections(
     _run_search(page)
 
 
+# ── Reusable pull (CLI + API share this) ─────────────────────────────────────
+
+
+def _export_sections_bytes(
+    *,
+    term: str,
+    level: str,
+    task_url: str | None,
+    profile_dir: Path,
+    progress_cb: Callable[[str], None] | None = None,
+) -> bytes:
+    """Headed login + navigate Find Course Sections + Export to Excel → raw bytes.
+
+    Opens the browser, blocks on human SSO + Duo, drives the report, and captures
+    Workday's native export. Does **not** validate or write — callers decide.
+    ``progress_cb`` receives coarse status codes (``navigating``/``exporting``…)
+    plus the ``browser_open``/``logged_in`` codes emitted by ``wait_for_login``.
+    """
+
+    def _cb(status: str) -> None:
+        if progress_cb is not None:
+            progress_cb(status)
+
+    context = None
+    try:
+        context, page = wb.launch(profile_dir)
+        page = wb.wait_for_login(page, progress_cb=progress_cb)
+        print("Exporting Find Course Sections to Excel…", flush=True)
+
+        def _navigate(pg: Any) -> None:
+            _cb("navigating")
+            navigate_find_course_sections(pg, term=term, level=level, task_url=task_url)
+
+        _cb("downloading")
+
+        def _export_poll() -> None:
+            _cb("exporting")
+
+        return wb.export_to_excel(page, _navigate, on_poll=_export_poll)
+    finally:
+        if context is not None:
+            try:
+                context.close()
+            except Exception:  # noqa: BLE001
+                pass
+
+
+def pull_course_sections(
+    *,
+    term: str | None = None,
+    level: str | None = None,
+    task_url: str | None = None,
+    profile_dir: Path | None = None,
+    progress_cb: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """Pull the shared *Find Course Sections* catalog and overwrite the xlsx.
+
+    The course-availability analogue of ``pull_academic_progress``: where that
+    writes per-user memory, this overwrites the **shared**
+    ``SCU_Find_Course_Sections.xlsx`` (course availability is the same for every
+    student) and drops in-process schedule caches so the next read reloads it.
+
+    ``term`` / ``level`` / ``task_url`` fall back to the same env vars and
+    heuristics as the CLI. Returns ``{"count", "term", "level"}``. Raises
+    ``SectionsValidationError`` if the export parses to zero courses (the shared
+    catalog is left untouched), or ``TimeoutError`` / ``RuntimeError`` on login
+    or navigation failure.
+    """
+
+    def _cb(status: str) -> None:
+        if progress_cb is not None:
+            progress_cb(status)
+
+    term_v = (term or os.environ.get(_TERM_ENV) or default_term_name()).strip()
+    level_v = (level or default_academic_level()).strip()
+    url_v = (
+        task_url if task_url is not None else os.environ.get(_SECTIONS_URL_ENV) or ""
+    ).strip() or None
+
+    _cb("pending")
+    data = _export_sections_bytes(
+        term=term_v,
+        level=level_v,
+        task_url=url_v,
+        profile_dir=profile_dir or PROFILE_DIR,
+        progress_cb=progress_cb,
+    )
+
+    _cb("validating")
+    with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tf:
+        tmp = Path(tf.name)
+        tmp.write_bytes(data)
+    try:
+        n = validate_sections_xlsx(tmp)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+    _cb("writing")
+    atomic_write_xlsx(DEST_XLSX, data)
+    # In-process only; the API process clears its own caches after the job.
+    clear_schedule_caches()
+    return {"count": n, "term": term_v, "level": level_v}
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 
@@ -384,21 +492,13 @@ def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     task_url = (os.environ.get(_SECTIONS_URL_ENV) or "").strip() or None
 
-    context = None
     try:
-        context, page = wb.launch(PROFILE_DIR)
-        page = wb.wait_for_login(page)
-        print("Exporting Find Course Sections to Excel…", flush=True)
-
-        def _navigate(pg: Any) -> None:
-            navigate_find_course_sections(
-                pg,
-                term=args.term.strip(),
-                level=args.level.strip(),
-                task_url=task_url,
-            )
-
-        data = wb.export_to_excel(page, _navigate)
+        data = _export_sections_bytes(
+            term=args.term.strip(),
+            level=args.level.strip(),
+            task_url=task_url,
+            profile_dir=PROFILE_DIR,
+        )
 
         with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tf:
             tmp = Path(tf.name)
@@ -438,12 +538,6 @@ def main(argv: list[str] | None = None) -> int:
     except OSError as exc:
         print(f"ERROR: failed to write catalog — {exc}", file=sys.stderr, flush=True)
         return EXIT_WRITE
-    finally:
-        if context is not None:
-            try:
-                context.close()
-            except Exception:  # noqa: BLE001
-                pass
 
 
 if __name__ == "__main__":

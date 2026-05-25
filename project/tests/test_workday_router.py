@@ -92,3 +92,54 @@ def test_sync_and_status_scoped_to_user(db_path, monkeypatch):
 
         other = client.get(f"/api/workday/status/{job_id}", params={"user_id": other_uid})
         assert other.status_code == 404
+
+
+def test_sync_sections_requires_auth(db_path, monkeypatch):
+    with _client(monkeypatch, db_path=db_path, memory_dir=_memory_dir(db_path)) as client:
+        res = client.post("/api/workday/sync-sections", json={"user_id": ""})
+    assert res.status_code == 401
+
+
+def test_sync_sections_reports_catalog_count(db_path, monkeypatch):
+    import sqlite3
+
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "INSERT INTO users (google_sub, email) VALUES (?, ?)",
+        ("sub-sections-a", "sections-a@scu.edu"),
+    )
+    conn.commit()
+    uid = str(
+        conn.execute("SELECT id FROM users WHERE email = ?", ("sections-a@scu.edu",)).fetchone()[0]
+    )
+    conn.close()
+
+    def fake_pull(*, progress_cb=None, **kwargs):
+        if progress_cb:
+            progress_cb("writing")
+        return {"count": 5, "term": "Fall 2026", "level": "Undergraduate"}
+
+    import scripts.workday_pull_sections as wps
+
+    monkeypatch.setattr(wps, "pull_course_sections", fake_pull)
+
+    with _client(monkeypatch, db_path=db_path, memory_dir=_memory_dir(db_path)) as client:
+        start = client.post("/api/workday/sync-sections", json={"user_id": uid})
+        assert start.status_code == 200
+        job_id = start.json()["job_id"]
+
+        import time
+
+        for _ in range(30):
+            st = client.get(f"/api/workday/status/{job_id}", params={"user_id": uid})
+            assert st.status_code == 200
+            body = st.json()
+            if body["status"] in ("done", "error"):
+                break
+            time.sleep(0.05)
+        else:
+            raise AssertionError("job did not finish")
+
+        assert body["status"] == "done", body
+        assert body.get("count") == 5
+        assert body.get("term") == "Fall 2026"
