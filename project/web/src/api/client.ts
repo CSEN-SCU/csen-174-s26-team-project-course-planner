@@ -1,10 +1,14 @@
 /**
- * Dev: browser calls same-origin `/api/...`; Vite proxies to FastAPI (no CORS, works in Firefox).
- * Prod: set `VITE_API_BASE` (e.g. `https://api.example.com/api`) or defaults to localhost.
+ * Default: browser calls same-origin `/api/...`.
+ * - Dev: Vite proxies `/api` → FastAPI (see `vite.config.ts`)
+ * - Prod: a reverse proxy / rewrite should route `/api` → FastAPI
+ *
+ * If your API is hosted on a different origin, set `VITE_API_BASE`
+ * (e.g. `https://api.example.com/api`).
  */
 const API_BASE =
   (import.meta.env.VITE_API_BASE as string | undefined)?.trim() ||
-  (import.meta.env.DEV ? "/api" : "http://localhost:8000/api");
+  "/api";
 
 /**
  * Top-level navigation URL for starting Google OAuth.
