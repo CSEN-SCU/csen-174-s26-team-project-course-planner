@@ -893,6 +893,216 @@ def _reconcile_followup_edit(
     return deduped
 
 
+# ── Deterministic unit-cap enforcement ───────────────────────────────────────
+# The system_instruction asks the LLM to honor a unit cap ("under 20 units",
+# "16 unit plan"), but that's a soft constraint Gemini routinely ignores. We
+# parse the cap ourselves and trim deterministically as a final safety net.
+
+# Bounded cap verbs ("under 18", "max 12", "no more than 20", "最多 16 学分").
+_UNIT_CAP_VERB_RE = re.compile(
+    r"(?:cap(?:ped)?\s+(?:at|to)|maximum|max|no\s+more\s+than|"
+    r"not\s+more\s+than|less\s+than|under|below|at\s+most|"
+    r"limit(?:\s+(?:to|at|under))?|不超过|最多|至多|不要超过)\s*"
+    r"(\d{1,2})\s*(?:-)?\s*(?:units?|学分|单元)?",
+    re.IGNORECASE,
+)
+
+# Numeric target adjacent to a unit word ("16 unit plan", "give me 14 units",
+# "16-unit", "16学分"). The unit word is required to avoid false positives
+# like "for 16 weeks" or "section 16".
+_UNIT_CAP_TARGET_RE = re.compile(
+    r"(\d{1,2})\s*[-]?\s*(?:units?|学分|单元)",
+    re.IGNORECASE,
+)
+
+
+def _extract_unit_cap(user_preference: str) -> int | None:
+    """Parse a numeric unit cap mentioned in the student's message.
+
+    Recognises common English and Chinese phrasings:
+      - "16 unit plan", "I want 14 units", "16-unit schedule"
+      - "under 20 units", "max 12 units", "no more than 18"
+      - "不超过 18 单元", "最多 16 学分"
+
+    Returns the *tightest* (smallest) cap when several numbers appear; e.g.
+    "between 14 and 16 units" → 14. Returns ``None`` when no clear cap is
+    stated.
+
+    Caps outside the realistic SCU range (8–25) are ignored so that
+    accidental matches against course numbers ("section 16") don't pin a
+    false cap.
+    """
+    if not user_preference:
+        return None
+    text = user_preference
+
+    candidates: list[int] = []
+    for m in _UNIT_CAP_VERB_RE.finditer(text):
+        try:
+            candidates.append(int(m.group(1)))
+        except (TypeError, ValueError):
+            continue
+    for m in _UNIT_CAP_TARGET_RE.finditer(text):
+        try:
+            n = int(m.group(1))
+        except (TypeError, ValueError):
+            continue
+        if 8 <= n <= 25:
+            candidates.append(n)
+
+    if not candidates:
+        return None
+    return min(candidates)
+
+
+def _enforce_unit_cap(
+    recommended: list[dict],
+    cap: int | None,
+) -> tuple[list[dict], list[str]]:
+    """Trim ``recommended`` from the tail until total units ≤ ``cap``.
+
+    Lab/lecture pairs (CSEN 194 ↔ CSEN 194L, etc., per the R1 subjects)
+    are dropped as a single group so we never split a co-requirement.
+
+    Returns ``(filtered, dropped_codes)``. When ``cap`` is ``None`` or the
+    plan is already at/under cap, ``dropped_codes`` is empty and the
+    original list is returned unchanged.
+    """
+    if cap is None or not recommended:
+        return list(recommended), []
+
+    total = _recompute_total_units(recommended)
+    if total <= cap:
+        return list(recommended), []
+
+    codes_in_list: set[str] = set()
+    units_by_code: dict[str, int] = {}
+    for r in recommended:
+        if not isinstance(r, dict):
+            continue
+        code = _normalize_code(r.get("course"))
+        if not code:
+            continue
+        codes_in_list.add(code)
+        try:
+            units_by_code[code] = int(r.get("units") or 0)
+        except (TypeError, ValueError):
+            units_by_code[code] = 0
+
+    def _partner_of(code: str) -> str | None:
+        parts = _split_course_code(code)
+        if not parts:
+            return None
+        subj, num = parts
+        if subj not in _LAB_PAIRING_SUBJECTS:
+            return None
+        if num.endswith("L") and len(num) > 1:
+            partner = f"{subj} {num[:-1]}"
+        else:
+            partner = f"{subj} {num}L"
+        return partner if partner in codes_in_list else None
+
+    drop_codes: set[str] = set()
+    for r in reversed(recommended):
+        if total <= cap:
+            break
+        if not isinstance(r, dict):
+            continue
+        code = _normalize_code(r.get("course"))
+        if not code or code in drop_codes:
+            continue
+        group = {code}
+        partner = _partner_of(code)
+        if partner:
+            group.add(partner)
+        group_units = sum(units_by_code.get(c, 0) for c in group)
+        drop_codes |= group
+        total -= group_units
+
+    filtered = [
+        r for r in recommended
+        if isinstance(r, dict)
+        and _normalize_code(r.get("course")) not in drop_codes
+    ]
+    return filtered, sorted(drop_codes)
+
+
+_REPLY_CODE_RE = re.compile(r"\b([A-Z]{2,6})\s*(\d{1,3}[A-Z]?)\b")
+_REPLY_UNIT_RE = re.compile(
+    r"(\d{1,2})\s*[-]?\s*(?:units?|学分|单元)",
+    re.IGNORECASE,
+)
+
+
+def _resync_assistant_reply(parsed: dict, user_preference: str = "") -> None:
+    """Rewrite ``assistant_reply`` when it disagrees with the final plan.
+
+    The system_instruction tells the model that ``assistant_reply`` must
+    be self-consistent with ``recommended`` + ``total_units``, but the
+    LLM occasionally hallucinates a different course list or unit total
+    in the chat string ("16-unit plan with four courses…" while
+    ``recommended`` actually holds 5 courses summing to 22).
+
+    Used for initial plans (no ``previous_plan``); follow-up turns already
+    go through :func:`_sync_followup_assistant_reply`.
+
+    Rewrites only when there is a real inconsistency:
+      - The reply mentions a course code that is not in ``recommended``.
+      - The reply mentions a unit count that doesn't match
+        ``total_units``.
+    Otherwise the original reply is preserved (it may carry useful
+    natural-language context the user wrote).
+    """
+    if not isinstance(parsed, dict):
+        return
+    recs = parsed.get("recommended") or []
+    if not isinstance(recs, list) or not recs:
+        return
+
+    final_codes: list[str] = []
+    for r in recs:
+        if not isinstance(r, dict):
+            continue
+        code = _normalize_code(r.get("course"))
+        if code and code not in final_codes:
+            final_codes.append(code)
+    final_codes_set = set(final_codes)
+
+    try:
+        total = int(parsed.get("total_units") or 0)
+    except (TypeError, ValueError):
+        total = 0
+    if total <= 0:
+        total = _recompute_total_units(recs)
+
+    reply = parsed.get("assistant_reply") or ""
+    if not isinstance(reply, str):
+        reply = str(reply)
+
+    mentioned_codes: set[str] = set()
+    for m in _REPLY_CODE_RE.finditer(reply):
+        mentioned_codes.add(f"{m.group(1).upper()} {m.group(2).upper()}")
+
+    mentioned_units: set[int] = set()
+    for m in _REPLY_UNIT_RE.finditer(reply):
+        try:
+            mentioned_units.add(int(m.group(1)))
+        except (TypeError, ValueError):
+            continue
+
+    code_inconsistent = bool(mentioned_codes - final_codes_set)
+    unit_inconsistent = bool(mentioned_units) and total not in mentioned_units
+
+    if not code_inconsistent and not unit_inconsistent:
+        return
+
+    course_list = ", ".join(final_codes) if final_codes else "no courses"
+    parsed["assistant_reply"] = (
+        f"I put together a {len(final_codes)}-course plan totaling "
+        f"{total} units: {course_list}. Let me know if you'd like to adjust the load."
+    )[:480]
+
+
 def _sync_followup_assistant_reply(
     parsed: dict,
     previous_plan: dict | None,
@@ -1656,6 +1866,19 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
         if units_index:
             parsed["total_units"] = _recompute_total_units(parsed.get("recommended") or [])
 
+    # ── Deterministic unit-cap enforcement ───────────────────────────────────
+    # If the student stated a unit cap ("16 unit plan", "under 20 units"),
+    # trim the plan from the tail until it satisfies the cap. The LLM is
+    # told to do this in the system prompt but routinely doesn't.
+    unit_cap = _extract_unit_cap(user_preference or "")
+    dropped_for_cap: list[str] = []
+    if unit_cap is not None:
+        parsed["recommended"], dropped_for_cap = _enforce_unit_cap(
+            parsed.get("recommended") or [], unit_cap
+        )
+        if dropped_for_cap:
+            parsed["total_units"] = _recompute_total_units(parsed["recommended"])
+
     eff_model = resolved_model or model
     parsed["meta"] = {
         "provider": "gemini",
@@ -1671,6 +1894,16 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
 
     tu = int(parsed.get("total_units") or 0)
     warnings: list[dict[str, str]] = []
+    if dropped_for_cap and unit_cap is not None:
+        warnings.append(
+            {
+                "code": "unit_cap_enforced",
+                "message": (
+                    f"Trimmed your plan to meet your {unit_cap}-unit cap; "
+                    f"dropped: {', '.join(dropped_for_cap)}."
+                ),
+            }
+        )
     if removed_completed:
         warnings.append(
             {
@@ -1714,6 +1947,10 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
 
     if is_followup:
         _sync_followup_assistant_reply(parsed, previous_plan, user_preference or "")
+    else:
+        # Initial plans don't get the follow-up reconcile; resync any
+        # assistant_reply that contradicts the final recommended list.
+        _resync_assistant_reply(parsed, user_preference or "")
 
     return _sanitize_model_output(parsed)
 
@@ -1728,23 +1965,23 @@ def _slot_suggestion_empty_message(
     """User-facing copy when no course at this slot fills a remaining requirement."""
     if not missing_details:
         return (
-            "请先上传 Academic Progress，才能按你尚未满足的要求推荐课程。"
+            "Upload your Academic Progress first so we can recommend courses for your open requirements."
         )
-    labels = "、".join(open_req_key_to_label.values())[:120]
+    labels = ", ".join(open_req_key_to_label.values())[:120]
     if has_educational_enrichment_gap(missing_details):
         return (
-            "这个时间段没有能同时满足你剩余 Core 要求的课。"
-            "若你有 Educational Enrichment，请查看下方「Enrichment 推荐」区块，"
-            "或在聊天里说明方向（例如中文）。也可换个时间段再试。"
+            "No Core courses at this time slot fill your remaining requirements. "
+            "If you need Educational Enrichment, see the Enrichment picks section below, "
+            "or describe your track in chat (e.g. Chinese). You can also try another time slot."
         )
     if labels:
         return (
-            f"这个时间段没有能填补你剩余要求的课（例如 {labels}）。"
-            "请换个时间段，或在聊天里说明你想优先满足哪一项。"
+            f"No courses at this time slot fill your remaining requirements (e.g. {labels}). "
+            "Try another slot, or tell chat which requirement to prioritize."
         )
     return (
-        "这个时间段没有能填补你 transcript 剩余要求的课。"
-        "请换个时间段再试。"
+        "No courses at this time slot fill your remaining transcript requirements. "
+        "Try another time slot."
     )
 
 
@@ -1949,9 +2186,9 @@ def suggest_courses_for_slot(
             if lab not in covers:
                 covers.append(lab)
 
-        rationale = "这个时间段可上"
+        rationale = "Available at this time slot"
         if covers:
-            rationale = "满足： " + " + ".join(covers[:3])
+            rationale = "Covers: " + " · ".join(covers[:3])
 
         candidates.append(
             _build_slot_candidate(
@@ -1991,11 +2228,11 @@ def suggest_courses_for_slot(
         if wants_advanced_chinese_only(user_preference or ""):
             enrich_prompt = (
                 (enrich_prompt or "")
-                + " 已隐藏初级中文课（CHIN 1 等）；仅显示较高阶选项。"
+                + " Intro Chinese (CHIN 1, etc.) is hidden; only higher-level options are shown."
             ).strip()
         enrich_candidates: list[dict[str, Any]] = []
         enrich_covers = ["Educational Enrichment", track_label]
-        enrich_rationale = f"专业 Enrichment · {track_label} · 这个时间段可上"
+        enrich_rationale = f"Major enrichment · {track_label} · available at this time slot"
         for code in enrich_codes:
             for key in planned_section_keys(code):
                 section_info = schedule_index.get(key)

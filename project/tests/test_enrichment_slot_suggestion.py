@@ -61,7 +61,7 @@ def test_slot_enrichment_shows_when_chin_on_plan_without_gap():
     )
     enrich = out.get("enrichment")
     assert enrich is not None
-    assert enrich.get("track_label") == "中文 (CHIN)"
+    assert enrich.get("track_label") == "Chinese (CHIN)"
     codes = [c["course"] for c in enrich.get("candidates") or []]
     assert "CHIN 1" not in codes
     assert "CHIN 125" in codes
@@ -79,7 +79,7 @@ def test_slot_enrichment_block_lists_chin_at_slot():
     )
     enrich = out.get("enrichment")
     assert enrich is not None
-    assert enrich.get("track_label") == "中文 (CHIN)"
+    assert enrich.get("track_label") == "Chinese (CHIN)"
     codes = [c["course"] for c in enrich.get("candidates") or []]
     assert "CHIN 125" in codes
     assert enrich["candidates"][0].get("kind") == "enrichment"

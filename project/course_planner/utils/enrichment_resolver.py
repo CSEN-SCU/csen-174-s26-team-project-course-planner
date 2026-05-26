@@ -80,7 +80,7 @@ def enrichment_track_label(subjects: list[str]) -> str:
     if not subjects:
         return ""
     if subjects == ["CHIN"] or (len(subjects) == 1 and subjects[0] == "CHIN"):
-        return "中文 (CHIN)"
+        return "Chinese (CHIN)"
     return " / ".join(subjects)
 
 
@@ -363,7 +363,7 @@ def try_enrichment_followup_plan(
             "recommended": list(prev_recs),
             "total_units": total,
             "advice": (
-                f"下学期开设列表里没有找到可加入的 {track} 课程，或都与现有课表时间冲突。"
+                f"No available {track} courses found next term, or they all have time conflicts."
             ),
             "assistant_reply": (
                 f"No, I could not add a {track} course for next term — none are available "
@@ -423,8 +423,8 @@ def resolve_enrichment_subjects_for_slot(
     if default_chinese_when_unspecified:
         return (
             ["CHIN"],
-            "中文 (CHIN)",
-            "在聊天里说明你的 enrichment 方向（如艺术、历史）；下方默认展示中文系列。",
+            "Chinese (CHIN)",
+            "Describe your enrichment track in chat (e.g. art, history); below defaults to the Chinese series.",
         )
 
-    return [], "", "在聊天里说明你想满足的 enrichment 方向（例如：中文）。"
+    return [], "", "Describe your enrichment track in chat (e.g. Chinese)."
