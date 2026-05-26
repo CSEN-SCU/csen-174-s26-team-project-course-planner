@@ -5,7 +5,6 @@ import {
   generateFourYearPlan,
   getMemory,
   saveMemory,
-  type OfferedCourse,
 } from "./api/client";
 import { CalendarView } from "./components/CalendarView";
 import { ChatPanel, type ChatUiMessage } from "./components/ChatPanel";
@@ -372,31 +371,6 @@ export default function App({ userId, onSignOut }: AppProps) {
       setLocalOverride([...base, ...additions]);
     },
     [localOverride, calendarRecommended],
-  );
-
-  const handleAddCourses = useCallback(
-    (picked: OfferedCourse[]) => {
-      const base = localOverride ?? calendarRecommended ?? [];
-      const present = new Set(
-        base.map((r) => String((r as { course?: unknown }).course ?? "").trim().toUpperCase()),
-      );
-      const additions = picked
-        .filter((c) => !present.has(c.course.trim().toUpperCase()))
-        .map((c) => ({
-          course: c.course,
-          title: c.title ?? undefined,
-          units: c.units ?? undefined,
-          best_professor: c.professor ?? undefined,
-          meeting_days: c.meeting_days,
-          meeting_start_min: c.meeting_start_min,
-          meeting_end_min: c.meeting_end_min,
-          category: "Manually added",
-          reason: "Added manually",
-          _manualAdd: true,
-        }));
-      appendPlanCourses(additions);
-    },
-    [localOverride, calendarRecommended, appendPlanCourses],
   );
 
   const handleAddFromCatalog = useCallback(

@@ -229,10 +229,18 @@ export type CatalogSection = {
   lab_partner: string | null;
 };
 
+export type CatalogMeetingTimeSlot = {
+  id: string;
+  label: string;
+  window_start_min: number;
+  window_end_min: number;
+  min_overlap_min?: number;
+};
+
 export type CatalogFacets = {
   subjects: string[];
   tags: { Core: string[]; Other: string[] };
-  time_buckets: string[];
+  meeting_times: CatalogMeetingTimeSlot[];
 };
 
 export type CourseBrowserLaunchContext =
@@ -243,7 +251,7 @@ export type CatalogSearchParams = {
   q?: string;
   subject?: string[];
   days?: number[];
-  time_bucket?: string[];
+  meeting_time?: string[];
   tag?: string[];
   day_index?: number;
   start_min?: number;
@@ -257,7 +265,7 @@ export async function searchCatalogSections(params: CatalogSearchParams = {}) {
   if (params.q?.trim()) q.set("q", params.q.trim());
   if (params.subject?.length) q.set("subject", params.subject.join(","));
   if (params.days?.length) q.set("days", params.days.join(","));
-  if (params.time_bucket?.length) q.set("time_bucket", params.time_bucket.join(","));
+  if (params.meeting_time?.length) q.set("meeting_time", params.meeting_time.join(","));
   if (params.tag?.length) q.set("tag", params.tag.join(","));
   if (params.day_index != null) q.set("day_index", String(params.day_index));
   if (params.start_min != null) q.set("start_min", String(params.start_min));

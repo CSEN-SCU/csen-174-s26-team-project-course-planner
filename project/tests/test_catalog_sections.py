@@ -7,10 +7,12 @@ import pytest
 from support import schedule_xlsx_available
 from utils.scu_course_schedule_xlsx import (
     catalog_facets,
+    catalog_time_windows,
     filter_catalog_sections,
     list_offered_sections,
+    section_matches_time_window,
     section_overlaps_slot,
-    section_overlaps_time_bucket,
+    section_overlaps_time_window,
 )
 
 
@@ -48,11 +50,22 @@ class TestSectionOverlapsSlot:
         )
 
 
-class TestSectionOverlapsTimeBucket:
-    def test_morning_class(self):
-        section = {"meeting_start_min": 15, "meeting_end_min": 75}
-        assert section_overlaps_time_bucket(section, "morning")
-        assert not section_overlaps_time_bucket(section, "evening")
+class TestTimeWindowFilter:
+    def test_two_hour_window_overlap(self):
+        # 9:15–10:20 AM → overlaps 8:00–10:00 window (65 min of overlap at end of window)
+        section = {"meeting_start_min": 75, "meeting_end_min": 140}
+        assert section_overlaps_time_window(section, 0, 120)
+        assert section_matches_time_window(section, "0:120")
+
+    def test_three_hour_lab_spans_windows(self):
+        # 1:00–4:00 PM lab (300–480) overlaps 12–2 and 2–4 with ≥30 min each
+        lab = {"meeting_start_min": 300, "meeting_end_min": 480}
+        assert section_overlaps_time_window(lab, 240, 360)
+        assert section_overlaps_time_window(lab, 360, 480)
+
+    def test_no_overlap_if_less_than_30_min(self):
+        section = {"meeting_start_min": 115, "meeting_end_min": 125}
+        assert not section_overlaps_time_window(section, 0, 120, min_overlap_min=30)
 
 
 @pytest.mark.skipif(not schedule_xlsx_available(), reason="requires schedule xlsx")
@@ -94,3 +107,14 @@ class TestListOfferedSectionsIntegration:
         facets = catalog_facets(sections)
         assert len(facets.get("subjects") or []) > 10
         assert len(facets.get("tags") or {}) > 0
+        assert len(facets.get("meeting_times") or []) == 7
+
+    def test_filter_by_time_window(self):
+        all_secs = list_offered_sections()
+        windows = catalog_time_windows()
+        assert len(windows) >= 4
+        wid = windows[0]["id"]
+        filtered = filter_catalog_sections(all_secs, meeting_time_slots=[wid])
+        assert filtered
+        for s in filtered:
+            assert section_matches_time_window(s, wid)

@@ -1,7 +1,7 @@
 /** 0 = Monday … 4 = Friday */
 export type WeekdayIndex = 0 | 1 | 2 | 3 | 4;
 
-/** Minutes from calendar start (8:00 AM) through end (6:00 PM), max 600 */
+/** Minutes from calendar start (8:00 AM) through end (10:00 PM), max 840 */
 export type MinutesFromDayStart = number;
 
 export interface ChatSession {
@@ -33,8 +33,8 @@ export interface ChatMessage {
 }
 
 export const CALENDAR_START_HOUR = 8;
-export const CALENDAR_END_HOUR = 18;
-/** Total span in minutes (8:00–18:00 = 10 hours) */
+export const CALENDAR_END_HOUR = 22;
+/** Total span in minutes (8:00 AM – 10:00 PM) */
 export const CALENDAR_SPAN_MINUTES =
   (CALENDAR_END_HOUR - CALENDAR_START_HOUR) * 60;
 

@@ -34,8 +34,8 @@ _INSTRUCTOR_RATINGS_FILE = _COURSE_PLANNER_DIR / "data" / "instructor_ratings.cs
 
 _SCHEDULE_SUBJECT_TYPOS: dict[str, str] = {"CSEE": "CSEN"}
 
-_CALENDAR_START_MIN = 8 * 60   # 8:00 AM
-_CALENDAR_END_MIN   = 18 * 60  # 6:00 PM
+_CALENDAR_START_MIN = 8 * 60        # 8:00 AM
+_CALENDAR_END_MIN   = 22 * 60  # 10:00 PM (evening sections)
 
 # Day token → weekday index (0=Mon, 4=Fri)
 _DAY_TOKEN_MAP: dict[str, int] = {
@@ -895,12 +895,7 @@ _LAB_PAIR_SUBJECTS = frozenset(
     {"CSEN", "COEN", "CSCI", "ELEN", "ECEN", "PHYS", "CHEM", "BIOL", "MECH"}
 )
 
-# Calendar-offset time buckets (minutes from 8:00 AM)
-_TIME_BUCKET_RANGES: dict[str, tuple[int, int]] = {
-    "morning": (0, 240),
-    "afternoon": (240, 540),
-    "evening": (540, _CALENDAR_END_MIN - _CALENDAR_START_MIN),
-}
+_DAY_LABELS_SHORT = ("M", "T", "W", "Th", "F")
 
 _CORE_TAG_PREFIXES = (
     "rtc ",
@@ -940,18 +935,87 @@ def section_overlaps_slot(
     return True
 
 
-def section_overlaps_time_bucket(section: dict[str, Any], bucket: str) -> bool:
-    """True if section meeting time overlaps a named bucket (morning/afternoon/evening)."""
-    key = (bucket or "").strip().lower()
-    bounds = _TIME_BUCKET_RANGES.get(key)
-    if not bounds:
-        return True
-    meeting_start = section.get("meeting_start_min")
-    meeting_end = section.get("meeting_end_min")
-    if meeting_start is None or meeting_end is None:
+def _format_calendar_offset_time(offset_min: int) -> str:
+    """Minutes from 8:00 AM calendar start → '10:20 AM'."""
+    total = _CALENDAR_START_MIN + int(offset_min)
+    h, m = divmod(total, 60)
+    h12 = h % 12 or 12
+    ampm = "AM" if h < 12 else "PM"
+    return f"{h12}:{m:02d} {ampm}"
+
+
+def _meeting_days_short_label(days: list[int]) -> str:
+    parts: list[str] = []
+    for d in sorted(days):
+        if 0 <= d < len(_DAY_LABELS_SHORT):
+            parts.append(_DAY_LABELS_SHORT[d])
+    return " ".join(parts)
+
+
+_CALENDAR_SPAN_MIN = _CALENDAR_END_MIN - _CALENDAR_START_MIN
+# Minimum overlap (minutes) between a section and a browse time window to count as a match.
+_TIME_WINDOW_MIN_OVERLAP = 30
+
+
+def parse_time_window_id(window_id: str) -> tuple[int, int] | None:
+    """Parse ``start_min:end_min`` window id (minutes from 8:00 AM)."""
+    try:
+        start_s, end_s = window_id.split(":", 1)
+        start, end = int(start_s), int(end_s)
+        if start < 0 or end <= start:
+            return None
+        return start, end
+    except (ValueError, AttributeError):
+        return None
+
+
+def section_overlaps_time_window(
+    section: dict[str, Any],
+    window_start_min: int,
+    window_end_min: int,
+    *,
+    min_overlap_min: int = _TIME_WINDOW_MIN_OVERLAP,
+) -> bool:
+    """True if the section meets for at least ``min_overlap_min`` inside the window."""
+    sec_start = section.get("meeting_start_min")
+    sec_end = section.get("meeting_end_min")
+    if sec_start is None or sec_end is None:
         return False
-    b0, b1 = bounds
-    return meeting_end > b0 and meeting_start < b1
+    overlap = min(int(sec_end), window_end_min) - max(int(sec_start), window_start_min)
+    return overlap >= min_overlap_min
+
+
+def section_matches_time_window(section: dict[str, Any], window_id: str) -> bool:
+    parsed = parse_time_window_id(window_id)
+    if not parsed:
+        return False
+    w0, w1 = parsed
+    return section_overlaps_time_window(section, w0, w1)
+
+
+def catalog_time_windows(
+    window_hours: int = 2,
+    min_overlap_min: int = _TIME_WINDOW_MIN_OVERLAP,
+) -> list[dict[str, Any]]:
+    """Fixed clock windows for the browser (e.g. 8:00–10:00, 10:00–12:00, …)."""
+    span = window_hours * 60
+    out: list[dict[str, Any]] = []
+    start = 0
+    while start < _CALENDAR_SPAN_MIN:
+        end = min(start + span, _CALENDAR_SPAN_MIN)
+        if end <= start:
+            break
+        out.append({
+            "id": f"{start}:{end}",
+            "label": (
+                f"{_format_calendar_offset_time(start)} – {_format_calendar_offset_time(end)}"
+            ),
+            "window_start_min": start,
+            "window_end_min": end,
+            "min_overlap_min": min_overlap_min,
+        })
+        start = end
+    return out
 
 
 def _normalize_tag_label(tag: str) -> str:
@@ -1190,7 +1254,7 @@ def catalog_facets(sections: list[dict[str, Any]]) -> dict[str, Any]:
             "Core": sorted(tags_core),
             "Other": sorted(tags_other),
         },
-        "time_buckets": list(_TIME_BUCKET_RANGES.keys()),
+        "meeting_times": catalog_time_windows(),
     }
 
 
@@ -1200,7 +1264,7 @@ def filter_catalog_sections(
     q: str | None = None,
     subjects: list[str] | None = None,
     days: list[int] | None = None,
-    time_buckets: list[str] | None = None,
+    meeting_time_slots: list[str] | None = None,
     tags: list[str] | None = None,
     day_index: int | None = None,
     start_min: int | None = None,
@@ -1210,7 +1274,7 @@ def filter_catalog_sections(
     q_norm = (q or "").strip().lower()
     subject_set = {s.strip().lower() for s in (subjects or []) if s.strip()}
     day_set = set(days or [])
-    bucket_list = [b.strip().lower() for b in (time_buckets or []) if b.strip()]
+    meeting_slot_ids = [s.strip() for s in (meeting_time_slots or []) if s.strip()]
     tag_norms = {_normalize_tag_label(t) for t in (tags or []) if t.strip()}
 
     out: list[dict[str, Any]] = []
@@ -1240,8 +1304,8 @@ def filter_catalog_sections(
             if not md.intersection(day_set):
                 continue
 
-        if bucket_list:
-            if not any(section_overlaps_time_bucket(s, b) for b in bucket_list):
+        if meeting_slot_ids:
+            if not any(section_matches_time_window(s, wid) for wid in meeting_slot_ids):
                 continue
 
         if tag_norms:
