@@ -56,7 +56,12 @@ def test_filter_low_level_chin_for_native_speaker():
 
 def test_infer_explicit_subject():
     out = infer_enrichment_subjects("add a CHIN course for enrichment")
-    assert "CHIN" in out
+    assert out == ["CHIN"]
+
+
+def test_infer_chinese_swap_ignores_removed_course_prefix():
+    out = infer_enrichment_subjects("replace ECEN 153 with a Chinese class")
+    assert out == ["CHIN"]
 
 
 def test_course_matches_chin_prefix_or_title():

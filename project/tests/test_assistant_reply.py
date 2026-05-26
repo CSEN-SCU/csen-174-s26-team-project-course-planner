@@ -222,3 +222,104 @@ def test_summarize_previous_plan_is_bounded_and_gracefully_empty():
     # It caps at the first 8 items.
     assert out.count("\n- ") <= 8
     assert out.startswith("=== CURRENT STATE")
+
+
+def _fake_schedule(*codes: str) -> dict:
+    index = {}
+    for code in codes:
+        subject, number = code.split()
+        index[(subject, number)] = {
+            "instructors": [],
+            "meeting_days": [],
+            "meeting_start_min": None,
+            "meeting_end_min": None,
+        }
+    return index
+
+
+def test_unit_floor_preference_does_not_trim_full_time_plan(monkeypatch):
+    """A 12-unit minimum is not a 12-unit cap; do not silently drop courses."""
+    captured: list[str] = []
+    reply = {
+        "recommended": [
+            {"course": "CSEN 161", "category": "Core", "units": 4, "reason": "core"},
+            {"course": "MATH 53", "category": "Core", "units": 4, "reason": "math"},
+            {"course": "PHIL 11", "category": "Core", "units": 4, "reason": "ethics"},
+            {"course": "ENGL 181", "category": "Core", "units": 4, "reason": "writing"},
+        ],
+        "total_units": 16,
+        "advice": "ok",
+        "assistant_reply": "I put together a 16 units plan with CSEN 161, MATH 53, PHIL 11, ENGL 181.",
+    }
+    monkeypatch.setattr(planning_agent, "get_genai_client", lambda **_kw: _stub_client(captured, reply))
+    monkeypatch.setattr(
+        planning_agent,
+        "load_schedule_section_index",
+        lambda: _fake_schedule("CSEN 161", "MATH 53", "PHIL 11", "ENGL 181"),
+    )
+    monkeypatch.setattr(planning_agent, "load_category_course_index", lambda: {})
+    monkeypatch.setattr(planning_agent, "load_course_units_index", lambda: {})
+    monkeypatch.setattr(planning_agent, "load_course_titles_index", lambda: {})
+
+    result = planning_agent.run_planning_agent(
+        missing_details=[
+            {"course": "CSEN 161", "category": "Core", "units": 4},
+            {"course": "MATH 53", "category": "Core", "units": 4},
+            {"course": "PHIL 11", "category": "Core", "units": 4},
+            {"course": "ENGL 181", "category": "Core", "units": 4},
+        ],
+        user_preference="I need at least 12 units for financial aid",
+    )
+
+    assert [item["course"] for item in result["recommended"]] == [
+        "CSEN 161",
+        "MATH 53",
+        "PHIL 11",
+        "ENGL 181",
+    ]
+    assert result["total_units"] == 16
+    assert all(w.get("code") != "unit_cap_enforced" for w in result.get("warnings", []))
+
+
+def test_time_preference_below_am_does_not_become_unit_cap(monkeypatch):
+    """A time phrase like 'below 10am' must not become a 10-unit cap."""
+    captured: list[str] = []
+    reply = {
+        "recommended": [
+            {"course": "CSEN 161", "category": "Core", "units": 4, "reason": "core"},
+            {"course": "MATH 53", "category": "Core", "units": 4, "reason": "math"},
+            {"course": "PHIL 11", "category": "Core", "units": 4, "reason": "ethics"},
+            {"course": "ENGL 181", "category": "Core", "units": 4, "reason": "writing"},
+        ],
+        "total_units": 16,
+        "advice": "ok",
+        "assistant_reply": "I put together a 16 units plan with CSEN 161, MATH 53, PHIL 11, ENGL 181.",
+    }
+    monkeypatch.setattr(planning_agent, "get_genai_client", lambda **_kw: _stub_client(captured, reply))
+    monkeypatch.setattr(
+        planning_agent,
+        "load_schedule_section_index",
+        lambda: _fake_schedule("CSEN 161", "MATH 53", "PHIL 11", "ENGL 181"),
+    )
+    monkeypatch.setattr(planning_agent, "load_category_course_index", lambda: {})
+    monkeypatch.setattr(planning_agent, "load_course_units_index", lambda: {})
+    monkeypatch.setattr(planning_agent, "load_course_titles_index", lambda: {})
+
+    result = planning_agent.run_planning_agent(
+        missing_details=[
+            {"course": "CSEN 161", "category": "Core", "units": 4},
+            {"course": "MATH 53", "category": "Core", "units": 4},
+            {"course": "PHIL 11", "category": "Core", "units": 4},
+            {"course": "ENGL 181", "category": "Core", "units": 4},
+        ],
+        user_preference="Please avoid classes below 10am if possible",
+    )
+
+    assert [item["course"] for item in result["recommended"]] == [
+        "CSEN 161",
+        "MATH 53",
+        "PHIL 11",
+        "ENGL 181",
+    ]
+    assert result["total_units"] == 16
+    assert all(w.get("code") != "unit_cap_enforced" for w in result.get("warnings", []))

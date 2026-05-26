@@ -58,8 +58,13 @@ def infer_enrichment_subjects(user_preference: str) -> list[str]:
     out: list[str] = []
     seen: set[str] = set()
 
-    for m in re.finditer(r"\b([A-Z]{2,6})\b", u):
-        subj = m.group(1)
+    for m in re.finditer(r"\b([A-Za-z]{2,6})\b", text):
+        raw = m.group(1)
+        subj = raw.upper()
+        if raw != subj and subj != "CHIN":
+            continue
+        if re.match(r"\s*\d", text[m.end():]):
+            continue
         if subj.isalpha() and 2 <= len(subj) <= 6 and subj not in seen:
             out.append(subj)
             seen.add(subj)

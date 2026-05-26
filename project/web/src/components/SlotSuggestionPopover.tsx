@@ -344,6 +344,7 @@ function CandidateCard({
 }
 
 function isAlreadySatisfied(c: CourseSuggestion, satisfied: string[]): boolean {
+  if (c.kind === "enrichment") return false;
   if (!Array.isArray(c.covers) || c.covers.length === 0) return false;
   if (!Array.isArray(satisfied) || satisfied.length === 0) return false;
   const sat = new Set(satisfied.map((x) => String(x || "").trim()).filter(Boolean));
