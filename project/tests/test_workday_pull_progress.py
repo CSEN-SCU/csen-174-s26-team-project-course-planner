@@ -116,7 +116,7 @@ def test_ensure_on_task_prefers_home_academics_app(monkeypatch):
     page.goto = pytest.fail  # type: ignore[attr-defined]
     page.wait_for_timeout = lambda *_a, **_k: None  # type: ignore[attr-defined]
     monkeypatch.setattr(wpp, "_finalize_report_page", lambda _p: False)
-    monkeypatch.setattr(wpp, "_wait_for_workday_content", lambda _p: None)
+    monkeypatch.setattr(wpp, "_wait_for_workday_content", lambda *_a, **_k: None)
     wpp._ensure_on_task(page)
     assert order == ["home"]
 
@@ -127,12 +127,45 @@ def test_ensure_on_task_raises_when_navigation_fails(monkeypatch):
     page.wait_for_load_state = lambda *_a, **_k: None  # type: ignore[attr-defined]
     page.wait_for_timeout = lambda *_a, **_k: None  # type: ignore[attr-defined]
     monkeypatch.setattr(wpp, "_finalize_report_page", lambda _p: False)
-    monkeypatch.setattr(wpp, "_wait_for_workday_content", lambda _p: None)
+    monkeypatch.setattr(wpp, "_wait_for_workday_content", lambda *_a, **_k: None)
     monkeypatch.setattr(wpp, "_try_home_academics_app", lambda _p: False)
     monkeypatch.setattr(wpp, "_try_sidebar_menu", lambda _p: False)
     monkeypatch.setattr(wpp, "_try_search_for_report", lambda _p: False)
     with pytest.raises(RuntimeError, match="View My Academic Progress"):
         wpp._ensure_on_task(page, task_url=wpp.TASK_URL)
+
+
+# ── Conditional render wait (the perf fix) ───────────────────────────────────
+
+
+def _wait_probe_page():
+    timeouts: list[int] = []
+    page = SimpleNamespace(
+        wait_for_load_state=lambda *_a, **_k: None,
+        wait_for_timeout=lambda ms: timeouts.append(ms),
+    )
+    return page, timeouts
+
+
+def test_wait_returns_immediately_when_ready():
+    """The win: stop the moment the next view is painted, don't sleep the cap."""
+    page, timeouts = _wait_probe_page()
+    wpp._wait_for_workday_content(page, ready=lambda: True)
+    assert timeouts == []  # never paused — ready on the first check
+
+
+def test_wait_falls_back_to_fixed_pause_without_ready():
+    """No readiness check given → preserve the legacy fixed RENDER_WAIT_MS pause."""
+    page, timeouts = _wait_probe_page()
+    wpp._wait_for_workday_content(page)
+    assert timeouts == [wpp.RENDER_WAIT_MS]
+
+
+def test_wait_caps_when_never_ready():
+    """Unmet readiness must still wait out the cap — no worse than the old behavior."""
+    page, timeouts = _wait_probe_page()
+    wpp._wait_for_workday_content(page, ready=lambda: False)
+    assert sum(timeouts) >= wpp.RENDER_WAIT_MS
 
 
 # ── CLI / upload (mocked) ─────────────────────────────────────────────────────

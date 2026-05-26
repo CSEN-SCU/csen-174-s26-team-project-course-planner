@@ -223,17 +223,32 @@ def _active_workday_page(initial: Page) -> Page | None:
     return initial if _on_workday(initial) else None
 
 
-def _wait_for_render(page: Page) -> None:
+def _wait_for_render(page: Page, ready: Callable[[], bool] | None = None) -> None:
     """Wait for Workday content to paint.
 
     ``networkidle`` never fires on Workday (the SPA polls forever), so we wait
-    for ``domcontentloaded`` plus a short fixed pause instead.
+    for ``domcontentloaded`` then, with ``ready`` given, poll until the next view
+    is up (capped at ``RENDER_WAIT_MS`` of summed poll steps) instead of always
+    sleeping the full pause. Summing steps (not wall clock) keeps the cap honest
+    when ``page.wait_for_timeout`` is a test no-op.
     """
     try:
         page.wait_for_load_state("domcontentloaded", timeout=30_000)
     except PWTimeout:
         pass
-    page.wait_for_timeout(RENDER_WAIT_MS)
+    if ready is None:
+        page.wait_for_timeout(RENDER_WAIT_MS)
+        return
+    waited = 0
+    step = 150
+    while waited < RENDER_WAIT_MS:
+        try:
+            if ready():
+                return
+        except Exception:  # noqa: BLE001
+            pass
+        page.wait_for_timeout(step)
+        waited += step
 
 
 # ── Public: launch ───────────────────────────────────────────────────────────
@@ -574,7 +589,10 @@ def export_to_excel(
     write garbage.
     """
     navigate(page)
-    _wait_for_render(page)
+    _wait_for_render(
+        page,
+        lambda: export_controls_visible(page) or _export_document_modal_visible(page),
+    )
 
     strategies = (
         _download_via_export_document_modal,
