@@ -7,22 +7,31 @@ import {
   saveMemory,
   type OfferedCourse,
 } from "./api/client";
-import { AddCoursePicker } from "./components/AddCoursePicker";
 import { CalendarView } from "./components/CalendarView";
 import { ChatPanel, type ChatUiMessage } from "./components/ChatPanel";
+import {
+  CourseBrowser,
+  type CourseBrowserAddOptions,
+} from "./components/CourseBrowser";
 import { FourYearPlanView } from "./components/FourYearPlanView";
 import { LeftPanel, type MemorySessionRow } from "./components/LeftPanel";
 import type { FourYearPlan, ParsedRow } from "./types";
 import { DeleteUserDataConfirm } from "./components/DeleteUserDataConfirm";
 import { FirstLoginCarousel } from "./components/FirstLoginCarousel";
+import { PlanStartModal } from "./components/PlanStartModal";
+import { SlotActionModal } from "./components/SlotActionModal";
 import { SlotSuggestionPopover } from "./components/SlotSuggestionPopover";
+import type { CatalogSection, CourseBrowserLaunchContext } from "./api/client";
+import { CALENDAR_START_HOUR } from "./types";
 import { clearLocalSession } from "./auth/session";
 import { SiteFooter } from "./components/SiteFooter";
 
 const WELCOME_TEXT =
   "Upload your Academic Progress file or describe your preferences to get started.";
-const NEW_PLAN_TEXT =
-  "Started a new plan. Upload your Academic Progress file or describe your preferences for next quarter.";
+const NEW_PLAN_AI_TEXT =
+  "Started a new plan. Upload your Academic Progress file (.xlsx) if you have not yet, then describe your preferences for next quarter.";
+const NEW_PLAN_MANUAL_TEXT =
+  "Started a new plan. Use Browse courses to search the catalog, or click a time slot on the calendar.";
 const INTRO_SEEN_KEY_PREFIX = "scu_planner_intro_seen:";
 
 export type AppProps = {
@@ -74,6 +83,19 @@ export default function App({ userId, onSignOut }: AppProps) {
     clientX: number;
     clientY: number;
   } | null>(null);
+  const [slotActionOpen, setSlotActionOpen] = useState(false);
+  const [slotActionData, setSlotActionData] = useState<{
+    dayIndex: number;
+    slotIndex: number;
+    startMin: number;
+    endMin: number;
+    clientX: number;
+    clientY: number;
+  } | null>(null);
+  const [planStartModalOpen, setPlanStartModalOpen] = useState(false);
+  const [courseBrowserOpen, setCourseBrowserOpen] = useState(false);
+  const [courseBrowserContext, setCourseBrowserContext] =
+    useState<CourseBrowserLaunchContext>({ mode: "open" });
 
   // Load academic progress + past plan snapshots for this user
   useEffect(() => {
@@ -270,23 +292,44 @@ export default function App({ userId, onSignOut }: AppProps) {
     }
   }, [userId, activeSessionId, planSnapshots]);
 
-  const handleNewPlan = useCallback(() => {
-    // Keep missingDetails, fileUploaded, parsedRows, planSnapshots — only reset current chat.
+  const resetActivePlanState = useCallback(() => {
     setLocalOverride(null);
     setPlanResult(null);
     setSessionCalendarRecommended(null);
     setFourYearPlan(null);
     setFourYearGenerating(false);
     setActiveSessionId(null);
-    // Close any open slot-suggestion popover so it doesn't linger across plans.
     setSlotPopoverOpen(false);
     setSlotPopoverData(null);
-    // Always give visible feedback, even from an already-empty state:
-    // distinct message, switch to the calendar tab, and focus the chat input.
-    setMessages([{ id: `m-new-${Date.now()}`, role: "assistant", content: NEW_PLAN_TEXT }]);
+    setSlotActionOpen(false);
+    setSlotActionData(null);
+  }, []);
+
+  const openCourseBrowser = useCallback((ctx: CourseBrowserLaunchContext) => {
+    setCourseBrowserContext(ctx);
+    setCourseBrowserOpen(true);
+    setViewMode("calendar");
+  }, []);
+
+  const handleNewPlan = useCallback(() => {
+    resetActivePlanState();
+    setPlanStartModalOpen(true);
+  }, [resetActivePlanState]);
+
+  const handlePlanStartManual = useCallback(() => {
+    setPlanStartModalOpen(false);
+    resetActivePlanState();
+    setMessages([{ id: `m-new-${Date.now()}`, role: "assistant", content: NEW_PLAN_MANUAL_TEXT }]);
+    openCourseBrowser({ mode: "open" });
+  }, [resetActivePlanState, openCourseBrowser, setMessages]);
+
+  const handlePlanStartAi = useCallback(() => {
+    setPlanStartModalOpen(false);
+    resetActivePlanState();
+    setMessages([{ id: `m-new-${Date.now()}`, role: "assistant", content: NEW_PLAN_AI_TEXT }]);
     setViewMode("calendar");
     setChatFocusNonce((n) => n + 1);
-  }, []);
+  }, [resetActivePlanState, setMessages]);
 
   const handleDeleteSession = useCallback((id: string) => {
     const snap = planSnapshots.find((s) => s.id === id);
@@ -308,28 +351,90 @@ export default function App({ userId, onSignOut }: AppProps) {
 
   // Manual "+ Add course": append picked courses (+ lab co-requisite) to the
   // live edit layer so they land on the calendar immediately — no AI call.
-  const handleAddCourses = useCallback((picked: OfferedCourse[]) => {
-    const base = localOverride ?? calendarRecommended ?? [];
-    const present = new Set(
-      base.map((r) => String((r as { course?: unknown }).course ?? "").trim().toUpperCase()),
-    );
-    const additions = picked
-      .filter((c) => !present.has(c.course.trim().toUpperCase()))
-      .map((c) => ({
-        course: c.course,
-        title: c.title ?? undefined,
-        units: c.units ?? undefined,
-        best_professor: c.professor ?? undefined,
-        meeting_days: c.meeting_days,
-        meeting_start_min: c.meeting_start_min,
-        meeting_end_min: c.meeting_end_min,
-        category: "Manually added",
-        reason: "Added manually",
-        _manualAdd: true,
-      }));
-    if (additions.length === 0) return;
-    setLocalOverride([...base, ...additions]);
-  }, [localOverride, calendarRecommended]);
+  function formatMeetingLabel(startMin: number | null, endMin: number | null): string | undefined {
+    if (startMin == null || endMin == null || startMin >= endMin) return undefined;
+    const base = CALENDAR_START_HOUR * 60;
+    const fmt = (off: number) => {
+      const total = base + off;
+      const h = Math.floor(total / 60);
+      const m = total % 60;
+      const d = new Date();
+      d.setHours(h, m, 0, 0);
+      return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+    };
+    return `${fmt(startMin)} – ${fmt(endMin)}`;
+  }
+
+  const appendPlanCourses = useCallback(
+    (additions: Record<string, unknown>[]) => {
+      if (additions.length === 0) return;
+      const base = localOverride ?? calendarRecommended ?? [];
+      setLocalOverride([...base, ...additions]);
+    },
+    [localOverride, calendarRecommended],
+  );
+
+  const handleAddCourses = useCallback(
+    (picked: OfferedCourse[]) => {
+      const base = localOverride ?? calendarRecommended ?? [];
+      const present = new Set(
+        base.map((r) => String((r as { course?: unknown }).course ?? "").trim().toUpperCase()),
+      );
+      const additions = picked
+        .filter((c) => !present.has(c.course.trim().toUpperCase()))
+        .map((c) => ({
+          course: c.course,
+          title: c.title ?? undefined,
+          units: c.units ?? undefined,
+          best_professor: c.professor ?? undefined,
+          meeting_days: c.meeting_days,
+          meeting_start_min: c.meeting_start_min,
+          meeting_end_min: c.meeting_end_min,
+          category: "Manually added",
+          reason: "Added manually",
+          _manualAdd: true,
+        }));
+      appendPlanCourses(additions);
+    },
+    [localOverride, calendarRecommended, appendPlanCourses],
+  );
+
+  const handleAddFromCatalog = useCallback(
+    (sections: CatalogSection[], options?: CourseBrowserAddOptions) => {
+      const base = localOverride ?? calendarRecommended ?? [];
+      const present = new Set(
+        base.map((r) => String((r as { course?: unknown }).course ?? "").trim().toUpperCase()),
+      );
+      const anchor = options?.slotAnchor;
+      const additions = sections
+        .filter((s) => !present.has(s.course.trim().toUpperCase()))
+        .map((s) => {
+          const row: Record<string, unknown> = {
+            course: s.course,
+            title: s.title ?? undefined,
+            units: s.units ?? undefined,
+            best_professor: s.instructors?.[0] ?? undefined,
+            meeting_days: s.meeting_days,
+            meeting_start_min: s.meeting_start_min,
+            meeting_end_min: s.meeting_end_min,
+            category: "Manually added",
+            reason: "Added manually",
+            _manualAdd: true,
+            _section: s.section,
+          };
+          if (anchor) {
+            row._slotAnchored = true;
+            row._anchoredDayIndex = anchor.dayIndex;
+            row._anchoredStartMin = anchor.startMin;
+            row._anchoredEndMin = anchor.endMin;
+            row._actualTimeLabel = formatMeetingLabel(s.meeting_start_min, s.meeting_end_min);
+          }
+          return row;
+        });
+      appendPlanCourses(additions);
+    },
+    [localOverride, calendarRecommended, appendPlanCourses],
+  );
 
   // Add course from slot suggestion popover (R6)
   const handleAddFromSlotSuggestion = useCallback((course: Record<string, unknown>) => {
@@ -531,22 +636,26 @@ export default function App({ userId, onSignOut }: AppProps) {
     setFirstLoginCarouselOpen(false);
   }, [userId]);
 
-  const handleSlotClick = useCallback((dayIndex: number, slotIndex: number, clientX: number, clientY: number) => {
-    // Slot indices are based on the calendar grid which starts at 8:00 AM.
-    // Backend slot-suggestion logic expects "minutes-from-calendar-start" (offset),
-    // so slotIndex*30 maps directly to the same units as the schedule xlsx parser.
-    const startMin = slotIndex * 30;
-    const endMin = startMin + 90; // 90-min window covers typical 50–75 min class lengths
+  const slotTimeLabel = useCallback((dayIndex: number, startMin: number, endMin: number) => {
+    const base = CALENDAR_START_HOUR * 60;
+    const fmt = (off: number) => {
+      const total = base + off;
+      const h = Math.floor(total / 60);
+      const m = total % 60;
+      const d = new Date();
+      d.setHours(h, m, 0, 0);
+      return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+    };
+    const dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+    return `${dayNames[dayIndex] ?? "Day"} ${fmt(startMin)} – ${fmt(endMin)}`;
+  }, []);
 
-    setSlotPopoverData({
-      dayIndex,
-      slotIndex,
-      startMin,
-      endMin,
-      clientX,
-      clientY,
-    });
-    setSlotPopoverOpen(true);
+  const handleSlotClick = useCallback((dayIndex: number, slotIndex: number, clientX: number, clientY: number) => {
+    const startMin = slotIndex * 30;
+    const endMin = startMin + 30;
+    setSlotActionData({ dayIndex, slotIndex, startMin, endMin, clientX, clientY });
+    setSlotActionOpen(true);
+    setSlotPopoverOpen(false);
   }, []);
 
   return (
@@ -561,6 +670,19 @@ export default function App({ userId, onSignOut }: AppProps) {
       <FirstLoginCarousel
         open={firstLoginCarouselOpen}
         onFinish={handleFinishFirstLoginCarousel}
+      />
+      <PlanStartModal
+        open={planStartModalOpen}
+        onManual={handlePlanStartManual}
+        onAi={handlePlanStartAi}
+        onClose={() => setPlanStartModalOpen(false)}
+      />
+      <CourseBrowser
+        open={courseBrowserOpen}
+        context={courseBrowserContext}
+        existingCodes={effectiveCodes}
+        onAdd={handleAddFromCatalog}
+        onClose={() => setCourseBrowserOpen(false)}
       />
       <div className="flex min-h-0 flex-1 overflow-hidden">
       <LeftPanel
@@ -597,7 +719,13 @@ export default function App({ userId, onSignOut }: AppProps) {
           </button>
           {viewMode === "calendar" && (
             <div className="ml-auto flex items-center pb-1 pr-1">
-              <AddCoursePicker existingCodes={effectiveCodes} onAdd={handleAddCourses} />
+              <button
+                type="button"
+                onClick={() => openCourseBrowser({ mode: "open" })}
+                className="flex items-center gap-1 rounded-md border border-[var(--scu-red)] px-2.5 py-1 text-xs font-semibold text-[var(--scu-red)] transition hover:bg-red-50"
+              >
+                Browse courses
+              </button>
             </div>
           )}
         </div>
@@ -609,6 +737,34 @@ export default function App({ userId, onSignOut }: AppProps) {
               onRemoveCourse={handleRemoveCourse}
               onSlotClick={handleSlotClick}
             />
+            {slotActionOpen && slotActionData && (
+              <SlotActionModal
+                open={slotActionOpen}
+                dayIndex={slotActionData.dayIndex}
+                startMin={slotActionData.startMin}
+                endMin={slotActionData.endMin}
+                clientX={slotActionData.clientX}
+                clientY={slotActionData.clientY}
+                onClose={() => setSlotActionOpen(false)}
+                onBrowse={() => {
+                  const d = slotActionData;
+                  setSlotActionOpen(false);
+                  openCourseBrowser({
+                    mode: "slot",
+                    dayIndex: d.dayIndex,
+                    startMin: d.startMin,
+                    endMin: d.endMin,
+                    label: slotTimeLabel(d.dayIndex, d.startMin, d.endMin),
+                  });
+                }}
+                onAiSuggest={() => {
+                  setSlotActionData(slotActionData);
+                  setSlotPopoverData(slotActionData);
+                  setSlotActionOpen(false);
+                  setSlotPopoverOpen(true);
+                }}
+              />
+            )}
             {/* Slot suggestion popover (R6) */}
             {slotPopoverOpen && slotPopoverData && (
               <SlotSuggestionPopover

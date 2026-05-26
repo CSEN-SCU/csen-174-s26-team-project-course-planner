@@ -895,6 +895,84 @@ _LAB_PAIR_SUBJECTS = frozenset(
     {"CSEN", "COEN", "CSCI", "ELEN", "ECEN", "PHYS", "CHEM", "BIOL", "MECH"}
 )
 
+# Calendar-offset time buckets (minutes from 8:00 AM)
+_TIME_BUCKET_RANGES: dict[str, tuple[int, int]] = {
+    "morning": (0, 240),
+    "afternoon": (240, 540),
+    "evening": (540, _CALENDAR_END_MIN - _CALENDAR_START_MIN),
+}
+
+_CORE_TAG_PREFIXES = (
+    "rtc ",
+    "c&i ",
+    "elsj",
+    "arts",
+    "social science",
+    "natural science",
+    "applied ethics",
+    "diversity",
+    "advanced writing",
+    "critical thinking",
+    "values in science",
+    "cultures and ideas",
+    "religion, theology",
+    "experiential learning",
+)
+
+
+def section_overlaps_slot(
+    section: dict[str, Any],
+    *,
+    day_index: int,
+    start_min: int,
+    end_min: int,
+) -> bool:
+    """True if section meets on ``day_index`` and meeting time overlaps [start_min, end_min)."""
+    meeting_days = section.get("meeting_days") or []
+    meeting_start = section.get("meeting_start_min")
+    meeting_end = section.get("meeting_end_min")
+    if day_index >= 5 or day_index not in meeting_days:
+        return False
+    if meeting_start is None or meeting_end is None:
+        return False
+    if meeting_end <= start_min or meeting_start >= end_min:
+        return False
+    return True
+
+
+def section_overlaps_time_bucket(section: dict[str, Any], bucket: str) -> bool:
+    """True if section meeting time overlaps a named bucket (morning/afternoon/evening)."""
+    key = (bucket or "").strip().lower()
+    bounds = _TIME_BUCKET_RANGES.get(key)
+    if not bounds:
+        return True
+    meeting_start = section.get("meeting_start_min")
+    meeting_end = section.get("meeting_end_min")
+    if meeting_start is None or meeting_end is None:
+        return False
+    b0, b1 = bounds
+    return meeting_end > b0 and meeting_start < b1
+
+
+def _normalize_tag_label(tag: str) -> str:
+    return tag.strip().lower()
+
+
+def _lab_partner_for(subj: str, num: str, sched_keys: set[tuple[str, str]]) -> str | None:
+    if subj not in _LAB_PAIR_SUBJECTS:
+        return None
+    partner_num = num[:-1] if num.endswith("L") else f"{num}L"
+    partner_keys = planned_section_keys(f"{subj} {partner_num}")
+    if any(k in sched_keys for k in partner_keys):
+        return f"{subj} {partner_num}"
+    return None
+
+
+@lru_cache(maxsize=1)
+def _cached_offered_sections(path_str: str | None) -> tuple[dict[str, Any], ...]:
+    p = Path(path_str) if path_str else None
+    return tuple(list_offered_sections(p))
+
 
 def clear_schedule_caches() -> None:
     """Drop in-process schedule caches after ``SCU_Find_Course_Sections.xlsx`` is replaced.
@@ -905,6 +983,7 @@ def clear_schedule_caches() -> None:
     """
     load_core_integrations_course_set.cache_clear()
     load_instructor_ratings.cache_clear()
+    _cached_offered_sections.cache_clear()
 
 
 def list_offered_courses(path: Path | None = None) -> list[dict[str, Any]]:
@@ -959,4 +1038,223 @@ def list_offered_courses(path: Path | None = None) -> list[dict[str, Any]]:
             "lab_partner": lab_partner,
         })
     out.sort(key=lambda c: (c["course"].split()[0], c["course"]))
+    return out
+
+
+def list_offered_sections(path: Path | None = None) -> list[dict[str, Any]]:
+    """One dict per xlsx row (section) for the manual course browser."""
+    p = _find_schedule_path(path)
+    if p is None:
+        return []
+
+    titles = load_course_titles_index(path)
+    units_index = load_course_units_index(path)
+    sched_keys: set[tuple[str, str]] = set()
+    out: list[dict[str, Any]] = []
+
+    wb = load_workbook(p, read_only=True, data_only=True)
+    try:
+        ws = wb.active
+        it = ws.iter_rows(values_only=True)
+        header_row = next(it, None)
+        if not header_row:
+            return []
+        h = [str(c).strip() if c is not None else "" for c in header_row]
+
+        try:
+            idx_sec = h.index("Course Section")
+        except ValueError:
+            return []
+
+        idx_subj = h.index("Course Subject") if "Course Subject" in h else None
+        idx_num = h.index("Course Number") if "Course Number" in h else None
+        idx_secnum = h.index("Section Number") if "Section Number" in h else None
+        idx_status = h.index("Section Status") if "Section Status" in h else None
+        idx_cap = h.index("Enrolled/Capacity") if "Enrolled/Capacity" in h else None
+        idx_inst = next((i for i, x in enumerate(h) if x == "All Instructors"), None)
+        idx_units = h.index("Units") if "Units" in h else None
+        idx_loc = h.index("Locations") if "Locations" in h else None
+        idx_tags = _find_col(h, _TAGS_HEADERS)
+        idx_days = _find_col(h, _DAYS_HEADERS)
+        idx_start = _find_col(h, _START_HEADERS)
+        idx_end = _find_col(h, _END_HEADERS)
+        idx_times = _find_col(h, _TIMES_HEADERS)
+        idx_patterns = h.index("Meeting Patterns") if "Meeting Patterns" in h else idx_times
+
+        def _get(row: tuple, idx: int | None) -> Any:
+            if idx is None or idx >= len(row):
+                return None
+            return row[idx]
+
+        for row in it:
+            if not row or idx_sec >= len(row):
+                continue
+            parsed = _parse_section_subject_number_with_sec(row[idx_sec])
+            if not parsed:
+                continue
+            subj, num, sec_num = parsed
+            sched_keys.add((subj, num))
+            code = f"{subj} {num}"
+
+            names = _split_instructor_aliases(_get(row, idx_inst)) if idx_inst is not None else []
+
+            days: list[int] = []
+            raw_days = _get(row, idx_days)
+            if raw_days:
+                days = _parse_days(raw_days)
+            elif idx_times is not None:
+                days = _parse_days(_get(row, idx_times))
+
+            time_range: tuple[int, int] | None = None
+            if idx_start is not None and idx_end is not None:
+                raw_s = _get(row, idx_start)
+                raw_e = _get(row, idx_end)
+                if raw_s and raw_e:
+                    s = _parse_single_time(str(raw_s))
+                    e = _parse_single_time(str(raw_e))
+                    if s is not None and e is not None:
+                        off_s = _offset(s)
+                        off_e = _offset(e)
+                        if off_s < off_e:
+                            time_range = (off_s, off_e)
+            if time_range is None and idx_times is not None:
+                time_range = _parse_time_range(_get(row, idx_times))
+
+            raw_units = _get(row, idx_units)
+            try:
+                units_val = float(raw_units) if raw_units is not None else None
+            except (TypeError, ValueError):
+                units_val = course_units_for(code, units_index)
+
+            tags = _parse_course_tag_codes(_get(row, idx_tags))
+
+            meeting_pattern = _get(row, idx_patterns)
+            meeting_pattern_str = (
+                str(meeting_pattern).strip() if meeting_pattern is not None else ""
+            )
+
+            out.append({
+                "course_section": str(row[idx_sec]).strip(),
+                "course": code,
+                "section": int(sec_num) if sec_num is not None else sec_num,
+                "subject": str(_get(row, idx_subj) or subj).strip(),
+                "number": str(_get(row, idx_num) or num).strip(),
+                "title": course_title_for(code, titles),
+                "units": units_val if units_val is not None else course_units_for(code, units_index),
+                "status": str(_get(row, idx_status) or "").strip() or None,
+                "enrolled_capacity": str(_get(row, idx_cap) or "").strip() or None,
+                "instructors": names,
+                "meeting_days": days,
+                "meeting_start_min": time_range[0] if time_range else None,
+                "meeting_end_min": time_range[1] if time_range else None,
+                "meeting_pattern": meeting_pattern_str or None,
+                "location": str(_get(row, idx_loc) or "").strip() or None,
+                "course_tags": tags,
+                "lab_partner": None,
+            })
+
+    finally:
+        wb.close()
+
+    for entry in out:
+        subj = entry["course"].split()[0]
+        num = entry["course"].split()[1] if " " in entry["course"] else ""
+        entry["lab_partner"] = _lab_partner_for(subj, num, sched_keys)
+
+    out.sort(key=lambda s: (s["subject"], s["course"], s.get("section") or 0))
+    return out
+
+
+def catalog_facets(sections: list[dict[str, Any]]) -> dict[str, Any]:
+    """Build filter facet lists from a section list."""
+    subjects: set[str] = set()
+    tags_core: set[str] = set()
+    tags_other: set[str] = set()
+
+    for s in sections:
+        subj = s.get("subject")
+        if isinstance(subj, str) and subj.strip():
+            subjects.add(subj.strip())
+        for tag in s.get("course_tags") or []:
+            if not isinstance(tag, str) or not tag.strip():
+                continue
+            low = tag.lower()
+            if any(low.startswith(p) or p in low for p in _CORE_TAG_PREFIXES):
+                tags_core.add(tag.strip())
+            else:
+                tags_other.add(tag.strip())
+
+    return {
+        "subjects": sorted(subjects),
+        "tags": {
+            "Core": sorted(tags_core),
+            "Other": sorted(tags_other),
+        },
+        "time_buckets": list(_TIME_BUCKET_RANGES.keys()),
+    }
+
+
+def filter_catalog_sections(
+    sections: list[dict[str, Any]],
+    *,
+    q: str | None = None,
+    subjects: list[str] | None = None,
+    days: list[int] | None = None,
+    time_buckets: list[str] | None = None,
+    tags: list[str] | None = None,
+    day_index: int | None = None,
+    start_min: int | None = None,
+    end_min: int | None = None,
+) -> list[dict[str, Any]]:
+    """Apply catalog browser filters (AND across filter types, OR within tags/days/buckets)."""
+    q_norm = (q or "").strip().lower()
+    subject_set = {s.strip().lower() for s in (subjects or []) if s.strip()}
+    day_set = set(days or [])
+    bucket_list = [b.strip().lower() for b in (time_buckets or []) if b.strip()]
+    tag_norms = {_normalize_tag_label(t) for t in (tags or []) if t.strip()}
+
+    out: list[dict[str, Any]] = []
+    for s in sections:
+        if q_norm:
+            hay = " ".join(
+                filter(
+                    None,
+                    [
+                        str(s.get("course") or ""),
+                        str(s.get("title") or ""),
+                        str(s.get("course_section") or ""),
+                        " ".join(s.get("instructors") or []),
+                    ],
+                )
+            ).lower()
+            if q_norm not in hay:
+                continue
+
+        if subject_set:
+            subj = str(s.get("subject") or "").strip().lower()
+            if subj not in subject_set:
+                continue
+
+        if day_set:
+            md = set(s.get("meeting_days") or [])
+            if not md.intersection(day_set):
+                continue
+
+        if bucket_list:
+            if not any(section_overlaps_time_bucket(s, b) for b in bucket_list):
+                continue
+
+        if tag_norms:
+            sec_tags = {_normalize_tag_label(t) for t in (s.get("course_tags") or [])}
+            if not sec_tags.intersection(tag_norms):
+                continue
+
+        if day_index is not None and start_min is not None and end_min is not None:
+            if not section_overlaps_slot(
+                s, day_index=day_index, start_min=start_min, end_min=end_min
+            ):
+                continue
+
+        out.append(s)
+
     return out

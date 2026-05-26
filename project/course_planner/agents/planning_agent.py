@@ -1854,17 +1854,15 @@ def suggest_courses_for_slot(
             if label not in bucket:
                 bucket.append(label)
 
+    from utils.scu_course_schedule_xlsx import section_overlaps_slot
+
     def _slot_fits(section_info: dict[str, Any]) -> bool:
-        meeting_days = section_info.get("meeting_days") or []
-        meeting_start = section_info.get("meeting_start_min")
-        meeting_end = section_info.get("meeting_end_min")
-        if day_index >= 5 or day_index not in meeting_days:
-            return False
-        if meeting_start is None or meeting_end is None:
-            return False
-        if meeting_end <= start_min or meeting_start >= end_min:
-            return False
-        return True
+        return section_overlaps_slot(
+            section_info,
+            day_index=day_index,
+            start_min=start_min,
+            end_min=end_min,
+        )
 
     def _build_slot_candidate(
         course_code: str,

@@ -10,14 +10,14 @@
 
 | Phase | Status | Notes |
 |-------|--------|-------|
-| **0** Setup | `[ ]` Not started | |
-| **1** Backend (sections API, overlap helper) | `[ ]` Not started | |
-| **2** Frontend core (browser, New Plan / slot modals) | `[ ]` Not started | |
-| **3** Filters (subject, days, times, tags) | `[ ]` Not started | |
-| **4** Polish & tests | `[ ]` Not started | |
+| **0** Setup | `[x]` Complete | Schedule xlsx for local dev; AGENTS R1 noted |
+| **1** Backend (sections API, overlap helper) | `[x]` Complete | `GET /api/catalog/sections`, overlap helper, tests |
+| **2** Frontend core (browser, New Plan / slot modals) | `[x]` Complete | CourseBrowser, PlanStartModal, SlotActionModal, App wiring |
+| **3** Filters (subject, days, times, tags) | `[x]` Complete | In CourseBrowser sidebar + API query params |
+| **4** Polish & tests | `[~]` In progress | Vitest updated; anchored calendar badge done; HANDOFF pending |
 | **5** v1.1 (open requirements filter, ★, 1hr grid) | `[ ]` Not started | |
 
-**Last updated:** _(agent: set date + your name/initials when you edit this table)_
+**Last updated:** 2026-05-26 — initial v1 implementation (Cursor agent)
 
 ### How to mark progress (required for all agents)
 
@@ -162,15 +162,15 @@ User provided Workday screenshot: search bar on top, filters left, wide results 
 
 When the user clicks **New Plan** in the left panel (`LeftPanel` → `onNewPlan` → `handleNewPlan`):
 
-- [ ] **Stop** jumping straight to “describe your preferences in chat” as the only path.
-- [ ] Show a **PlanStartModal** (or inline chooser) with two clear options:
+- [x] **Stop** jumping straight to “describe your preferences in chat” as the only path.
+- [x] Show a **PlanStartModal** (or inline chooser) with two clear options:
 
 | Option | Label (suggested) | Behavior |
 |--------|-----------------|----------|
 | **Manual** | “Search and add courses myself” | Reset plan state (same as today), open **Course Browser** with no filters, switch to **This Quarter** tab. Transcript **not** required. |
 | **AI** | “Have AI recommend my schedule” | Reset plan state, focus chat, show short prompt: upload Academic Progress if missing, then describe preferences. Existing `ChatPanel` / `generatePlan` flow. |
 
-- [ ] Preserve RT#4 behavior: **do not** clear `fileUploaded`, `missingDetails`, or `parsedRows` on New Plan (only the active quarter plan + chat for that session).
+- [x] Preserve RT#4 behavior: **do not** clear `fileUploaded`, `missingDetails`, or `parsedRows` on New Plan (only the active quarter plan + chat for that session).
 - [ ] Optional third link: “Continue previous session” if `planSnapshots` exist — out of scope unless easy.
 
 **Copy note:** Update `NEW_PLAN_TEXT` in `App.tsx` — it currently assumes AI-only (“describe your preferences…”).
@@ -179,14 +179,14 @@ When the user clicks **New Plan** in the left panel (`LeftPanel` → `onNewPlan`
 
 When the user clicks an **empty** calendar cell (`CalendarView` → `onSlotClick`):
 
-- [ ] Show a **SlotActionModal** (small popover at click coordinates, similar to R6 placement) with two options:
+- [x] Show a **SlotActionModal** (small popover at click coordinates, similar to R6 placement) with two options:
 
 | Option | Label (suggested) | Behavior |
 |--------|-----------------|----------|
 | **Browse** | “Search courses in this time” | Open **Course Browser** pre-filtered to clicked **day** + **time overlap** (see §5.6). |
 | **AI suggest** | “AI suggestions for this slot” | Existing `SlotSuggestionPopover` / `suggest_for_slot` (requirement-ranked when transcript present). |
 
-- [ ] Do **not** auto-open AI popover without choice (replaces current behavior in `App.tsx` that sets `slotPopoverOpen` immediately).
+- [x] Do **not** auto-open AI popover without choice (replaces current behavior in `App.tsx` that sets `slotPopoverOpen` immediately).
 
 **Overlap rule (core fix):** A section is included if its meeting on that weekday **intersects** the clicked time range:
 
@@ -216,9 +216,9 @@ This is the same interval test as `_slot_fits()` in `planning_agent.suggest_cour
 
 When the user adds a course from **Browse** (or AI suggest) opened via a calendar click:
 
-- [ ] Store metadata on the plan row, e.g. `_slotAnchored: true`, `_anchoredDayIndex`, `_anchoredStartMin`, `_anchoredEndMin`.
-- [ ] Show a small badge on the calendar block: **“Added for this time slot”** (or “Time set from slot pick”) so users know the block reflects their click, not necessarily the section’s real catalog time.
-- [ ] **Default display behavior (v1 product decision):** Render the course block at the **clicked slot’s start/end** for visual alignment, but show the **real** meeting time in the block subtitle (from catalog). Example: click 10:00–10:30 → block drawn there; subtitle `Actual: 9:15–10:20 AM`.
+- [x] Store metadata on the plan row, e.g. `_slotAnchored: true`, `_anchoredDayIndex`, `_anchoredStartMin`, `_anchoredEndMin`.
+- [x] Show a small badge on the calendar block: **“Added for this time slot”** (or “Time set from slot pick”) so users know the block reflects their click, not necessarily the section’s real catalog time.
+- [x] **Default display behavior (v1 product decision):** Render the course block at the **clicked slot’s start/end** for visual alignment, but show the **real** meeting time in the block subtitle (from catalog). Example: click 10:00–10:30 → block drawn there; subtitle `Actual: 9:15–10:20 AM`.
 - [ ] **Alternative (stricter):** Use real catalog times for block position; badge only explains why it appeared in search. **Prefer subtitle + anchored draw** unless usability testing says otherwise.
 
 When adding the **same** course from global Browse (not from a slot), do **not** set anchored metadata — use real `meeting_*` from the section row.
@@ -439,45 +439,45 @@ No change needed to `fileUploaded` for manual add — verify in test.
 
 ### Phase 0 — Setup
 
-- [ ] Copy `SCU_Find_Course_Sections.xlsx` into `project/course_planner/` (if missing).
-- [ ] Run `pytest tests/test_category_index.py` — confirms tags parse.
-- [ ] Read `AGENTS.md` R1 (lab pairing).
+- [x] Copy `SCU_Find_Course_Sections.xlsx` into `project/course_planner/` (if missing).
+- [x] Run `pytest tests/test_category_index.py` — confirms tags parse.
+- [x] Read `AGENTS.md` R1 (lab pairing).
 
 ### Phase 1 — Backend (TDD)
 
-- [ ] Add `tests/test_catalog_sections.py`:
+- [x] Add `tests/test_catalog_sections.py`:
   - Parses sample row tags (`RTC 3`, `ELSJ`, `C&I 1`)
   - `list_offered_sections` returns multiple sections per course
   - Filter by subject + tag + day
-- [ ] Implement `list_offered_sections` + `catalog_facets`
-- [ ] Add API endpoint with query params
-- [ ] Extend `POST /api/courses/refresh` to clear new caches
+- [x] Implement `list_offered_sections` + `catalog_facets`
+- [x] Add API endpoint with query params
+- [x] Extend `POST /api/courses/refresh` to clear new caches
 
 ### Phase 2 — Frontend core
 
-- [ ] API client + types
-- [ ] `CourseBrowser` modal with search + table
-- [ ] Wire to `App.tsx` (visible in **This Quarter** tab)
+- [x] API client + types
+- [x] `CourseBrowser` modal with search + table
+- [x] Wire to `App.tsx` (visible in **This Quarter** tab)
 - [ ] Manual test: add course without upload → appears on calendar
-- [ ] `PlanStartModal` + update `handleNewPlan` (manual opens browser, AI focuses chat)
-- [ ] `SlotActionModal` + update `handleSlotClick` (30-min window, chooser before popover/browser)
+- [x] `PlanStartModal` + update `handleNewPlan` (manual opens browser, AI focuses chat)
+- [x] `SlotActionModal` + update `handleSlotClick` (30-min window, chooser before popover/browser)
 
 ### Phase 3 — Filters
 
-- [ ] Subject multi-select
-- [ ] Day checkboxes
-- [ ] Time bucket checkboxes
-- [ ] Tag multi-select (grouped); debounce API calls 300ms
-- [ ] Course Browser: apply `initialFilters` from slot context (`day_index`, `start_min`, `end_min`)
-- [ ] Fix `suggest_courses_for_slot` / `handleSlotClick` to use shared overlap + 30-min slot (remove +90)
+- [x] Subject multi-select
+- [x] Day checkboxes
+- [x] Time bucket checkboxes
+- [x] Tag multi-select (grouped); debounce API calls 300ms
+- [x] Course Browser: apply `initialFilters` from slot context (`day_index`, `start_min`, `end_min`)
+- [x] Fix `suggest_courses_for_slot` / `handleSlotClick` to use shared overlap + 30-min slot (remove +90)
 
 ### Phase 4 — Polish & tests
 
 - [ ] Vitest: browser opens without `fileUploaded`; add calls `handleAddCourses`
-- [ ] Vitest: New Plan shows chooser; Manual opens browser; AI focuses chat
+- [x] Vitest: New Plan shows chooser; Manual opens browser; AI focuses chat
 - [ ] Vitest: calendar click shows chooser; Browse passes day/time filters
-- [ ] Pytest: overlap includes class that starts before slot but ends during slot
-- [ ] Anchored badge + calendar draw at clicked slot; subtitle shows actual time
+- [x] Pytest: overlap includes class that starts before slot but ends during slot
+- [x] Anchored badge + calendar draw at clicked slot; subtitle shows actual time
 - [ ] Accessibility: keyboard nav, `aria-label` on filters, focus trap in modal
 - [ ] Mobile: filters collapse to drawer
 - [ ] Update `HANDOFF.md` file map

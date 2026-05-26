@@ -20,6 +20,10 @@ export interface CourseBlock {
   code: string;
   title?: string;
   professor: string;
+  /** Shown when the block was placed from a calendar slot pick */
+  slotAnchored?: boolean;
+  /** Real catalog meeting time when slotAnchored */
+  actualTimeLabel?: string;
 }
 
 export interface ChatMessage {

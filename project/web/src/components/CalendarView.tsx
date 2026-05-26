@@ -143,7 +143,14 @@ export function CalendarView({ recommendedCourses, onRemoveCourse, onSlotClick }
                       <p className="text-xs font-bold leading-tight pr-4">{c.code}</p>
                       {c.title && <p className="truncate text-[10px] leading-tight opacity-90 font-medium">{c.title}</p>}
                       <p className="truncate text-[10px] leading-tight opacity-80">{c.professor}</p>
-                      <p className="mt-0.5 text-[9px] leading-tight opacity-90">{formatCourseTime(c.startOffsetMin, c.endOffsetMin)}</p>
+                      {c.slotAnchored && (
+                        <p className="text-[9px] font-medium leading-tight opacity-95">Added for this time slot</p>
+                      )}
+                      <p className="mt-0.5 text-[9px] leading-tight opacity-90">
+                        {c.slotAnchored && c.actualTimeLabel
+                          ? `Actual: ${c.actualTimeLabel}`
+                          : formatCourseTime(c.startOffsetMin, c.endOffsetMin)}
+                      </p>
                       {onRemoveCourse && (
                         <button
                           type="button"

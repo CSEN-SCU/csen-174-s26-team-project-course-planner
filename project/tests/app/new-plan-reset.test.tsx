@@ -77,8 +77,34 @@ vi.mock("../../web/src/components/SlotSuggestionPopover", () => ({
   ),
 }));
 
-vi.mock("../../web/src/components/AddCoursePicker", () => ({
-  AddCoursePicker: () => <div data-testid="add-course-picker" />,
+vi.mock("../../web/src/components/CourseBrowser", () => ({
+  CourseBrowser: () => <div data-testid="course-browser" />,
+}));
+
+vi.mock("../../web/src/components/PlanStartModal", () => ({
+  PlanStartModal: ({
+    open,
+    onManual,
+    onAi,
+  }: {
+    open: boolean;
+    onManual: () => void;
+    onAi: () => void;
+  }) =>
+    open ? (
+      <div data-testid="plan-start-modal">
+        <button type="button" onClick={onManual}>
+          Search and add courses myself
+        </button>
+        <button type="button" onClick={onAi}>
+          Have AI recommend my schedule
+        </button>
+      </div>
+    ) : null,
+}));
+
+vi.mock("../../web/src/components/SlotActionModal", () => ({
+  SlotActionModal: () => null,
 }));
 
 vi.mock("../../web/src/components/DeleteUserDataConfirm", () => ({
@@ -137,23 +163,23 @@ describe("App.handleNewPlan state reset (RT#4)", () => {
     });
   });
 
-  it("clicking 'New Plan' button changes message to NEW_PLAN_TEXT", async () => {
+  it("clicking 'New Plan' then AI path sets NEW_PLAN_AI_TEXT", async () => {
     const user = userEvent.setup();
     render(<App userId="test-user" onSignOut={() => {}} />);
 
-    // Find and click the "New Plan" button (in LeftPanel)
     await waitFor(() => {
-      const newPlanBtn = screen.queryByRole("button", { name: /new plan/i });
-      expect(newPlanBtn).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /new plan/i })).toBeInTheDocument();
     });
 
-    const newPlanBtn = screen.getByRole("button", { name: /new plan/i });
-    await user.click(newPlanBtn);
+    await user.click(screen.getByRole("button", { name: /new plan/i }));
+    await waitFor(() => {
+      expect(screen.getByTestId("plan-start-modal")).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: /have ai recommend my schedule/i }));
 
-    // Verify message changed to NEW_PLAN_TEXT
     await waitFor(() => {
       expect(screen.getByTestId("latest-message")).toHaveTextContent(
-        "Started a new plan. Upload your Academic Progress file or describe your preferences for next quarter."
+        "Started a new plan. Upload your Academic Progress file (.xlsx) if you have not yet, then describe your preferences for next quarter.",
       );
     });
   });
@@ -169,11 +195,9 @@ describe("App.handleNewPlan state reset (RT#4)", () => {
     // Verify we're in 4-year view (by checking if the button has the active style)
     expect(fourYearBtn).toHaveClass("border-[var(--scu-red)]");
 
-    // Click "New Plan"
-    const newPlanBtn = screen.getByRole("button", { name: /new plan/i });
-    await user.click(newPlanBtn);
+    await user.click(screen.getByRole("button", { name: /new plan/i }));
+    await user.click(screen.getByRole("button", { name: /have ai recommend my schedule/i }));
 
-    // Verify back to calendar view (calendar button should have active style)
     await waitFor(() => {
       const calendarBtn = screen.getByRole("button", { name: /this quarter/i });
       expect(calendarBtn).toHaveClass("border-[var(--scu-red)]");
@@ -343,24 +367,21 @@ describe("App.handleNewPlan state reset (RT#4)", () => {
     });
   });
 
-  it("[pin] messages reset to a single NEW_PLAN_TEXT entry (no stale messages)", async () => {
+  it("[pin] messages reset to a single NEW_PLAN_AI_TEXT entry (no stale messages)", async () => {
     const user = userEvent.setup();
     render(<App userId="test-user" onSignOut={() => {}} />);
 
     await waitFor(() => expect(lastChatProps).not.toBeNull());
 
-    // Inject a plan which also sets messages
     await injectPlan(["CSEN 12"]);
 
-    // Click "New Plan"
-    const newPlanBtn = screen.getByRole("button", { name: /new plan/i });
-    await user.click(newPlanBtn);
+    await user.click(screen.getByRole("button", { name: /new plan/i }));
+    await user.click(screen.getByRole("button", { name: /have ai recommend my schedule/i }));
 
-    // PIN: exactly one message (the NEW_PLAN_TEXT reset message), no residual chat history
     await waitFor(() => {
       expect(screen.getByTestId("messages-count")).toHaveTextContent("1");
       expect(screen.getByTestId("latest-message")).toHaveTextContent(
-        "Started a new plan. Upload your Academic Progress file or describe your preferences for next quarter."
+        "Started a new plan. Upload your Academic Progress file (.xlsx) if you have not yet, then describe your preferences for next quarter.",
       );
     });
   });

@@ -155,6 +155,34 @@ export function recommendedToCalendarBlocks(
       return;
     }
 
+    // --- Path B0: placed from calendar slot (draw at clicked cell; show real time in UI) ---
+    if (
+      item._slotAnchored === true &&
+      typeof item._anchoredDayIndex === "number" &&
+      typeof item._anchoredStartMin === "number" &&
+      typeof item._anchoredEndMin === "number"
+    ) {
+      const day = item._anchoredDayIndex as number;
+      const start = item._anchoredStartMin as number;
+      const end = item._anchoredEndMin as number;
+      if (start < end && day >= 0 && day <= 4) {
+        claim(day, start, end);
+        blocks.push({
+          id: `${idBase}-anchored-d${day}`,
+          dayIndex: day as WeekdayIndex,
+          startOffsetMin: start,
+          endOffsetMin: end,
+          code,
+          title,
+          professor,
+          slotAnchored: true,
+          actualTimeLabel:
+            typeof item._actualTimeLabel === "string" ? item._actualTimeLabel : undefined,
+        });
+      }
+      return;
+    }
+
     // --- Path B: single confirmed meeting time (no sections index) ---
     const meetingDays = item.meeting_days;
     const meetingStart = item.meeting_start_min;

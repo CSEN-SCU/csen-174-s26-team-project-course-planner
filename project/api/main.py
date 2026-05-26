@@ -27,7 +27,7 @@ from fastapi.responses import JSONResponse
 
 from db.migrate import migrate
 from middleware.rate_limit import RateLimitExceeded
-from routers import auth, courses, diagnostics, four_year_plan, memory, plan, upload, voice
+from routers import auth, catalog, courses, diagnostics, four_year_plan, memory, plan, upload, voice
 
 
 @asynccontextmanager
@@ -88,6 +88,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(plan.router, prefix="/api/plan", tags=["plan"])
 app.include_router(courses.router, prefix="/api/courses", tags=["courses"])
+app.include_router(catalog.router, prefix="/api/catalog", tags=["catalog"])
 app.include_router(four_year_plan.router, prefix="/api/four-year-plan", tags=["four-year-plan"])
 app.include_router(memory.router, prefix="/api/memory", tags=["memory"])
 app.include_router(upload.router, prefix="/api/upload", tags=["upload"])

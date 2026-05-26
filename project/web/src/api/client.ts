@@ -209,6 +209,73 @@ export async function listCourses() {
   return (data.courses as OfferedCourse[]) ?? [];
 }
 
+export type CatalogSection = {
+  course_section: string;
+  course: string;
+  section: number;
+  subject: string;
+  number: string;
+  title: string | null;
+  units: number | null;
+  status: string | null;
+  enrolled_capacity: string | null;
+  instructors: string[];
+  meeting_days: number[];
+  meeting_start_min: number | null;
+  meeting_end_min: number | null;
+  meeting_pattern: string | null;
+  location: string | null;
+  course_tags: string[];
+  lab_partner: string | null;
+};
+
+export type CatalogFacets = {
+  subjects: string[];
+  tags: { Core: string[]; Other: string[] };
+  time_buckets: string[];
+};
+
+export type CourseBrowserLaunchContext =
+  | { mode: "open" }
+  | { mode: "slot"; dayIndex: number; startMin: number; endMin: number; label: string };
+
+export type CatalogSearchParams = {
+  q?: string;
+  subject?: string[];
+  days?: number[];
+  time_bucket?: string[];
+  tag?: string[];
+  day_index?: number;
+  start_min?: number;
+  end_min?: number;
+  limit?: number;
+  offset?: number;
+};
+
+export async function searchCatalogSections(params: CatalogSearchParams = {}) {
+  const q = new URLSearchParams();
+  if (params.q?.trim()) q.set("q", params.q.trim());
+  if (params.subject?.length) q.set("subject", params.subject.join(","));
+  if (params.days?.length) q.set("days", params.days.join(","));
+  if (params.time_bucket?.length) q.set("time_bucket", params.time_bucket.join(","));
+  if (params.tag?.length) q.set("tag", params.tag.join(","));
+  if (params.day_index != null) q.set("day_index", String(params.day_index));
+  if (params.start_min != null) q.set("start_min", String(params.start_min));
+  if (params.end_min != null) q.set("end_min", String(params.end_min));
+  if (params.limit != null) q.set("limit", String(params.limit));
+  if (params.offset != null) q.set("offset", String(params.offset));
+  const qs = q.toString();
+  const res = await fetch(`${API_BASE}/catalog/sections${qs ? `?${qs}` : ""}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(errFromBody(data));
+  return data as {
+    sections: CatalogSection[];
+    total: number;
+    count: number;
+    facets: CatalogFacets;
+  };
+}
+
 // ── Slot-based course suggestions (R6) ──────────────────────────────────────
 
 export type CourseSuggestion = {
