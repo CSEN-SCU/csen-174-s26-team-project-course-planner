@@ -306,7 +306,7 @@ export function ChatPanel({
         setWorkdayStatus({ syncing: false, label: "Connection lost", phase: "error" });
         focusPlannerAfterWorkdaySync();
       }
-    }, 2000);
+    }, 600);
   }, [
     userId,
     workdayPullAvailable,
@@ -367,12 +367,21 @@ export function ChatPanel({
         } else if (job.status === "error") {
           clearInterval(catalogPollRef.current!);
           catalogPollRef.current = null;
+          const errDetail =
+            (typeof job.error === "string" && job.error.trim()) ||
+            job.label ||
+            "Unknown error";
+          setCatalogStatus({
+            syncing: false,
+            label: errDetail,
+            phase: "error",
+          });
           setMessages((m) => [
             ...m,
             {
               id: `a-${Date.now()}`,
               role: "assistant",
-              content: `Course catalog sync failed: ${job.error ?? "Unknown error"}`,
+              content: `Course catalog sync failed:\n\n${errDetail}`,
             },
           ]);
           focusPlannerAfterWorkdaySync();
@@ -383,7 +392,7 @@ export function ChatPanel({
         setCatalogStatus({ syncing: false, label: "Connection lost", phase: "error" });
         focusPlannerAfterWorkdaySync();
       }
-    }, 2000);
+    }, 600);
   }, [userId, workdayPullAvailable, catalogStatus.syncing, setMessages]);
 
   const sendText = useCallback(async (text: string) => {
@@ -759,8 +768,18 @@ export function ChatPanel({
             {catalogStatus.syncing && (
               <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-blue-500 animate-pulse" />
             )}
-            <span className="flex-1 truncate">
-              {catalogStatus.label ? `Catalog: ${catalogStatus.label}` : ""}
+            <span
+              className={
+                catalogStatus.phase === "error"
+                  ? "flex-1 whitespace-pre-wrap break-words max-h-28 overflow-y-auto"
+                  : "flex-1 truncate"
+              }
+            >
+              {catalogStatus.phase === "error"
+                ? catalogStatus.label || "Catalog sync failed"
+                : catalogStatus.label
+                  ? `Catalog: ${catalogStatus.label}`
+                  : ""}
             </span>
             <button
               type="button"

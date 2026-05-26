@@ -75,6 +75,22 @@ def test_swap_preserves_unrelated_courses():
     assert "ECEN 153L" not in codes
 
 
+def test_advanced_chinese_removes_chin1_without_naming_code():
+    """Native-speaker follow-up: LLM drops CHIN 1 — reconcile must not restore it."""
+    prev = {
+        "recommended": [_rec("CHIN 1", 4), _rec("THTR 189", 5)],
+        "total_units": 9,
+    }
+    llm_out = [_rec("THTR 189", 5), _rec("COMM 131D", 5), _rec("ENGR 111", 3)]
+    out = _reconcile_followup_edit(
+        llm_out, prev, "我是中国人，所以我只能上高阶的中文课"
+    )
+    codes = {r["course"] for r in out}
+    assert "CHIN 1" not in codes
+    assert "THTR 189" in codes
+    assert "COMM 131D" in codes
+
+
 def test_dedup_removes_repeated_course():
     """LLM repeated CHST 4 twice — only one survives."""
     llm_out = [_rec("CHST 4"), _rec("ENGL 181"), _rec("CHST 4")]
@@ -107,14 +123,12 @@ def test_first_turn_passthrough_with_dedup():
 
 
 def test_named_removal_respected_even_if_llm_kept_it():
-    """If the user said remove ECEN 153 but the LLM kept it, reconcile does
-    NOT force-remove it (the LLM's list is authoritative for what's IN);
-    reconcile only prevents *unauthorized drops*. ECEN 153 stays because
-    the LLM included it — the user can re-ask. This documents the boundary."""
+    """Hard rule: if the user explicitly named a course to remove, it must be removed
+    deterministically even if the LLM kept it."""
     llm_out = [_rec("CSEN 122"), _rec("ECEN 153"), _rec("ENGL 181")]
     out = _reconcile_followup_edit(llm_out, _PREV, "drop ECEN 153")
     codes = {r["course"] for r in out}
-    # ECEN 153 present because the LLM emitted it; reconcile doesn't delete.
-    assert "ECEN 153" in codes
+    assert "ECEN 153" not in codes
+    assert "ECEN 153L" not in codes
     # but unrelated dropped courses are still restored
     assert "CSEN 194" in codes

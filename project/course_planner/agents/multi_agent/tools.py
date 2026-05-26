@@ -86,7 +86,10 @@ def tool_search_schedule(subject: str | None = None) -> list[dict[str, Any]]:
     return out
 
 
-def tool_get_open_req_candidates(requirement_text: str) -> dict[str, Any]:
+def tool_get_open_req_candidates(
+    requirement_text: str,
+    user_preference: str = "",
+) -> dict[str, Any]:
     """For an open Core/GE requirement (e.g. ``"Core: ENGR: RTC 3"``),
     return the candidate courses in next-term schedule that satisfy it,
     plus the normalized requirement label."""
@@ -94,7 +97,9 @@ def tool_get_open_req_candidates(requirement_text: str) -> dict[str, Any]:
     cat = _category_index()
     titles = _titles_index()
     label = _normalize_open_req_text(requirement_text) or requirement_text[:40]
-    candidates = _resolve_open_requirement(requirement_text, cat, sched)
+    candidates = _resolve_open_requirement(
+        requirement_text, cat, sched, user_preference=user_preference
+    )
     enriched = [
         {"course": c, "title": course_title_for(c, titles)} for c in candidates
     ]

@@ -31,6 +31,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import uuid
 from typing import Annotated, Any, TypedDict
 
@@ -52,6 +53,106 @@ from agents.multi_agent.tools import (
 log = logging.getLogger(__name__)
 
 DEFAULT_MODEL = "gemini-2.5-flash"
+
+_COURSE_CODE_RE = re.compile(r"^([A-Z]{2,8})\s+(\d+[A-Z]?)$", re.IGNORECASE)
+
+
+def _normalize_code(code: str | None) -> str:
+    if not code:
+        return ""
+    return " ".join(str(code).split()).upper()
+
+
+def _split_course_code(code: str) -> tuple[str, str] | None:
+    m = _COURSE_CODE_RE.match(code.strip())
+    if not m:
+        return None
+    return m.group(1).upper(), m.group(2).upper()
+
+
+def _named_removal_codes(user_preference: str) -> set[str]:
+    """Extract course codes the user explicitly named for removal/swap.
+
+    Hard product rule: we never remove a course unless the student explicitly
+    named its code. This helper finds codes even when there's no space
+    (e.g. "ECEN153换成…") and expands to lab partners + common aliases.
+    """
+    text = (user_preference or "").upper()
+    named: set[str] = set()
+    for m in re.finditer(r"(?<![A-Z])([A-Z]{2,6})\s*(\d{1,3}[A-Z]?)(?![0-9])", text):
+        named.add(f"{m.group(1)} {m.group(2)}")
+    expanded: set[str] = set(named)
+    alias = {"CSEN": "COEN", "COEN": "CSEN", "ECEN": "ELEN", "ELEN": "ECEN"}
+    for code in named:
+        parts = _split_course_code(code)
+        if not parts:
+            continue
+        subj, num = parts
+        partner_num = num[:-1] if num.endswith("L") else f"{num}L"
+        expanded.add(f"{subj} {partner_num}")
+        alt = alias.get(subj)
+        if alt:
+            expanded.add(f"{alt} {num}")
+            expanded.add(f"{alt} {partner_num}")
+    return expanded
+
+
+def _reconcile_followup_edit(
+    new_recs: list[dict[str, Any]],
+    previous_plan: dict[str, Any] | None,
+    user_preference: str,
+) -> list[dict[str, Any]]:
+    """Targeted diff reconcile for follow-up turns (R7).
+
+    - Dedup the model list.
+    - Restore any previous-plan course the model dropped UNLESS the student
+      explicitly named it for removal.
+    - If the student DID name removals, enforce removing those codes even if
+      the model kept them.
+    """
+    # 1) Dedup by course code (preserve order).
+    seen: set[str] = set()
+    deduped: list[dict[str, Any]] = []
+    for r in new_recs or []:
+        if not isinstance(r, dict):
+            continue
+        code = _normalize_code(r.get("course"))
+        if code and code in seen:
+            continue
+        if code:
+            seen.add(code)
+        deduped.append(r)
+
+    if not isinstance(previous_plan, dict):
+        return deduped
+    prev = previous_plan.get("recommended") or []
+    if not isinstance(prev, list) or not prev:
+        return deduped
+
+    from utils.enrichment_resolver import implicit_removal_codes_for_followup
+
+    named = _named_removal_codes(user_preference) | implicit_removal_codes_for_followup(
+        user_preference, previous_plan
+    )
+    present = {_normalize_code(r.get("course")) for r in deduped if isinstance(r, dict)}
+
+    # 2) Restore previous courses the model dropped without authorization.
+    for pr in prev:
+        if not isinstance(pr, dict):
+            continue
+        code = _normalize_code(pr.get("course"))
+        if not code or code in present:
+            continue
+        if code in named:
+            continue
+        deduped.append(pr)
+        present.add(code)
+
+    # 3) Enforce explicit removals deterministically.
+    if named:
+        deduped = [r for r in deduped if _normalize_code(r.get("course")) not in named]
+
+    return deduped
 
 
 # ── Shared state ─────────────────────────────────────────────────────────────
@@ -138,6 +239,19 @@ def planner_node(state: PlanningState) -> dict[str, Any]:
     """
     use_react = os.environ.get("PLANNER_REACT", "1") != "0"
 
+    def _apply_followup_reconcile(recs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        previous_plan = state.get("previous_plan")
+        if not isinstance(previous_plan, dict) or not previous_plan.get("recommended"):
+            return recs
+        try:
+            return _reconcile_followup_edit(
+                recs,
+                previous_plan,
+                str(state.get("user_preference") or ""),
+            )
+        except Exception:
+            return recs
+
     if use_react:
         from agents.multi_agent.planner_react import run_planner_react
 
@@ -145,7 +259,12 @@ def planner_node(state: PlanningState) -> dict[str, Any]:
         if tool_calls:
             log.info("planner_react: %d tool call(s): %s",
                      len(tool_calls), [t["name"] for t in tool_calls])
-        return {"candidate_plan": parsed.get("recommended") or []}
+        recs = parsed.get("recommended") or []
+        if not isinstance(recs, list):
+            recs = []
+        recs = [r for r in recs if isinstance(r, dict)]
+        recs = _apply_followup_reconcile(recs)
+        return {"candidate_plan": recs}
 
     # Single-shot fallback.
     client = get_genai_client(purpose="multi-agent planner")
@@ -166,7 +285,12 @@ def planner_node(state: PlanningState) -> dict[str, Any]:
     except json.JSONDecodeError:
         log.warning("planner: model returned unparseable JSON: %r", text[:200])
         parsed = {"recommended": []}
-    return {"candidate_plan": parsed.get("recommended") or []}
+    recs = parsed.get("recommended") or []
+    if not isinstance(recs, list):
+        recs = []
+    recs = [r for r in recs if isinstance(r, dict)]
+    recs = _apply_followup_reconcile(recs)
+    return {"candidate_plan": recs}
 
 
 # ── Node 2: Verifier ─────────────────────────────────────────────────────────
@@ -520,6 +644,48 @@ def run_multi_agent_plan(
     For the review-then-approve flow use :func:`start_plan_with_review`
     + :func:`resume_plan` instead.
     """
+    if isinstance(previous_plan, dict) and previous_plan.get("recommended"):
+        from utils.enrichment_resolver import try_enrichment_followup_plan
+
+        enrich_plan = try_enrichment_followup_plan(
+            user_preference=user_preference or "",
+            missing_details=missing_details,
+            previous_plan=previous_plan,
+        )
+        if enrich_plan is not None:
+            from agents.planning_agent import (
+                _enrich_recommended_units,
+                _reconcile_followup_edit,
+                _recompute_total_units,
+                _sync_followup_assistant_reply,
+            )
+
+            merged = _reconcile_followup_edit(
+                enrich_plan.get("recommended") or [],
+                previous_plan,
+                user_preference or "",
+            )
+            enrich_plan["recommended"] = merged
+            enrich_plan["total_units"] = _recompute_total_units(merged)
+            _sync_followup_assistant_reply(
+                enrich_plan, previous_plan, user_preference or ""
+            )
+            recs = enrich_plan.get("recommended") or []
+            return {
+                "recommended": recs,
+                "total_units": enrich_plan.get("total_units")
+                or sum(int((r or {}).get("units") or 0) for r in recs if isinstance(r, dict)),
+                "advice": enrich_plan.get("advice", ""),
+                "assistant_reply": enrich_plan.get("assistant_reply", ""),
+                "verifier_passes": 0,
+                "verifier_issues": [],
+                "meta": {
+                    "provider": "deterministic",
+                    "model": "enrichment_resolver",
+                    "graph": "enrichment_followup",
+                },
+            }
+
     graph = build_graph(checkpointer=checkpointer)
     config = {"configurable": {"thread_id": thread_id}} if thread_id else None
     final_state = graph.invoke(

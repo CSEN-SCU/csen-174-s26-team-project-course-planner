@@ -268,7 +268,22 @@ export type CourseSuggestion = {
   instructor: string;
   rating: number;
   difficulty: number;
+  would_take_again_pct?: number | null;
+  source?: string | null;
+  quality?: number;
   rationale: string;
+  covers?: string[];
+  kind?: "requirement" | "enrichment";
+  meeting_days?: number[];
+  meeting_start_min?: number | null;
+  meeting_end_min?: number | null;
+};
+
+export type EnrichmentSlotSuggestions = {
+  track_label: string;
+  subjects: string[];
+  prompt: string | null;
+  candidates: CourseSuggestion[];
 };
 
 /** Suggest courses for a calendar time slot (R6 popover). */
@@ -278,6 +293,8 @@ export async function suggestCoursesForSlot(params: {
   end_min: number;
   missing_details: Record<string, unknown>[];
   exclude_codes?: string[];
+  /** Recent chat text — used to infer enrichment direction (e.g. 中文). */
+  user_preference?: string;
 }) {
   const res = await fetch(`${API_BASE}/plan/suggest_for_slot`, {
     method: "POST",
@@ -288,6 +305,7 @@ export async function suggestCoursesForSlot(params: {
       end_min: params.end_min,
       missing_details: params.missing_details,
       exclude_codes: params.exclude_codes ?? [],
+      user_preference: params.user_preference ?? "",
     }),
   });
   const data = await res.json();
@@ -295,5 +313,7 @@ export async function suggestCoursesForSlot(params: {
   return {
     candidates: (data.candidates as CourseSuggestion[]) ?? [],
     count: data.count as number,
+    message: typeof data.message === "string" ? data.message : undefined,
+    enrichment: (data.enrichment as EnrichmentSlotSuggestions | null | undefined) ?? null,
   };
 }

@@ -17,6 +17,19 @@ from utils.academic_progress_helpers import (
     enrich_missing_details,
     extract_completed_course_codes,
 )
+from utils.enrichment_resolver import (
+    EDUCATIONAL_ENRICHMENT_MARKER as _EDUCATIONAL_ENRICHMENT_MARKER,
+    filter_enrichment_codes_for_preference,
+    has_educational_enrichment_gap,
+    implicit_removal_codes_for_followup,
+    infer_enrichment_subjects as _preferred_enrichment_subjects,
+    is_low_level_chin_course,
+    list_enrichment_course_codes,
+    resolve_enrichment_subjects_for_slot,
+    should_show_slot_enrichment,
+    try_enrichment_followup_plan,
+    wants_advanced_chinese_only,
+)
 from utils.scu_course_schedule_xlsx import (
     course_title_for,
     course_units_for,
@@ -852,7 +865,9 @@ def _reconcile_followup_edit(
     if not prev:
         return deduped
 
-    named = _named_removal_codes(user_preference)
+    named = _named_removal_codes(user_preference) | implicit_removal_codes_for_followup(
+        user_preference, previous_plan
+    )
     present = {_normalize_code(r.get("course")) for r in deduped}
 
     # 2. Preserve previous courses the LLM dropped without authorization.
@@ -866,7 +881,68 @@ def _reconcile_followup_edit(
             continue  # the student asked to remove this — honor it
         deduped.append(pr)
         present.add(code)
+
+    # 3. HARD RULE: If the student explicitly named courses to remove, remove
+    # them deterministically even if the LLM kept them.
+    #
+    # Product requirement: follow-up edits are targeted diffs; we never remove
+    # a course unless the student explicitly named its code.
+    if named:
+        deduped = [r for r in deduped if _normalize_code(r.get("course")) not in named]
+
     return deduped
+
+
+def _sync_followup_assistant_reply(
+    parsed: dict,
+    previous_plan: dict | None,
+    user_preference: str = "",
+) -> None:
+    """Rebuild chat reply from the final plan so it matches ``recommended`` (R7)."""
+    if not isinstance(previous_plan, dict):
+        return
+    prev = previous_plan.get("recommended") or []
+    if not prev:
+        return
+    recs = parsed.get("recommended") or []
+    if not isinstance(recs, list):
+        return
+
+    def _codes(rows: list) -> set[str]:
+        out: set[str] = set()
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            code = _normalize_code(row.get("course"))
+            if code:
+                out.add(code)
+        return out
+
+    prev_c = _codes(prev)
+    new_c = _codes(recs)
+    added = sorted(new_c - prev_c)
+    removed = sorted(prev_c - new_c)
+    total = int(parsed.get("total_units") or _recompute_total_units(recs))
+
+    parts: list[str] = []
+    if wants_advanced_chinese_only(user_preference) and any(
+        is_low_level_chin_course(c) for c in removed
+    ):
+        parts.append(
+            "Yes — I removed beginner Chinese (CHIN 1-level) because you need "
+            "advanced Chinese as a native speaker."
+        )
+    elif removed:
+        parts.append(f"I removed {', '.join(removed)}.")
+    elif added:
+        parts.append("Yes — I updated your plan.")
+    else:
+        parts.append("I kept your other courses the same.")
+
+    if added:
+        parts.append(f"Added {', '.join(added)}.")
+    parts.append(f"Total {total} units.")
+    parsed["assistant_reply"] = " ".join(parts)[:480]
 
 
 def _resolve_item_codes(item: dict) -> list[str]:
@@ -898,11 +974,6 @@ _OPEN_REQ_PAREN_RE = re.compile(r"\s*\([^)]*\)\s*")
 # Maximum number of open-requirement candidates shown to the LLM per slot.
 # Keeps the prompt concise and prevents the model picking a mediocre option.
 _OPEN_REQ_CANDIDATE_LIMIT = 5
-
-# Substring that identifies an Educational Enrichment requirement in the
-# normalised Workday requirement text.
-_EDUCATIONAL_ENRICHMENT_MARKER = "educational enrichment"
-
 
 def _normalize_open_req_text(req_text: str) -> str:
     """Strip 'Core: ENGR: ' prefixes and parenthetical details from a requirement string.
@@ -947,6 +1018,7 @@ def _resolve_open_requirement(
     req_text: str,
     category_index: dict[str, list[str]],
     schedule_index: dict,
+    user_preference: str = "",
 ) -> list[str]:
     """Return course codes (in schedule) that satisfy an open Core/GE requirement.
 
@@ -979,11 +1051,27 @@ def _resolve_open_requirement(
     # Filter to courses actually offered next term
     candidates = [c for c in candidates if any(k in schedule_index for k in planned_section_keys(c))]
 
-    # R4a: Educational Enrichment — restrict to Core Integrations tagged courses only
+    # Educational Enrichment: two cases
+    # 1) Department-scoped enrichment (e.g. "take 3 CHIN courses"): use the
+    #    student's stated department preference to source candidates directly
+    #    from the next-term schedule.
+    # 2) Otherwise fall back to the existing R4 scoping using Core Integrations tags.
     if _EDUCATIONAL_ENRICHMENT_MARKER in norm:
-        integrations_set = load_core_integrations_course_set()
-        if integrations_set:
-            candidates = [c for c in candidates if c in integrations_set]
+        preferred_subjects = _preferred_enrichment_subjects(user_preference)
+        if preferred_subjects:
+            subj_set = set(preferred_subjects)
+            candidates = []
+            seen_codes: set[str] = set()
+            for (subj, num) in schedule_index.keys():
+                if subj in subj_set:
+                    code = f"{subj} {num}"
+                    if code not in seen_codes:
+                        candidates.append(code)
+                        seen_codes.add(code)
+        else:
+            integrations_set = load_core_integrations_course_set()
+            if integrations_set:
+                candidates = [c for c in candidates if c in integrations_set]
 
     # R4b: Sort by best instructor rating descending; unrated courses go last
     ratings = load_instructor_ratings()
@@ -1001,6 +1089,7 @@ def _build_schedule_block(
     schedule_index: dict,
     category_index: dict | None = None,
     units_lookup: dict[str, int] | None = None,
+    user_preference: str = "",
 ) -> tuple[str, set[tuple[str, str]]]:
     """
     Return a prompt block listing which required courses are offered next term,
@@ -1026,7 +1115,12 @@ def _build_schedule_block(
             req_label = _normalize_open_req_text(req_text) or req_text[:40]
             open_courses: list[str] = []
             if category_index:
-                open_courses = _resolve_open_requirement(req_text, category_index, schedule_index)
+                open_courses = _resolve_open_requirement(
+                    req_text,
+                    category_index,
+                    schedule_index,
+                    user_preference=user_preference,
+                )
             if open_courses:
                 for c in open_courses:
                     open_req_course_labels.setdefault(c, []).append(req_label)
@@ -1261,8 +1355,33 @@ def run_planning_agent(
 
     schedule_index = load_schedule_section_index()
     category_index = load_category_course_index()
+
+    # ── Deterministic follow-up: add enrichment-direction course (no LLM) ─────
+    if isinstance(previous_plan, dict) and previous_plan.get("recommended"):
+        enrich_plan = try_enrichment_followup_plan(
+            user_preference=user_preference or "",
+            missing_details=missing_details,
+            previous_plan=previous_plan,
+            units_lookup=units_lookup,
+        )
+        if enrich_plan is not None:
+            merged = _reconcile_followup_edit(
+                enrich_plan.get("recommended") or [],
+                previous_plan,
+                user_preference or "",
+            )
+            enrich_plan["recommended"] = _enrich_recommended_units(merged, units_lookup)
+            enrich_plan["total_units"] = _recompute_total_units(enrich_plan["recommended"])
+            _sync_followup_assistant_reply(
+                enrich_plan, previous_plan, user_preference or ""
+            )
+            return _sanitize_model_output(enrich_plan)
     schedule_block, offered_keys = _build_schedule_block(
-        missing_details, schedule_index, category_index, units_lookup=units_lookup
+        missing_details,
+        schedule_index,
+        category_index,
+        units_lookup=units_lookup,
+        user_preference=user_preference or "",
     )
 
     memory_block = _build_memory_block(memory_snippets)
@@ -1443,7 +1562,12 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
             for item in missing_details:
                 if not _resolve_item_codes(item):
                     req_text = item.get("category") or item.get("requirement") or ""
-                    for c in _resolve_open_requirement(req_text, category_index, schedule_index):
+                    for c in _resolve_open_requirement(
+                        req_text,
+                        category_index,
+                        schedule_index,
+                        user_preference=user_preference or "",
+                    ):
                         resolved.add(c.upper())
                         for subj, num in planned_section_keys(c):
                             resolved.add(f"{subj} {num}")
@@ -1588,10 +1712,41 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
         )
     parsed["warnings"] = warnings
 
+    if is_followup:
+        _sync_followup_assistant_reply(parsed, previous_plan, user_preference or "")
+
     return _sanitize_model_output(parsed)
 
 
 # ── Slot-based course suggestions (R6) ──────────────────────────────────────
+
+
+def _slot_suggestion_empty_message(
+    missing_details: list[dict[str, any]],
+    open_req_key_to_label: dict[str, str],
+) -> str:
+    """User-facing copy when no course at this slot fills a remaining requirement."""
+    if not missing_details:
+        return (
+            "请先上传 Academic Progress，才能按你尚未满足的要求推荐课程。"
+        )
+    labels = "、".join(open_req_key_to_label.values())[:120]
+    if has_educational_enrichment_gap(missing_details):
+        return (
+            "这个时间段没有能同时满足你剩余 Core 要求的课。"
+            "若你有 Educational Enrichment，请查看下方「Enrichment 推荐」区块，"
+            "或在聊天里说明方向（例如中文）。也可换个时间段再试。"
+        )
+    if labels:
+        return (
+            f"这个时间段没有能填补你剩余要求的课（例如 {labels}）。"
+            "请换个时间段，或在聊天里说明你想优先满足哪一项。"
+        )
+    return (
+        "这个时间段没有能填补你 transcript 剩余要求的课。"
+        "请换个时间段再试。"
+    )
+
 
 def suggest_courses_for_slot(
     day_index: int,
@@ -1599,88 +1754,287 @@ def suggest_courses_for_slot(
     end_min: int,
     missing_details: list[dict[str, any]],
     exclude_codes: list[str] | None = None,
-) -> list[dict[str, any]]:
-  """Suggest up to 5 courses that fit a calendar slot and open requirements.
+    user_preference: str = "",
+) -> dict[str, Any]:
+    """Suggest courses for a calendar slot (R6).
 
-  Args:
-    day_index: 0=Mon, 1=Tue, ..., 6=Sun
-    start_min: start time in minutes since midnight
-    end_min: end time in minutes since midnight
-    missing_details: list of open requirements (from academic progress)
-    exclude_codes: course codes to exclude (e.g. already in plan)
+    - ``candidates``: Core / concrete requirements (must have non-empty ``covers``).
+    - ``enrichment``: optional block when transcript still has Educational
+      Enrichment — department-scoped list (e.g. CHIN / 中文), separate from Core tags.
 
-  Returns:
-    List of up to 5 candidate courses with title, instructor, rating, rationale
-  """
-  exclude_codes = exclude_codes or []
-  schedule_index = load_schedule_section_index()
-  ratings = load_instructor_ratings()
-  units_index = load_course_units_index()
-  category_index = load_category_course_index()
+    Returns:
+        {"candidates": [...], "enrichment": {...} | None, "message": str | None}
+    """
+    exclude_codes = exclude_codes or []
+    schedule_index = load_schedule_section_index()
+    ratings = load_instructor_ratings()
+    units_index = load_course_units_index()
+    category_index = load_category_course_index()
+    titles_index = load_course_titles_index()
 
-  # Build a set of open categories from missing_details
-  open_categories = set()
-  for detail in missing_details:
-    cat = detail.get("category")
-    if isinstance(cat, str):
-      open_categories.add(cat)
+    def _get_first_str(d: dict, keys: tuple[str, ...]) -> str | None:
+        for k in keys:
+            v = d.get(k)
+            if isinstance(v, str) and v.strip():
+                return v
+        return None
 
-  candidates = []
+    def _display_open_req_label(req_text: str) -> str:
+        """Human-facing label for an open requirement (strip 'Core: ENGR: ' and parentheticals)."""
+        text = (req_text or "").strip()
+        for prefix in _OPEN_REQ_STRIP_PREFIXES:
+            if text.startswith(prefix):
+                text = text[len(prefix):].strip()
+                break
+        text = _OPEN_REQ_PAREN_RE.sub(" ", text).strip()
+        return text
 
-  # Scan schedule index for courses that fit the time slot
-  for (subject, course_num), section_info in schedule_index.items():
-    course_code = f"{subject} {course_num}"
+    def _display_course_req_label(detail: dict) -> str:
+        """Human-facing label for a concrete course requirement row."""
+        req = (detail.get("requirement") or detail.get("category") or "").strip()
+        if not req:
+            return "Required course"
+        # Drop noisy "Core: ENGR:" prefix but keep the rest
+        return _display_open_req_label(req) or req
 
-    # Skip if already excluded
-    if course_code in exclude_codes:
-      continue
+    # Build open requirement keys + labels so we can explain "covers what".
+    open_req_key_to_label: dict[str, str] = {}
+    open_req_keys: set[str] = set()
 
-    meeting_days = section_info.get("meeting_days") or []
-    meeting_start = section_info.get("meeting_start_min")
-    meeting_end = section_info.get("meeting_end_min")
+    # Also build a mapping for concrete course requirements:
+    # course_code -> [labels...] where label comes from that missing_details row.
+    required_course_to_labels: dict[str, list[str]] = {}
 
-    # meeting_days is a list of weekday ints (0=Mon..4=Fri) — compare on int.
-    if day_index >= 5 or day_index not in meeting_days:
-      continue
+    for detail in missing_details or []:
+        if not isinstance(detail, dict):
+            continue
 
-    # Check for time overlap
-    if meeting_start is not None and meeting_end is not None:
-      if meeting_end <= start_min or meeting_start >= end_min:
-        continue  # No overlap
+        # Concrete course requirements: map resolved codes to the row label.
+        # Workday/legacy shapes sometimes use `course_code` rather than `course`.
+        if not isinstance(detail.get("course"), str) and isinstance(detail.get("course_code"), str):
+            detail = {**detail, "course": detail.get("course_code")}
+        codes = _resolve_item_codes(detail)
+        if codes:
+            label = _display_course_req_label(detail)
+            for code in codes:
+                norm_code = _normalize_code(code)
+                if not norm_code:
+                    continue
+                bucket = required_course_to_labels.setdefault(norm_code, [])
+                if label not in bucket:
+                    bucket.append(label)
 
-    # Build candidate entry
-    instructors = section_info.get("instructors") or []
-    best_instructor = instructors[0] if instructors else None
-    instructor_name = best_instructor if isinstance(best_instructor, str) else "Unknown"
+        raw_txt = _get_first_str(
+            detail,
+            (
+                "requirement",
+                "Requirement",
+                "category",
+                "Category",
+                "name",
+                "Name",
+                "label",
+                "Label",
+            ),
+        )
+        if not raw_txt:
+            continue
+        norm = _normalize_open_req_text(raw_txt)
+        if not norm:
+            continue
+        open_req_keys.add(norm)
+        open_req_key_to_label.setdefault(norm, _display_open_req_label(raw_txt) or raw_txt.strip())
 
-    rating_info = None
-    if best_instructor:
-      for r in ratings:
-        if r.get("instructor_name") == best_instructor and r.get("course_code") == course_code:
-          rating_info = r
-          break
+    # Reverse map: course_code -> [open requirement labels it satisfies]
+    course_to_open_req_labels: dict[str, list[str]] = {}
+    for k in open_req_keys:
+        label = open_req_key_to_label.get(k) or k
+        for c in category_index.get(k) or []:
+            bucket = course_to_open_req_labels.setdefault(c, [])
+            if label not in bucket:
+                bucket.append(label)
 
-    # Compute rationale
-    rationale = "Available at this time"
-    if open_categories:
-      course_categories = category_index.get((subject, course_num)) or []
-      matching_cats = [c for c in course_categories if c in open_categories]
-      if matching_cats:
-        rationale = f"Covers {', '.join(matching_cats)}"
+    def _slot_fits(section_info: dict[str, Any]) -> bool:
+        meeting_days = section_info.get("meeting_days") or []
+        meeting_start = section_info.get("meeting_start_min")
+        meeting_end = section_info.get("meeting_end_min")
+        if day_index >= 5 or day_index not in meeting_days:
+            return False
+        if meeting_start is None or meeting_end is None:
+            return False
+        if meeting_end <= start_min or meeting_start >= end_min:
+            return False
+        return True
 
-    unit_count = course_units_for(course_code, units_index) or 0
+    def _build_slot_candidate(
+        course_code: str,
+        section_info: dict[str, Any],
+        *,
+        covers: list[str],
+        rationale: str,
+        kind: str = "requirement",
+    ) -> dict[str, Any]:
+        meeting_days = section_info.get("meeting_days") or []
+        meeting_start = section_info.get("meeting_start_min")
+        meeting_end = section_info.get("meeting_end_min")
 
-    candidate = {
-        "course": course_code,
-        "title": course_title_for((subject, course_num)) or course_code,
-        "units": unit_count,
-        "instructor": instructor_name,
-        "rating": rating_info.get("rating", 3.0) if rating_info else 3.0,
-        "difficulty": rating_info.get("difficulty", 3.0) if rating_info else 3.0,
-        "rationale": rationale,
+        instructors = section_info.get("instructors") or []
+        instructor_name = (
+            instructors[0] if instructors and isinstance(instructors[0], str) else "Unknown"
+        )
+
+        rec = ratings.get(instructor_name) if isinstance(ratings, dict) else None
+        if not rec and isinstance(instructor_name, str) and isinstance(ratings, dict):
+            rec = ratings.get(instructor_name.lower())
+
+        rating_val = rec.get("rating") if isinstance(rec, dict) else None
+        difficulty_val = rec.get("difficulty") if isinstance(rec, dict) else None
+        wta_val = rec.get("would_take_again_pct") if isinstance(rec, dict) else None
+        source_val = rec.get("source") if isinstance(rec, dict) else None
+        try:
+            rating = float(rating_val) if rating_val is not None else 3.0
+        except (TypeError, ValueError):
+            rating = 3.0
+        try:
+            difficulty = float(difficulty_val) if difficulty_val is not None else 3.0
+        except (TypeError, ValueError):
+            difficulty = 3.0
+        try:
+            would_take_again_pct = float(wta_val) if wta_val is not None else None
+        except (TypeError, ValueError):
+            would_take_again_pct = None
+        source = str(source_val).strip() if source_val is not None else None
+
+        r01 = max(0.0, min(1.0, rating / 5.0))
+        d01 = max(0.0, min(1.0, difficulty / 5.0))
+        w01 = (
+            max(0.0, min(1.0, (would_take_again_pct or 0.0) / 100.0))
+            if would_take_again_pct is not None
+            else 0.5
+        )
+        quality = int(round((0.60 * r01 + 0.25 * w01 + 0.15 * (1.0 - d01)) * 100))
+
+        return {
+            "course": course_code,
+            "title": course_title_for(course_code, titles_index) or course_code,
+            "units": course_units_for(course_code, units_index) or 0,
+            "instructor": instructor_name,
+            "rating": rating,
+            "difficulty": difficulty,
+            "would_take_again_pct": would_take_again_pct,
+            "source": source,
+            "quality": quality,
+            "rationale": rationale,
+            "covers": covers,
+            "kind": kind,
+            "meeting_days": list(meeting_days),
+            "meeting_start_min": meeting_start,
+            "meeting_end_min": meeting_end,
+        }
+
+    candidates: list[dict[str, any]] = []
+
+    for (subject, course_num), section_info in schedule_index.items():
+        course_code = f"{subject} {course_num}"
+        if course_code in exclude_codes:
+            continue
+        if not _slot_fits(section_info):
+            continue
+
+        covers: list[str] = []
+        for k in planned_section_keys(course_code):
+            norm = _normalize_code(f"{k[0]} {k[1]}")
+            for lab in required_course_to_labels.get(norm, []):
+                if lab not in covers:
+                    covers.append(lab)
+        for lab in course_to_open_req_labels.get(course_code) or []:
+            if lab not in covers:
+                covers.append(lab)
+
+        rationale = "这个时间段可上"
+        if covers:
+            rationale = "满足： " + " + ".join(covers[:3])
+
+        candidates.append(
+            _build_slot_candidate(
+                course_code,
+                section_info,
+                covers=covers,
+                rationale=rationale,
+                kind="requirement",
+            )
+        )
+
+    def _rank_key(c: dict[str, any]) -> tuple:
+        n_covers = len(c.get("covers") or [])
+        return (-n_covers, -(c.get("quality") or 0), -(c.get("rating") or 0), c.get("course", ""))
+
+    with_covers = [c for c in candidates if c.get("covers")]
+    with_covers.sort(key=_rank_key)
+
+    enrichment_block: dict[str, Any] | None = None
+    if should_show_slot_enrichment(
+        user_preference or "",
+        missing_details,
+        plan_course_codes=exclude_codes,
+    ):
+        subjects, track_label, enrich_prompt = resolve_enrichment_subjects_for_slot(
+            user_preference or ""
+        )
+        enrich_codes = list_enrichment_course_codes(
+            schedule_index,
+            subjects,
+            titles_index,
+            exclude_codes=exclude_codes,
+        )
+        enrich_codes = filter_enrichment_codes_for_preference(
+            enrich_codes, user_preference or ""
+        )
+        if wants_advanced_chinese_only(user_preference or ""):
+            enrich_prompt = (
+                (enrich_prompt or "")
+                + " 已隐藏初级中文课（CHIN 1 等）；仅显示较高阶选项。"
+            ).strip()
+        enrich_candidates: list[dict[str, Any]] = []
+        enrich_covers = ["Educational Enrichment", track_label]
+        enrich_rationale = f"专业 Enrichment · {track_label} · 这个时间段可上"
+        for code in enrich_codes:
+            for key in planned_section_keys(code):
+                section_info = schedule_index.get(key)
+                if not section_info or not _slot_fits(section_info):
+                    continue
+                enrich_candidates.append(
+                    _build_slot_candidate(
+                        code,
+                        section_info,
+                        covers=enrich_covers,
+                        rationale=enrich_rationale,
+                        kind="enrichment",
+                    )
+                )
+                break
+
+        def _enrich_rank(c: dict[str, Any]) -> tuple:
+            return (-(c.get("quality") or 0), -(c.get("rating") or 0), c.get("course", ""))
+
+        enrich_candidates.sort(key=_enrich_rank)
+        enrichment_block = {
+            "track_label": track_label,
+            "subjects": subjects,
+            "prompt": enrich_prompt,
+            "candidates": enrich_candidates[:5],
+        }
+
+    core_out = with_covers[:5]
+    if core_out or enrichment_block:
+        return {
+            "candidates": core_out,
+            "enrichment": enrichment_block,
+            "message": None,
+        }
+
+    return {
+        "candidates": [],
+        "enrichment": enrichment_block,
+        "message": _slot_suggestion_empty_message(missing_details, open_req_key_to_label),
     }
-    candidates.append(candidate)
-
-  # Sort by rating (descending) and limit to 5
-  candidates.sort(key=lambda x: (-x["rating"], x["course"]))
-  return candidates[:5]

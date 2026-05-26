@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { suggestCoursesForSlot, type CourseSuggestion } from "../api/client";
+import {
+  suggestCoursesForSlot,
+  type CourseSuggestion,
+  type EnrichmentSlotSuggestions,
+} from "../api/client";
+import { CALENDAR_START_HOUR } from "../types";
 
 export type SlotSuggestionPopoverProps = {
   day_index: number;
@@ -8,6 +13,10 @@ export type SlotSuggestionPopoverProps = {
   end_min: number;
   missing_details: Record<string, unknown>[];
   excluded_courses: string[];
+  /** Requirement labels already satisfied by slot-added courses (e.g. Social Justice). */
+  satisfied_covers?: string[];
+  /** Recent chat text — infers enrichment direction (e.g. 中文 → CHIN). */
+  user_preference?: string;
   onAddCourse: (course: Record<string, unknown>) => void;
   onClose: () => void;
   /** Viewport coordinates of the click that opened the popover */
@@ -33,16 +42,19 @@ export function SlotSuggestionPopover({
   end_min,
   missing_details,
   excluded_courses,
+  satisfied_covers = [],
+  user_preference = "",
   onAddCourse,
   onClose,
   client_x,
   client_y,
 }: SlotSuggestionPopoverProps) {
   const [candidates, setCandidates] = useState<CourseSuggestion[]>([]);
+  const [enrichment, setEnrichment] = useState<EnrichmentSlotSuggestions | null>(null);
+  const [emptyMessage, setEmptyMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
   // Codes shown so-far (excluded on Show-more requests)
   const [shownCodes, setShownCodes] = useState<string[]>(excluded_courses);
 
@@ -64,16 +76,24 @@ export function SlotSuggestionPopover({
   useEffect(() => {
     setLoading(true);
     setError(null);
+    setEmptyMessage(null);
     suggestCoursesForSlot({
       day_index,
       start_min,
       end_min,
       missing_details,
       exclude_codes: excluded_courses,
+      user_preference,
     })
       .then((res) => {
         setCandidates(res.candidates);
-        setShownCodes([...excluded_courses, ...res.candidates.map((c) => c.course)]);
+        setEnrichment(res.enrichment);
+        setEmptyMessage(res.message ?? null);
+        const codes = [
+          ...res.candidates.map((c) => c.course),
+          ...(res.enrichment?.candidates ?? []).map((c) => c.course),
+        ];
+        setShownCodes([...excluded_courses, ...codes]);
       })
       .catch((err) => {
         setError(err instanceof Error ? err.message : "Failed to load suggestions");
@@ -82,16 +102,20 @@ export function SlotSuggestionPopover({
         setLoading(false);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [day_index, start_min, end_min]);
+  }, [day_index, start_min, end_min, user_preference]);
 
   const handleAddCourse = (candidate: CourseSuggestion) => {
     onAddCourse({
       course: candidate.course,
       title: candidate.title,
       units: candidate.units,
-      category: "", // filled by caller based on missing_details
+      category: candidate.kind === "enrichment" ? "Educational Enrichment" : "",
       reason: candidate.rationale,
-      instructor: candidate.instructor,
+      best_professor: candidate.instructor,
+      meeting_days: candidate.meeting_days,
+      meeting_start_min: candidate.meeting_start_min,
+      meeting_end_min: candidate.meeting_end_min,
+      covers: candidate.covers,
     });
     onClose();
   };
@@ -104,20 +128,39 @@ export function SlotSuggestionPopover({
       end_min,
       missing_details,
       exclude_codes: shownCodes,
+      user_preference,
     })
       .then((res) => {
-        if (res.candidates.length === 0) return; // nothing new
-        setCandidates((prev) => [...prev, ...res.candidates]);
-        setShownCodes((prev) => [...prev, ...res.candidates.map((c) => c.course)]);
+        const newCore = res.candidates;
+        const enrich = res.enrichment;
+        const newEnrich = enrich?.candidates ?? [];
+        if (newCore.length === 0 && newEnrich.length === 0) return;
+        if (newCore.length > 0) {
+          setCandidates((prev) => [...prev, ...newCore]);
+        }
+        if (enrich) {
+          setEnrichment((prev) => (prev ? { ...prev, candidates: [...prev.candidates, ...newEnrich] } : enrich));
+        }
+        setShownCodes((prev) => [
+          ...prev,
+          ...newCore.map((c) => c.course),
+          ...newEnrich.map((c) => c.course),
+        ]);
       })
       .catch(() => {/* silent — best effort */})
       .finally(() => setLoadingMore(false));
   };
 
   const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const hour = Math.floor(start_min / 60);
-  const min = start_min % 60;
+  // `start_min` is minutes-from-calendar-start (8:00 AM) so we add the offset
+  // to render a human-readable clock time.
+  const startTotal = CALENDAR_START_HOUR * 60 + start_min;
+  const hour = Math.floor(startTotal / 60);
+  const min = startTotal % 60;
   const timeStr = `${hour % 12 || 12}:${String(min).padStart(2, "0")} ${hour < 12 ? "AM" : "PM"}`;
+
+  const enrichList = enrichment?.candidates ?? [];
+  const hasAny = candidates.length > 0 || enrichList.length > 0;
 
   return (
     <div
@@ -163,67 +206,68 @@ export function SlotSuggestionPopover({
           </div>
         )}
 
-        {/* Empty */}
-        {!loading && !error && candidates.length === 0 && (
-          <p className="text-xs text-neutral-400 text-center py-4">
-            No courses available at this time slot.
+        {/* Empty (no core and no enrichment at this slot) */}
+        {!loading && !error && !hasAny && (
+          <p className="text-xs text-neutral-600 leading-relaxed text-center py-4 px-1">
+            {emptyMessage ??
+              "这个时间段没有能填补你剩余要求的课。请换个时间段，或在聊天里说明你想优先满足哪一项。"}
           </p>
         )}
 
-        {/* Candidate cards */}
-        {!loading && !error && candidates.map((c, idx) => (
-          <div
-            key={c.course}
-            className="rounded-lg border border-neutral-200 bg-white hover:border-neutral-300 transition overflow-hidden"
-          >
-            {/* Summary row */}
-            <div className="flex items-start gap-2 px-3 py-2">
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-neutral-900 leading-tight">
-                  {c.course}
-                </p>
-                <p className="text-[11px] text-neutral-600 leading-tight truncate">
-                  {c.title}
-                </p>
-                <p className="text-[11px] text-neutral-400 mt-0.5 flex items-center gap-1.5">
-                  <StarIcon />
-                  <span>{c.rating.toFixed(1)}</span>
-                  <span className="text-neutral-300">·</span>
-                  <span>{c.instructor}</span>
-                  <span className="text-neutral-300">·</span>
-                  <span>{c.units}u</span>
-                </p>
-              </div>
-              <button
-                onClick={() => handleAddCourse(c)}
-                className="shrink-0 px-2.5 py-1.5 text-[11px] font-bold bg-[var(--scu-red)] text-white rounded-md hover:bg-red-700 transition"
-              >
-                Add
-              </button>
+        {/* Enrichment block — department sequence (e.g. 中文 / CHIN) */}
+        {!loading && !error && enrichment && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 space-y-2">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-amber-900">
+                Enrichment 推荐
+              </p>
+              <p className="text-xs font-semibold text-amber-950 mt-0.5">
+                方向：{enrichment.track_label || "未指定"}
+              </p>
+              <p className="text-[11px] text-amber-900/80 mt-1 leading-relaxed">
+                含 <span className="font-mono">CHIN</span> 开头，或课程名含 Chinese / 中文 的课。
+              </p>
+              {enrichment.prompt && (
+                <p className="text-[11px] text-amber-800 mt-1 leading-relaxed">{enrichment.prompt}</p>
+              )}
             </div>
-
-            {/* Expandable rationale */}
-            {expandedIdx === idx && (
-              <div className="px-3 pb-2 pt-1 border-t border-neutral-100 bg-neutral-50">
-                <p className="text-[11px] text-neutral-700 leading-relaxed">{c.rationale}</p>
-                <p className="text-[10px] text-neutral-500 mt-1">
-                  Difficulty: {c.difficulty.toFixed(1)} / 5
-                </p>
-              </div>
+            {enrichList.length === 0 ? (
+              <p className="text-[11px] text-amber-800 text-center py-2">
+                这个时间段没有符合该方向的 Enrichment 课，请换个时间或改方向。
+              </p>
+            ) : (
+              enrichList.map((c) => (
+                <CandidateCard
+                  key={`enrich-${c.course}`}
+                  c={c}
+                  onAdd={() => handleAddCourse(c)}
+                  addDisabled={isAlreadySatisfied(c, satisfied_covers)}
+                  badgeClass="bg-amber-100 text-amber-900 border-amber-200"
+                />
+              ))
             )}
-
-            {/* "Why this?" toggle */}
-            <button
-              onClick={() => setExpandedIdx(expandedIdx === idx ? null : idx)}
-              className="w-full text-left px-3 pb-2 text-[11px] text-[var(--scu-red)] hover:underline"
-            >
-              {expandedIdx === idx ? "Hide details ▲" : "Why this? ▼"}
-            </button>
           </div>
-        ))}
+        )}
+
+        {/* Core / other requirement fills */}
+        {!loading && !error && candidates.length > 0 && (
+          <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500 px-0.5">
+            其它未满足要求
+          </p>
+        )}
+        {!loading && !error &&
+          candidates.map((c) => (
+            <CandidateCard
+              key={c.course}
+              c={c}
+              onAdd={() => handleAddCourse(c)}
+              addDisabled={isAlreadySatisfied(c, satisfied_covers)}
+              badgeClass="bg-red-50 text-[var(--scu-red)] border-red-100"
+            />
+          ))}
 
         {/* Show more */}
-        {!loading && !error && candidates.length > 0 && (
+        {!loading && !error && hasAny && (
           <button
             onClick={handleShowMore}
             disabled={loadingMore}
@@ -235,6 +279,74 @@ export function SlotSuggestionPopover({
       </div>
     </div>
   );
+}
+
+function CandidateCard({
+  c,
+  onAdd,
+  addDisabled,
+  badgeClass,
+}: {
+  c: CourseSuggestion;
+  onAdd: () => void;
+  addDisabled?: boolean;
+  badgeClass: string;
+}) {
+  return (
+    <div className="rounded-lg border border-neutral-200 bg-white hover:border-neutral-300 transition overflow-hidden">
+      <div className="flex items-start gap-2 px-3 py-2">
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-bold text-neutral-900 leading-tight">{c.course}</p>
+          <p className="text-[11px] text-neutral-600 leading-tight truncate">{c.title}</p>
+          {Array.isArray(c.covers) && c.covers.length > 0 && (
+            <div className="mt-1 flex flex-wrap items-center gap-1">
+              <span className="text-[10px] font-semibold text-neutral-500 shrink-0">满足：</span>
+              {c.covers.slice(0, 2).map((t) => (
+                <span
+                  key={t}
+                  className={`inline-flex items-center rounded-full text-[10px] font-semibold px-2 py-0.5 border ${badgeClass}`}
+                >
+                  {t}
+                </span>
+              ))}
+            </div>
+          )}
+          <p className="text-[11px] text-neutral-400 mt-0.5 flex flex-wrap items-center gap-1.5">
+            <StarIcon />
+            <span>{c.rating.toFixed(1)}</span>
+            <span className="text-neutral-300">·</span>
+            <span>{c.units}u</span>
+            <span className="text-neutral-300">·</span>
+            <span className="truncate" title={c.instructor}>
+              {c.instructor}
+            </span>
+          </p>
+          <p className="text-[10px] text-neutral-500 mt-1 leading-snug">{c.rationale}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onAdd}
+          disabled={addDisabled}
+          title={addDisabled ? "该要求已满足（通常只需要一门课）" : undefined}
+          className={`shrink-0 px-2.5 py-1.5 text-[11px] font-bold rounded-md transition ${
+            addDisabled
+              ? "bg-neutral-200 text-neutral-500 cursor-not-allowed"
+              : "bg-[var(--scu-red)] text-white hover:bg-red-700"
+          }`}
+        >
+          {addDisabled ? "已满足" : "Add"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function isAlreadySatisfied(c: CourseSuggestion, satisfied: string[]): boolean {
+  if (!Array.isArray(c.covers) || c.covers.length === 0) return false;
+  if (!Array.isArray(satisfied) || satisfied.length === 0) return false;
+  const sat = new Set(satisfied.map((x) => String(x || "").trim()).filter(Boolean));
+  // If any cover label is already satisfied, treat this as duplicative.
+  return c.covers.some((lab) => sat.has(String(lab || "").trim()));
 }
 
 function XIcon() {

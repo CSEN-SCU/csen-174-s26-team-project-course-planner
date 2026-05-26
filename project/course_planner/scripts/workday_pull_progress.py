@@ -294,7 +294,12 @@ def _click_labels(
         )
         for target in candidates:
             try:
-                target.wait_for(state="visible", timeout=3_000)
+                # Per-candidate wait was 3000ms — when a label isn't on the current
+                # page (the common case across the Academics → View More → … walk),
+                # each missing candidate cost a full 3s of dead time. 1500ms is
+                # still enough for any label that's about to appear, and halves
+                # the worst-case "wait for a label that isn't here" cost.
+                target.wait_for(state="visible", timeout=1_500)
                 target.click(timeout=5_000)
                 page.wait_for_timeout(400)
                 _wait_for_workday_content(page, ready)
@@ -418,6 +423,23 @@ def _ensure_on_task(page: Page, task_url: str = TASK_URL) -> None:
     if _finalize_report_page(page):
         print("Already on the Academic Progress report.", flush=True)
         return
+
+    # Opportunistic fast-path: if "View My Academic Progress" is already a
+    # visible link on the current page (e.g. the Academics task tile surfaces
+    # it directly in the right-hand sidebar), click it once and skip the
+    # Academics → View More → Academic Advising menu walk. Falls through
+    # silently when the link isn't here — only ~600ms cost, never blocks the
+    # existing strategies. Crucially, this path only changes which link gets
+    # clicked; the ready/report-loaded detection downstream is unchanged.
+    try:
+        if page.get_by_text(
+            "View My Academic Progress", exact=False
+        ).first.is_visible(timeout=600):
+            if _click_academic_progress_link(page):
+                print("Reached Academic Progress via direct link.", flush=True)
+                return
+    except Exception:  # noqa: BLE001
+        pass
 
     if _try_home_academics_app(page):
         print("Reached Academic Progress via Academics app menu.", flush=True)

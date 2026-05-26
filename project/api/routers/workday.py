@@ -53,6 +53,7 @@ _SECTIONS_STATUS_LABELS: dict[str, str] = {
     "browser_open": "Browser open — complete SCU login and Duo in that window",
     "logged_in": "Login detected — opening Find Course Sections…",
     "navigating": "Opening Find Course Sections…",
+    "filtering": "Selecting Future Fall + Undergrad in Workday…",
     "downloading": "Applying term/level filters and exporting…",
     "exporting": "Click the Excel icon on the report (or wait — retrying every few seconds)…",
     "validating": "Validating the course catalog…",
@@ -115,14 +116,20 @@ def _scrub_sections_error(exc: BaseException) -> str:
     if isinstance(exc, ModuleNotFoundError) or name in {"ImportError", "ModuleNotFoundError"}:
         return "Workday sync is not enabled on this server."
     msg = str(exc).strip()
+    if not msg:
+        return _GENERIC_SECTIONS_ERROR
     if "0 offered courses" in msg or "parsed to 0" in msg:
         return (
             "The export contained no courses — Workday's term/level filters or layout "
             "may have changed. The shared catalog was left unchanged."
         )
-    if "Find Course Sections" in msg or "open workday" in msg.lower():
+    if "open workday" in msg.lower() and "could not open" in msg.lower():
         return "Could not open Find Course Sections in Workday. Try again later."
-    return _GENERIC_SECTIONS_ERROR
+    if isinstance(exc, RuntimeError):
+        return msg
+    if len(msg) <= 500:
+        return msg
+    return msg[:497] + "…"
 
 
 _jobs: dict[str, dict[str, Any]] = {}

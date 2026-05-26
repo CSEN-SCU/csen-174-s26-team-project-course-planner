@@ -282,9 +282,15 @@ def _shape_v2_response(plan: dict[str, Any]) -> dict[str, Any]:
     except (TypeError, ValueError):
         total_units = 0
     advice, reply = _synthesize_advice_reply(plan)
+    if isinstance(plan.get("advice"), str) and plan["advice"].strip():
+        advice = plan["advice"].strip()
+    if isinstance(plan.get("assistant_reply"), str) and plan["assistant_reply"].strip():
+        reply = plan["assistant_reply"].strip()
     return {
         "type": "plan",
-        "engine": "multi_agent",
+        "engine": plan.get("meta", {}).get("graph", "multi_agent")
+        if isinstance(plan.get("meta"), dict)
+        else "multi_agent",
         "recommended": recs,
         "total_units": total_units,
         "advice": advice,
@@ -411,6 +417,10 @@ class SlotSuggestionRequest(BaseModel):
     end_min: int = Field(..., description="End time in minutes since midnight")
     missing_details: list[dict[str, Any]] = Field(..., description="Open requirements")
     exclude_codes: list[str] = Field(default_factory=list, description="Codes to exclude")
+    user_preference: str = Field(
+        default="",
+        description="Recent chat text for enrichment direction (e.g. 中文 / CHIN)",
+    )
 
 
 @router.post("/suggest_for_slot", dependencies=[Depends(limit("slot_suggest"))])
@@ -420,17 +430,28 @@ def suggest_for_slot(body: SlotSuggestionRequest) -> dict[str, Any]:
     This is a cheaper alternative to full /api/plan regeneration for slot-click popover.
     """
     try:
-        candidates = suggest_courses_for_slot(
+        result = suggest_courses_for_slot(
             day_index=body.day_index,
             start_min=body.start_min,
             end_min=body.end_min,
             missing_details=body.missing_details,
             exclude_codes=body.exclude_codes,
+            user_preference=body.user_preference,
         )
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"suggestion failed: {exc}") from exc
 
+    candidates = result.get("candidates") or []
+    if not isinstance(candidates, list):
+        candidates = []
+
+    enrichment = result.get("enrichment")
+    if enrichment is not None and not isinstance(enrichment, dict):
+        enrichment = None
+
     return {
         "candidates": candidates,
         "count": len(candidates),
+        "message": result.get("message"),
+        "enrichment": enrichment,
     }

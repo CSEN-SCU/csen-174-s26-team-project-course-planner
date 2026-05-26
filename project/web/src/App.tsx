@@ -18,7 +18,6 @@ import { FirstLoginCarousel } from "./components/FirstLoginCarousel";
 import { SlotSuggestionPopover } from "./components/SlotSuggestionPopover";
 import { clearLocalSession } from "./auth/session";
 import { SiteFooter } from "./components/SiteFooter";
-import { CALENDAR_START_HOUR } from "./types";
 
 const WELCOME_TEXT =
   "Upload your Academic Progress file or describe your preferences to get started.";
@@ -351,6 +350,64 @@ export default function App({ userId, onSignOut }: AppProps) {
     [effectiveRecommended],
   );
 
+  // Slot-add UX: prevent users from repeatedly filling the same requirement (e.g. SJ/Medical SJ)
+  // by filtering already-satisfied requirement labels out of `missing_details` before requesting
+  // slot suggestions. This keeps the popover honest and avoids "double counting".
+  const satisfiedCoverLabels = useMemo(() => {
+    const out: string[] = [];
+    for (const r of effectiveRecommended ?? []) {
+      const covers = (r as { covers?: unknown }).covers;
+      if (!Array.isArray(covers)) continue;
+      for (const c of covers) {
+        const s = typeof c === "string" ? c.trim() : "";
+        if (s && !out.includes(s)) out.push(s);
+      }
+    }
+    return out;
+  }, [effectiveRecommended]);
+
+  function _normCover(s: string): string {
+    return (s || "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .replace(/[()（）、,.:;·/\\\-]+/g, " ")
+      .trim();
+  }
+
+  const missingDetailsForSlot = useMemo(() => {
+    if (!Array.isArray(missingDetails) || missingDetails.length === 0) return [];
+    if (!Array.isArray(satisfiedCoverLabels) || satisfiedCoverLabels.length === 0) return missingDetails;
+
+    const satisfied = satisfiedCoverLabels.map(_normCover).filter(Boolean);
+    if (satisfied.length === 0) return missingDetails;
+
+    return missingDetails.filter((row) => {
+      if (!row || typeof row !== "object") return true;
+      const r = row as Record<string, unknown>;
+      const raw =
+        (typeof r.requirement === "string" && r.requirement) ||
+        (typeof r.Requirement === "string" && r.Requirement) ||
+        (typeof r.category === "string" && r.category) ||
+        (typeof r.Category === "string" && r.Category) ||
+        "";
+      const hay = _normCover(raw);
+      if (!hay) return true;
+      // If any satisfied cover label is mentioned by this missing-detail row,
+      // treat it as already satisfied by a previously slot-added course.
+      return !satisfied.some((lab) => hay.includes(lab));
+    });
+  }, [missingDetails, satisfiedCoverLabels]);
+
+  /** Last user chat line — passed to slot popover for enrichment direction (e.g. 中文). */
+  const slotUserPreference = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user") {
+        return messages[i].content.trim();
+      }
+    }
+    return "";
+  }, [messages]);
+
   const handleGenerateFourYearPlan = useCallback(async (preferences: string) => {
     if (!missingDetails.length || fourYearGenerating) return;
     setFourYearGenerating(true);
@@ -475,7 +532,10 @@ export default function App({ userId, onSignOut }: AppProps) {
   }, [userId]);
 
   const handleSlotClick = useCallback((dayIndex: number, slotIndex: number, clientX: number, clientY: number) => {
-    const startMin = CALENDAR_START_HOUR * 60 + slotIndex * 30;
+    // Slot indices are based on the calendar grid which starts at 8:00 AM.
+    // Backend slot-suggestion logic expects "minutes-from-calendar-start" (offset),
+    // so slotIndex*30 maps directly to the same units as the schedule xlsx parser.
+    const startMin = slotIndex * 30;
     const endMin = startMin + 90; // 90-min window covers typical 50–75 min class lengths
 
     setSlotPopoverData({
@@ -545,7 +605,7 @@ export default function App({ userId, onSignOut }: AppProps) {
         {viewMode === "calendar" ? (
           <div className="relative min-h-0 flex-1">
             <CalendarView
-              recommendedCourses={effectiveRecommended}
+              recommendedCourses={effectiveRecommended ?? []}
               onRemoveCourse={handleRemoveCourse}
               onSlotClick={handleSlotClick}
             />
@@ -556,8 +616,10 @@ export default function App({ userId, onSignOut }: AppProps) {
                 slot_index={slotPopoverData.slotIndex}
                 start_min={slotPopoverData.startMin}
                 end_min={slotPopoverData.endMin}
-                missing_details={missingDetails as Record<string, unknown>[]}
+                missing_details={missingDetailsForSlot as Record<string, unknown>[]}
                 excluded_courses={effectiveCodes}
+                satisfied_covers={satisfiedCoverLabels}
+                user_preference={slotUserPreference}
                 onAddCourse={handleAddFromSlotSuggestion}
                 onClose={() => setSlotPopoverOpen(false)}
                 client_x={slotPopoverData.clientX}

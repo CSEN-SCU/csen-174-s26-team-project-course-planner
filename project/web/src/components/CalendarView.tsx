@@ -67,13 +67,20 @@ export function CalendarView({ recommendedCourses, onRemoveCourse, onSlotClick }
 
       <div className="min-h-0 flex-1 overflow-auto p-3 space-y-3">
         <div className="relative min-w-[720px] rounded-lg border border-neutral-200 bg-white shadow-sm">
-          {/* Empty state overlay */}
+          {/* Empty state hint — pointer-events-none so time slots stay clickable */}
           {isEmpty && (
-            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-lg bg-white/90">
-              <p className="text-sm font-medium text-neutral-400">No schedule yet</p>
-              <p className="mt-1 text-xs text-neutral-300">
-                {onSlotClick ? "Chat to generate a plan, or click any time slot to ask the AI for a course." : "Chat to generate a plan."}
-              </p>
+            <div
+              className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center rounded-lg"
+              aria-hidden
+            >
+              <div className="max-w-xs rounded-lg bg-white/85 px-4 py-3 text-center shadow-sm ring-1 ring-neutral-200/80">
+                <p className="text-sm font-medium text-neutral-500">No schedule yet</p>
+                <p className="mt-1 text-xs text-neutral-400">
+                  {onSlotClick
+                    ? "Click any time slot below to add a course, or chat to generate a full plan."
+                    : "Chat to generate a plan."}
+                </p>
+              </div>
             </div>
           )}
 
