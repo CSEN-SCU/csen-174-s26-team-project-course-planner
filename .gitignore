@@ -35,15 +35,6 @@ project/course_planner/View_My_Academic_Progress.xlsx
 project/course_planner/SCU_Find_Course_Sections.xlsx
 project/course_planner/~$*.xlsx
 
-# Workday auto-pull prototype (branch): the persistent Playwright login profile
-# (canonically project/course_planner/.workday_profile/) holds Workday cookies +
-# session — NEVER commit (security critical). The bare pattern matches the
-# profile dir at any depth as a safety net; *.xlsx.tmp covers the pull scripts'
-# atomic download/replace temp files.
-.workday_profile/
-project/course_planner/*.xlsx.tmp
-project/course_planner/.workday_debug_last.xlsx
-
 # Course planner local SQLite database (per-user accounts + memory).
 # Ignore the directory CONTENTS (so user data / app.db stay out of git) but
 # allow re-including specific seed/config files below.

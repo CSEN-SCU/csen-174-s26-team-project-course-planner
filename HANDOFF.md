@@ -206,12 +206,7 @@ From `Copy of Red Team — SCU Course Planner.pdf`.
 
 - **Manual Academic Progress upload only**: students export "View My Academic
   Progress" from Workday as `.xlsx` / `.xlsm` and upload it with the paperclip.
-  The Playwright Workday sync path and `SCU_WORKDAY_URL` env var were removed.
-  A **branch prototype** re-adds auto-pull the safe way — headed Playwright
-  **CLI** scripts where the human does SSO + Duo and we store zero credentials;
-  install + usage in
-  [`project/course_planner/scripts/README.md`](project/course_planner/scripts/README.md).
-  Trigger is CLI-only; productionizing as a browser extension is future work.
+  There is no in-app or CLI browser automation path.
 - **Tests consolidated into `project/tests/`**: all pytest files now live in
   `project/tests/` (single CI home). The old `project/course_planner/tests/`
   directory still exists but only has non-test support files.
@@ -246,7 +241,6 @@ project/
       memory.py                      GET/DELETE /api/memory/{uid}
       diagnostics.py                 GET /api/diagnostics/leak_attempts (RT#8 admin)
       auth.py                        login/register + Google OAuth
-                                     (NOTE: workday.py was REMOVED)
   course_planner/
     agents/
       planning_agent.py              run_planning_agent (LEGACY, canonical) + suggest_courses_for_slot

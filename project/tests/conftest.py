@@ -51,8 +51,6 @@ def _reset_rate_limiter():
                     "plan": generous,
                     "four_year_plan": generous,
                     "slot_suggest": generous,
-                    "workday_sync": generous,
-                    "workday_sync_sections": generous,
                 }
             )
         )
