@@ -80,7 +80,7 @@ def enrichment_track_label(subjects: list[str]) -> str:
     if not subjects:
         return ""
     if subjects == ["CHIN"] or (len(subjects) == 1 and subjects[0] == "CHIN"):
-        return "Chinese (CHIN)"
+        return "中文 (CHIN)"
     return " / ".join(subjects)
 
 
@@ -423,8 +423,8 @@ def resolve_enrichment_subjects_for_slot(
     if default_chinese_when_unspecified:
         return (
             ["CHIN"],
-            "Chinese (CHIN)",
-            "Describe your enrichment track in chat (e.g. art, history); below defaults to the Chinese series.",
+            "中文 (CHIN)",
+            "在聊天里说明你的 enrichment 方向（如艺术、历史）；下方默认展示中文系列。",
         )
 
-    return [], "", "Describe your enrichment track in chat (e.g. Chinese)."
+    return [], "", "在聊天里说明你想满足的 enrichment 方向（例如：中文）。"

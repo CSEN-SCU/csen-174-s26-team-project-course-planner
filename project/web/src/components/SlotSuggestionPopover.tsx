@@ -210,7 +210,7 @@ export function SlotSuggestionPopover({
         {!loading && !error && !hasAny && (
           <p className="text-xs text-neutral-600 leading-relaxed text-center py-4 px-1">
             {emptyMessage ??
-              "No courses at this time slot fill your remaining requirements. Try another slot, or tell the chat which requirement to prioritize."}
+              "这个时间段没有能填补你剩余要求的课。请换个时间段，或在聊天里说明你想优先满足哪一项。"}
           </p>
         )}
 
@@ -219,14 +219,13 @@ export function SlotSuggestionPopover({
           <div className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 space-y-2">
             <div>
               <p className="text-[11px] font-bold uppercase tracking-wide text-amber-900">
-                Enrichment picks
+                Enrichment 推荐
               </p>
               <p className="text-xs font-semibold text-amber-950 mt-0.5">
-                Track: {enrichment.track_label || "Not specified"}
+                方向：{enrichment.track_label || "未指定"}
               </p>
               <p className="text-[11px] text-amber-900/80 mt-1 leading-relaxed">
-                Courses starting with <span className="font-mono">CHIN</span>, or titles containing
-                Chinese / 中文.
+                含 <span className="font-mono">CHIN</span> 开头，或课程名含 Chinese / 中文 的课。
               </p>
               {enrichment.prompt && (
                 <p className="text-[11px] text-amber-800 mt-1 leading-relaxed">{enrichment.prompt}</p>
@@ -234,8 +233,7 @@ export function SlotSuggestionPopover({
             </div>
             {enrichList.length === 0 ? (
               <p className="text-[11px] text-amber-800 text-center py-2">
-                No enrichment courses in this track fit this time slot. Try another time or change
-                your track in chat.
+                这个时间段没有符合该方向的 Enrichment 课，请换个时间或改方向。
               </p>
             ) : (
               enrichList.map((c) => (
@@ -254,7 +252,7 @@ export function SlotSuggestionPopover({
         {/* Core / other requirement fills */}
         {!loading && !error && candidates.length > 0 && (
           <p className="text-[10px] font-bold uppercase tracking-wide text-neutral-500 px-0.5">
-            Other open requirements
+            其它未满足要求
           </p>
         )}
         {!loading && !error &&
@@ -302,7 +300,7 @@ function CandidateCard({
           <p className="text-[11px] text-neutral-600 leading-tight truncate">{c.title}</p>
           {Array.isArray(c.covers) && c.covers.length > 0 && (
             <div className="mt-1 flex flex-wrap items-center gap-1">
-              <span className="text-[10px] font-semibold text-neutral-500 shrink-0">Covers:</span>
+              <span className="text-[10px] font-semibold text-neutral-500 shrink-0">满足：</span>
               {c.covers.slice(0, 2).map((t) => (
                 <span
                   key={t}
@@ -329,14 +327,14 @@ function CandidateCard({
           type="button"
           onClick={onAdd}
           disabled={addDisabled}
-          title={addDisabled ? "This requirement is already satisfied (usually one course is enough)" : undefined}
+          title={addDisabled ? "该要求已满足（通常只需要一门课）" : undefined}
           className={`shrink-0 px-2.5 py-1.5 text-[11px] font-bold rounded-md transition ${
             addDisabled
               ? "bg-neutral-200 text-neutral-500 cursor-not-allowed"
               : "bg-[var(--scu-red)] text-white hover:bg-red-700"
           }`}
         >
-          {addDisabled ? "Satisfied" : "Add"}
+          {addDisabled ? "已满足" : "Add"}
         </button>
       </div>
     </div>

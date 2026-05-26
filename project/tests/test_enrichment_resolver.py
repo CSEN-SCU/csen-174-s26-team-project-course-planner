@@ -25,7 +25,7 @@ def test_has_enrichment_gap():
 def test_infer_chinese_from_natural_language():
     assert infer_enrichment_subjects("我想加一门中文课满足 enrichment") == ["CHIN"]
     assert infer_enrichment_subjects("我现在是中国人，只能上高阶中文") == ["CHIN"]
-    assert enrichment_track_label(["CHIN"]) == "Chinese (CHIN)"
+    assert enrichment_track_label(["CHIN"]) == "中文 (CHIN)"
 
 
 def test_implicit_removal_chin1_for_native_speaker():
@@ -81,5 +81,5 @@ def test_list_codes_from_fake_schedule():
 def test_slot_default_chinese_when_unspecified():
     subjects, label, prompt = resolve_enrichment_subjects_for_slot("")
     assert subjects == ["CHIN"]
-    assert label == "Chinese (CHIN)"
+    assert label == "中文 (CHIN)"
     assert prompt is not None
