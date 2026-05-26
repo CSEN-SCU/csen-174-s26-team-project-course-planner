@@ -192,6 +192,7 @@ def test_default_limits_match_review_spec():
         "four_year_plan",
         "slot_suggest",
         "workday_sync",
+        "workday_sync_sections",
     }
     assert DEFAULT_LIMITS["plan"].per_minute_ip == 10
     assert DEFAULT_LIMITS["plan"].per_minute_user == 20

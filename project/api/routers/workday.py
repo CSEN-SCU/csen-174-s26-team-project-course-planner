@@ -1,13 +1,20 @@
 """
 Workday headed-browser pull (local dev).
 
-POST /api/workday/sync                  → {job_id}
-GET  /api/workday/status/{job_id}       → {status, label, missing_details?, error?}
+POST /api/workday/sync                  → {job_id}   (per-user Academic Progress)
+POST /api/workday/sync-sections         → {job_id}   (shared Find Course Sections)
+GET  /api/workday/status/{job_id}       → {status, label, missing_details?, count?, error?}
 GET  /api/workday/available             → {available: bool}
 
 The student completes SSO + Duo in a visible Chromium window on the machine
 where the API runs. No SCU passwords are stored — only a gitignored browser
 profile under ``course_planner/.workday_profile/``.
+
+``/sync`` pulls *View My Academic Progress* into the requester's own memory.
+``/sync-sections`` pulls the *Find Course Sections* catalog — course
+availability is identical for every student, so it overwrites the **shared**
+``SCU_Find_Course_Sections.xlsx`` and refreshes everyone's catalog. Any
+authenticated user may trigger it (the frontend asks for confirmation first).
 
 Disabled on hosts without Playwright or when ``SCU_WORKDAY_PULL_ENABLED=0``.
 """
@@ -41,7 +48,23 @@ _STATUS_LABELS: dict[str, str] = {
     "error": "Sync failed.",
 }
 
+_SECTIONS_STATUS_LABELS: dict[str, str] = {
+    "pending": "Starting browser…",
+    "browser_open": "Browser open — complete SCU login and Duo in that window",
+    "logged_in": "Login detected — opening Find Course Sections…",
+    "navigating": "Opening Find Course Sections…",
+    "downloading": "Applying term/level filters and exporting…",
+    "exporting": "Click the Excel icon on the report (or wait — retrying every few seconds)…",
+    "validating": "Validating the course catalog…",
+    "writing": "Saving the shared catalog…",
+    "done": "Done — course catalog updated!",
+    "error": "Catalog sync failed.",
+}
+
 _GENERIC_ERROR = "Sync failed. Try uploading manually with the paperclip button."
+_GENERIC_SECTIONS_ERROR = (
+    "Catalog sync failed. Try again, or run scripts/workday_pull_sections.py locally."
+)
 
 
 def _playwright_importable() -> bool:
@@ -80,6 +103,26 @@ def _scrub_error(exc: BaseException) -> str:
     if "Could not reach" in msg or "Find Course Sections" in msg:
         return "Could not open Academic Progress in Workday. Try again or upload manually."
     return _GENERIC_ERROR
+
+
+def _scrub_sections_error(exc: BaseException) -> str:
+    """Like ``_scrub_error`` but with catalog-appropriate wording (no per-user upload)."""
+    name = type(exc).__name__
+    if name in {"PWTimeout", "PlaywrightTimeoutError", "TimeoutError"}:
+        if isinstance(exc, TimeoutError):
+            return "Login timed out. Complete SSO and Duo in the browser window, then try again."
+        return "Workday took too long to respond."
+    if isinstance(exc, ModuleNotFoundError) or name in {"ImportError", "ModuleNotFoundError"}:
+        return "Workday sync is not enabled on this server."
+    msg = str(exc).strip()
+    if "0 offered courses" in msg or "parsed to 0" in msg:
+        return (
+            "The export contained no courses — Workday's term/level filters or layout "
+            "may have changed. The shared catalog was left unchanged."
+        )
+    if "Find Course Sections" in msg or "open workday" in msg.lower():
+        return "Could not open Find Course Sections in Workday. Try again later."
+    return _GENERIC_SECTIONS_ERROR
 
 
 _jobs: dict[str, dict[str, Any]] = {}
@@ -131,6 +174,43 @@ def _run_pull(job_id: str, user_id: str) -> None:
         )
 
 
+def _invalidate_course_catalog_cache() -> None:
+    """Drop catalog caches so ``GET /api/courses`` serves the new xlsx without a restart."""
+    try:
+        from routers.courses import refresh_courses
+
+        refresh_courses()
+    except Exception:  # noqa: BLE001
+        logger.warning("Failed to refresh course catalog cache after sections pull", exc_info=True)
+
+
+def _run_sections_pull(job_id: str) -> None:
+    def cb(status: str) -> None:
+        _set_job(job_id, status=status, label=_SECTIONS_STATUS_LABELS.get(status, status))
+
+    try:
+        from scripts.workday_pull_sections import pull_course_sections
+
+        result = pull_course_sections(progress_cb=cb)
+        _invalidate_course_catalog_cache()
+        _set_job(
+            job_id,
+            status="done",
+            label=_SECTIONS_STATUS_LABELS["done"],
+            count=int(result.get("count") or 0),
+            term=str(result.get("term") or ""),
+            level=str(result.get("level") or ""),
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Workday sections pull failed for job_id=%s", job_id)
+        _set_job(
+            job_id,
+            status="error",
+            label=_SECTIONS_STATUS_LABELS["error"],
+            error=_scrub_sections_error(exc),
+        )
+
+
 class SyncRequest(BaseModel):
     user_id: str = ""
 
@@ -156,6 +236,31 @@ def start_sync(body: SyncRequest) -> dict[str, str]:
         user_id=user_id,
     )
     threading.Thread(target=_run_pull, args=(job_id, user_id), daemon=True).start()
+    return {"job_id": job_id}
+
+
+@router.post("/sync-sections", dependencies=[Depends(limit("workday_sync_sections"))])
+def start_sections_sync(body: SyncRequest) -> dict[str, str]:
+    """Start a headed pull of the shared Find Course Sections catalog.
+
+    The result overwrites the shared catalog for *all* users, so the frontend
+    confirms before calling this. Any authenticated user may trigger it; the job
+    is tracked under the requester's id so only they poll its status.
+    """
+    if not workday_pull_enabled():
+        raise HTTPException(
+            status_code=503,
+            detail="Workday sync is not available on this server.",
+        )
+    user_id = _require_user(body.user_id)
+    job_id = str(uuid.uuid4())
+    _set_job(
+        job_id,
+        status="pending",
+        label=_SECTIONS_STATUS_LABELS["pending"],
+        user_id=user_id,
+    )
+    threading.Thread(target=_run_sections_pull, args=(job_id,), daemon=True).start()
     return {"job_id": job_id}
 
 

@@ -83,6 +83,7 @@ DEFAULT_LIMITS: Dict[str, RouteLimits] = {
     "four_year_plan": RouteLimits(per_minute_ip=5, per_minute_user=10, max_concurrent_per_user=1),
     "slot_suggest": RouteLimits(per_minute_ip=60, per_minute_user=120, max_concurrent_per_user=4),
     "workday_sync": RouteLimits(per_minute_ip=3, per_minute_user=6, max_concurrent_per_user=1),
+    "workday_sync_sections": RouteLimits(per_minute_ip=3, per_minute_user=6, max_concurrent_per_user=1),
 }
 
 
