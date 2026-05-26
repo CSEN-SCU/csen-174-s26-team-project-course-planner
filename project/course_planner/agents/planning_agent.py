@@ -898,12 +898,31 @@ def _reconcile_followup_edit(
 # "16 unit plan"), but that's a soft constraint Gemini routinely ignores. We
 # parse the cap ourselves and trim deterministically as a final safety net.
 
-# Bounded cap verbs ("under 18", "max 12", "no more than 20", "最多 16 学分").
+# Bounded cap verbs ("max 12", "no more than 20", "最多 16 学分").
 _UNIT_CAP_VERB_RE = re.compile(
     r"(?:cap(?:ped)?\s+(?:at|to)|maximum|max|no\s+more\s+than|"
-    r"not\s+more\s+than|less\s+than|under|below|at\s+most|"
+    r"not\s+more\s+than|at\s+most|"
     r"limit(?:\s+(?:to|at|under))?|不超过|最多|至多|不要超过)\s*"
-    r"(\d{1,2})\s*(?:-)?\s*(?:units?|学分|单元)?",
+    r"(\d{1,2})(?!\s*(?:a\.?m\.?|p\.?m\.?))\s*(?:-)?\s*(?:units?|学分|单元)?",
+    re.IGNORECASE,
+)
+
+# Comparative caps are only treated as unit caps when a unit word is present.
+# This avoids interpreting time preferences like "below 10am" as a 10-unit cap.
+_UNIT_CAP_COMPARATIVE_RE = re.compile(
+    r"(?:less\s+than|under|below)\s*"
+    r"(\d{1,2})\s*(?:-)?\s*(?:units?|学分|单元)",
+    re.IGNORECASE,
+)
+
+# Unit floors ("at least 12 units") must never be reinterpreted as caps by the
+# broad numeric target matcher below.
+_UNIT_FLOOR_RE = re.compile(
+    r"(?:(?:at\s+least|minimum|min(?:imum)?(?:\s+of)?|"
+    r"no\s+less\s+than|not\s+less\s+than|>=|≥|不少于|至少|最少)\s*"
+    r"\d{1,2}\s*(?:-)?\s*(?:units?|学分|单元)|"
+    r"\d{1,2}\s*(?:-)?\s*(?:units?|学分|单元)\s*"
+    r"(?:minimum|min(?:imum)?|or\s+more|以上|起))",
     re.IGNORECASE,
 )
 
@@ -926,7 +945,8 @@ def _extract_unit_cap(user_preference: str) -> int | None:
 
     Returns the *tightest* (smallest) cap when several numbers appear; e.g.
     "between 14 and 16 units" → 14. Returns ``None`` when no clear cap is
-    stated.
+    stated. Unit floors ("at least 12 units") and clock times ("below 10am")
+    are not caps.
 
     Caps outside the realistic SCU range (8–25) are ignored so that
     accidental matches against course numbers ("section 16") don't pin a
@@ -936,13 +956,23 @@ def _extract_unit_cap(user_preference: str) -> int | None:
         return None
     text = user_preference
 
+    floor_spans = [m.span() for m in _UNIT_FLOOR_RE.finditer(text)]
+
+    def _overlaps_floor(span: tuple[int, int]) -> bool:
+        return any(span[0] < end and start < span[1] for start, end in floor_spans)
+
     candidates: list[int] = []
-    for m in _UNIT_CAP_VERB_RE.finditer(text):
-        try:
-            candidates.append(int(m.group(1)))
-        except (TypeError, ValueError):
-            continue
+    for pattern in (_UNIT_CAP_VERB_RE, _UNIT_CAP_COMPARATIVE_RE):
+        for m in pattern.finditer(text):
+            if _overlaps_floor(m.span()):
+                continue
+            try:
+                candidates.append(int(m.group(1)))
+            except (TypeError, ValueError):
+                continue
     for m in _UNIT_CAP_TARGET_RE.finditer(text):
+        if _overlaps_floor(m.span()):
+            continue
         try:
             n = int(m.group(1))
         except (TypeError, ValueError):
