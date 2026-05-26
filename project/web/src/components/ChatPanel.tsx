@@ -9,10 +9,6 @@ import {
 } from "react";
 import {
   generatePlan,
-  getWorkdayPullAvailable,
-  pollWorkdayStatus,
-  startWorkdaySectionsSync,
-  startWorkdaySync,
   transcribeAudio,
   uploadTranscript,
 } from "../api/client";
@@ -86,38 +82,6 @@ function planSummaryText(plan: Record<string, unknown>): string {
 
 
 // Pick the MIME type the browser supports
-/** After Workday Chromium closes, bring the user back to this planner tab. */
-function focusPlannerAfterWorkdaySync() {
-  try {
-    window.focus();
-  } catch {
-    /* ignore — some browsers block cross-window focus */
-  }
-  try {
-    const previousTitle = document.title;
-    document.title = "✓ Workday synced — SCU Course Planner";
-    window.setTimeout(() => {
-      if (document.title === "✓ Workday synced — SCU Course Planner") {
-        document.title = previousTitle || "SCU Course Planner";
-      }
-    }, 4000);
-  } catch {
-    /* ignore */
-  }
-  if (typeof Notification !== "undefined") {
-    if (Notification.permission === "granted") {
-      const n = new Notification("SCU Course Planner", {
-        body: "Workday sync finished — click to return to the planner.",
-        tag: "workday-sync-done",
-      });
-      n.onclick = () => {
-        window.focus();
-        n.close();
-      };
-    }
-  }
-}
-
 function getBestMimeType(): string {
   const candidates = [
     "audio/webm;codecs=opus",
@@ -159,20 +123,6 @@ export function ChatPanel({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const dragCounterRef = useRef(0);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [workdayPullAvailable, setWorkdayPullAvailable] = useState(false);
-  const [workdayStatus, setWorkdayStatus] = useState<{
-    syncing: boolean;
-    label: string;
-    phase: "idle" | "active" | "done" | "error";
-  }>({ syncing: false, label: "", phase: "idle" });
-  const workdayPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Shared Find Course Sections catalog sync (separate from the per-user transcript pull).
-  const [catalogStatus, setCatalogStatus] = useState<{
-    syncing: boolean;
-    label: string;
-    phase: "idle" | "active" | "done" | "error";
-  }>({ syncing: false, label: "", phase: "idle" });
-  const catalogPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const hasUserInput = messages.some((m) => m.role === "user");
   const canDropFiles = !hasUserInput;
@@ -196,33 +146,6 @@ export function ChatPanel({
     }
   }, [focusNonce]);
 
-  useEffect(() => {
-    let cancelled = false;
-    void getWorkdayPullAvailable()
-      .then((ok) => {
-        if (!cancelled) setWorkdayPullAvailable(ok);
-      })
-      .catch(() => {
-        if (!cancelled) setWorkdayPullAvailable(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (workdayPollRef.current) {
-        clearInterval(workdayPollRef.current);
-        workdayPollRef.current = null;
-      }
-      if (catalogPollRef.current) {
-        clearInterval(catalogPollRef.current);
-        catalogPollRef.current = null;
-      }
-    };
-  }, []);
-
   const processFile = useCallback(async (f: File) => {
     try {
       const data = await uploadTranscript(f, userId ?? undefined);
@@ -238,162 +161,6 @@ export function ChatPanel({
       setMessages((m) => [...m, { id: `a-${Date.now()}`, role: "assistant", content: `Upload failed: ${msg}` }]);
     }
   }, [userId, setMissingDetails, setParsedRows, setFileUploaded, setMessages]);
-
-  const startWorkdayPull = useCallback(async () => {
-    if (workdayStatus.syncing || !userId || !workdayPullAvailable) return;
-    if (typeof Notification !== "undefined" && Notification.permission === "default") {
-      void Notification.requestPermission();
-    }
-    setWorkdayStatus({ syncing: true, label: "Starting browser…", phase: "active" });
-
-    let jobId: string;
-    try {
-      const res = await startWorkdaySync(userId);
-      jobId = res.job_id;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setWorkdayStatus({ syncing: false, label: `Failed to start: ${msg}`, phase: "error" });
-      return;
-    }
-
-    workdayPollRef.current = setInterval(async () => {
-      try {
-        const job = await pollWorkdayStatus(jobId, userId);
-        setWorkdayStatus({
-          syncing: job.status !== "done" && job.status !== "error",
-          label: job.label ?? job.status,
-          phase:
-            job.status === "done" ? "done" : job.status === "error" ? "error" : "active",
-        });
-
-        if (job.status === "done") {
-          clearInterval(workdayPollRef.current!);
-          workdayPollRef.current = null;
-          const md = (job.missing_details as unknown[]) ?? [];
-          const pr = (job.parsed_rows as ParsedRow[]) ?? [];
-          setMissingDetails(md);
-          setParsedRows?.(pr);
-          setFileUploaded(true);
-          setMessages((m) => [
-            ...m,
-            {
-              id: `a-${Date.now()}`,
-              role: "assistant",
-              content: `Workday sync complete! Found ${md.length} remaining requirements. What are your preferences for next quarter?`,
-            },
-          ]);
-          focusPlannerAfterWorkdaySync();
-          window.setTimeout(() => {
-            messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-            textareaRef.current?.focus();
-          }, 0);
-        } else if (job.status === "error") {
-          clearInterval(workdayPollRef.current!);
-          workdayPollRef.current = null;
-          setMessages((m) => [
-            ...m,
-            {
-              id: `a-${Date.now()}`,
-              role: "assistant",
-              content: `Workday sync failed: ${job.error ?? "Unknown error"}`,
-            },
-          ]);
-          focusPlannerAfterWorkdaySync();
-        }
-      } catch {
-        clearInterval(workdayPollRef.current!);
-        workdayPollRef.current = null;
-        setWorkdayStatus({ syncing: false, label: "Connection lost", phase: "error" });
-        focusPlannerAfterWorkdaySync();
-      }
-    }, 600);
-  }, [
-    userId,
-    workdayPullAvailable,
-    workdayStatus.syncing,
-    setMissingDetails,
-    setParsedRows,
-    setFileUploaded,
-    setMessages,
-  ]);
-
-  const startCatalogPull = useCallback(async () => {
-    if (catalogStatus.syncing || !userId || !workdayPullAvailable) return;
-    const ok = window.confirm(
-      "Refresh the shared course catalog (Find Course Sections) from Workday?\n\n" +
-        "This opens a browser for you to log in (SSO + Duo), then replaces the " +
-        "catalog for everyone. Only do this when a new term's schedule is posted.",
-    );
-    if (!ok) return;
-    if (typeof Notification !== "undefined" && Notification.permission === "default") {
-      void Notification.requestPermission();
-    }
-    setCatalogStatus({ syncing: true, label: "Starting browser…", phase: "active" });
-
-    let jobId: string;
-    try {
-      const res = await startWorkdaySectionsSync(userId);
-      jobId = res.job_id;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setCatalogStatus({ syncing: false, label: `Failed to start: ${msg}`, phase: "error" });
-      return;
-    }
-
-    catalogPollRef.current = setInterval(async () => {
-      try {
-        const job = await pollWorkdayStatus(jobId, userId);
-        setCatalogStatus({
-          syncing: job.status !== "done" && job.status !== "error",
-          label: job.label ?? job.status,
-          phase:
-            job.status === "done" ? "done" : job.status === "error" ? "error" : "active",
-        });
-
-        if (job.status === "done") {
-          clearInterval(catalogPollRef.current!);
-          catalogPollRef.current = null;
-          const count = typeof job.count === "number" ? job.count : 0;
-          const term = job.term ? ` for ${job.term}` : "";
-          setMessages((m) => [
-            ...m,
-            {
-              id: `a-${Date.now()}`,
-              role: "assistant",
-              content: `Course catalog updated${term} — ${count} sections available. The "+ Add course" list now reflects the latest schedule.`,
-            },
-          ]);
-          focusPlannerAfterWorkdaySync();
-        } else if (job.status === "error") {
-          clearInterval(catalogPollRef.current!);
-          catalogPollRef.current = null;
-          const errDetail =
-            (typeof job.error === "string" && job.error.trim()) ||
-            job.label ||
-            "Unknown error";
-          setCatalogStatus({
-            syncing: false,
-            label: errDetail,
-            phase: "error",
-          });
-          setMessages((m) => [
-            ...m,
-            {
-              id: `a-${Date.now()}`,
-              role: "assistant",
-              content: `Course catalog sync failed:\n\n${errDetail}`,
-            },
-          ]);
-          focusPlannerAfterWorkdaySync();
-        }
-      } catch {
-        clearInterval(catalogPollRef.current!);
-        catalogPollRef.current = null;
-        setCatalogStatus({ syncing: false, label: "Connection lost", phase: "error" });
-        focusPlannerAfterWorkdaySync();
-      }
-    }, 600);
-  }, [userId, workdayPullAvailable, catalogStatus.syncing, setMessages]);
 
   const sendText = useCallback(async (text: string) => {
     const trimmed = text.trim();
@@ -414,7 +181,7 @@ export function ChatPanel({
           id: `a-${Date.now()}`,
           role: "assistant",
           content:
-            "Please upload your Academic Progress (.xlsx) from Workday (paperclip below), or use Sync from Workday if available.",
+            "Please upload your Academic Progress (.xlsx) from Workday using the paperclip below.",
         },
       ]);
       return;
@@ -724,80 +491,6 @@ export function ChatPanel({
           onChange={onFileChange}
         />
 
-        {workdayStatus.phase !== "idle" && (
-          <div
-            className={`mb-2 flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium ${
-              workdayStatus.phase === "error"
-                ? "bg-red-50 text-red-700"
-                : workdayStatus.phase === "done"
-                  ? "bg-emerald-50 text-emerald-700"
-                  : "bg-blue-50 text-blue-700"
-            }`}
-          >
-            {workdayStatus.syncing && (
-              <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-blue-500 animate-pulse" />
-            )}
-            <span className="flex-1 truncate">{workdayStatus.label}</span>
-            <button
-              type="button"
-              onClick={() => {
-                if (workdayPollRef.current) {
-                  clearInterval(workdayPollRef.current);
-                  workdayPollRef.current = null;
-                }
-                setWorkdayStatus({ syncing: false, label: "", phase: "idle" });
-              }}
-              className="shrink-0 rounded px-1.5 py-0.5 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800"
-              title={workdayStatus.syncing ? "Dismiss status (browser may still be open)" : "Dismiss"}
-            >
-              ✕
-            </button>
-          </div>
-        )}
-
-        {catalogStatus.phase !== "idle" && (
-          <div
-            className={`mb-2 flex items-center gap-2 rounded-md px-3 py-2 text-xs font-medium ${
-              catalogStatus.phase === "error"
-                ? "bg-red-50 text-red-700"
-                : catalogStatus.phase === "done"
-                  ? "bg-emerald-50 text-emerald-700"
-                  : "bg-blue-50 text-blue-700"
-            }`}
-          >
-            {catalogStatus.syncing && (
-              <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-blue-500 animate-pulse" />
-            )}
-            <span
-              className={
-                catalogStatus.phase === "error"
-                  ? "flex-1 whitespace-pre-wrap break-words max-h-28 overflow-y-auto"
-                  : "flex-1 truncate"
-              }
-            >
-              {catalogStatus.phase === "error"
-                ? catalogStatus.label || "Catalog sync failed"
-                : catalogStatus.label
-                  ? `Catalog: ${catalogStatus.label}`
-                  : ""}
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                if (catalogPollRef.current) {
-                  clearInterval(catalogPollRef.current);
-                  catalogPollRef.current = null;
-                }
-                setCatalogStatus({ syncing: false, label: "", phase: "idle" });
-              }}
-              className="shrink-0 rounded px-1.5 py-0.5 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800"
-              title={catalogStatus.syncing ? "Dismiss status (browser may still be open)" : "Dismiss"}
-            >
-              ✕
-            </button>
-          </div>
-        )}
-
         {/* Voice status bar */}
         {voiceStatus !== "idle" && (
           <div
@@ -844,44 +537,6 @@ export function ChatPanel({
             >
               <PaperclipIcon />
             </button>
-            {workdayPullAvailable && userId && (
-              <button
-                type="button"
-                onClick={() => void startWorkdayPull()}
-                disabled={workdayStatus.syncing}
-                title={
-                  workdayStatus.syncing
-                    ? "Syncing from Workday…"
-                    : "Sync from Workday (opens browser — you log in with SSO + Duo)"
-                }
-                className={`rounded-md p-2 transition ${
-                  workdayStatus.syncing
-                    ? "cursor-wait bg-blue-100 text-blue-500"
-                    : "text-neutral-500 hover:bg-neutral-100 hover:text-blue-600"
-                }`}
-              >
-                {workdayStatus.syncing ? <SpinnerIcon /> : <WorkdayIcon />}
-              </button>
-            )}
-            {workdayPullAvailable && userId && (
-              <button
-                type="button"
-                onClick={() => void startCatalogPull()}
-                disabled={catalogStatus.syncing}
-                title={
-                  catalogStatus.syncing
-                    ? "Syncing course catalog…"
-                    : "Sync course catalog from Workday (shared — refreshes Find Course Sections for everyone)"
-                }
-                className={`rounded-md p-2 transition ${
-                  catalogStatus.syncing
-                    ? "cursor-wait bg-blue-100 text-blue-500"
-                    : "text-neutral-500 hover:bg-neutral-100 hover:text-blue-600"
-                }`}
-              >
-                {catalogStatus.syncing ? <SpinnerIcon /> : <CatalogIcon />}
-              </button>
-            )}
             <button
               type="button"
               onClick={() => void toggleVoice()}
@@ -914,45 +569,6 @@ export function ChatPanel({
         </p>
       </div>
     </aside>
-  );
-}
-
-function WorkdayIcon({ size = 20 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M4 6h16v12H4V6z"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M8 10h8M8 14h5"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function CatalogIcon({ size = 20 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
-      <rect x="3" y="4" width="18" height="17" rx="2" stroke="currentColor" strokeWidth="2" />
-      <path
-        d="M3 9h18M8 2v4M16 2v4"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <path
-        d="M7 13h4M7 17h7"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
   );
 }
 

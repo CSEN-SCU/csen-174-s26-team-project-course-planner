@@ -1728,23 +1728,23 @@ def _slot_suggestion_empty_message(
     """User-facing copy when no course at this slot fills a remaining requirement."""
     if not missing_details:
         return (
-            "请先上传 Academic Progress，才能按你尚未满足的要求推荐课程。"
+            "Upload your Academic Progress first so we can recommend courses for your open requirements."
         )
     labels = "、".join(open_req_key_to_label.values())[:120]
     if has_educational_enrichment_gap(missing_details):
         return (
-            "这个时间段没有能同时满足你剩余 Core 要求的课。"
-            "若你有 Educational Enrichment，请查看下方「Enrichment 推荐」区块，"
-            "或在聊天里说明方向（例如中文）。也可换个时间段再试。"
+            "No Core courses at this time slot fill your remaining requirements. "
+            "If you need Educational Enrichment, see the Enrichment picks section below, "
+            "or describe your track in chat (e.g. Chinese). You can also try another time slot."
         )
     if labels:
         return (
-            f"这个时间段没有能填补你剩余要求的课（例如 {labels}）。"
-            "请换个时间段，或在聊天里说明你想优先满足哪一项。"
+            f"No courses at this time slot fill your remaining requirements (e.g. {labels}). "
+            "Try another slot, or tell chat which requirement to prioritize."
         )
     return (
-        "这个时间段没有能填补你 transcript 剩余要求的课。"
-        "请换个时间段再试。"
+        "No courses at this time slot fill your remaining transcript requirements. "
+        "Try another time slot."
     )
 
 
@@ -1951,9 +1951,9 @@ def suggest_courses_for_slot(
             if lab not in covers:
                 covers.append(lab)
 
-        rationale = "这个时间段可上"
+        rationale = "Available at this time slot"
         if covers:
-            rationale = "满足： " + " + ".join(covers[:3])
+            rationale = "Covers: " + " · ".join(covers[:3])
 
         candidates.append(
             _build_slot_candidate(
@@ -1993,11 +1993,11 @@ def suggest_courses_for_slot(
         if wants_advanced_chinese_only(user_preference or ""):
             enrich_prompt = (
                 (enrich_prompt or "")
-                + " 已隐藏初级中文课（CHIN 1 等）；仅显示较高阶选项。"
+                + " Intro Chinese (CHIN 1, etc.) is hidden; only higher-level options are shown."
             ).strip()
         enrich_candidates: list[dict[str, Any]] = []
         enrich_covers = ["Educational Enrichment", track_label]
-        enrich_rationale = f"专业 Enrichment · {track_label} · 这个时间段可上"
+        enrich_rationale = f"Major enrichment · {track_label} · available at this time slot"
         for code in enrich_codes:
             for key in planned_section_keys(code):
                 section_info = schedule_index.get(key)
