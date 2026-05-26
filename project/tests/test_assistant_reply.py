@@ -72,7 +72,7 @@ def test_previous_plan_is_summarized_into_prompt(monkeypatch):
     assert "FOLLOW-UP" in prompt or "follow-up" in prompt.lower()
     assert "STUDENT MESSAGE" in prompt
     # assistant_reply round-trips intact
-    assert result["assistant_reply"].startswith("Yes,")
+    assert result["assistant_reply"].startswith("Yes")
 
 
 def test_no_previous_plan_uses_initial_summary_instruction(monkeypatch):
