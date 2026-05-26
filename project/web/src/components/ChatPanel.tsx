@@ -581,7 +581,7 @@ export function ChatPanel({
           {
             id: `a-${Date.now()}`,
             role: "assistant",
-            content: "Please upload an .xlsx Academic Progress export.",
+            content: "Please upload an Academic Progress export from Workday (.xlsx or .xlsm files).",
           },
         ]);
         return;
@@ -840,7 +840,7 @@ export function ChatPanel({
               type="button"
               onClick={onFilePick}
               className="rounded-md p-2 text-neutral-500 hover:bg-neutral-100"
-              title="Attach Excel file"
+              title="Upload Academic Progress"
             >
               <PaperclipIcon />
             </button>
@@ -909,12 +909,8 @@ export function ChatPanel({
         </div>
         <p className="mt-1.5 text-[10px] text-neutral-400">
           {canDropFiles
-            ? workdayPullAvailable && userId
-              ? "Drop your .xlsx here, use the paperclip, or Sync from Workday (local API + browser)."
-              : "Drag and drop your Academic Progress .xlsx here, or use the paperclip to upload."
-            : workdayPullAvailable && userId
-              ? "Upload .xlsx with the paperclip or Sync from Workday."
-              : "Upload your Academic Progress .xlsx with the paperclip."}
+            ? "Drag and drop your Academic Progress (.xlsx or .xlsm files) here, or use the paperclip to upload."
+            : "Upload your Academic Progress (.xlsx) file with the paperclip."}
         </p>
       </div>
     </aside>

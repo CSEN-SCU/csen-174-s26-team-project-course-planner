@@ -4,7 +4,7 @@ import {
   DATA_DISCLOSURE_HREF,
 } from "../lib/routes";
 
-const AFFILIATION_DISCLAIMER = "Not affiliated with Santa Clara University.";
+const AFFILIATION_DISCLAIMER = "Not affiliated with Santa Clara University";
 
 export type SiteFooterProps = {
   userId?: string | null;
