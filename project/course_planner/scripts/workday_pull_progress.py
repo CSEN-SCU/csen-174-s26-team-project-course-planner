@@ -122,12 +122,53 @@ def _print_xlsx_preview(xlsx_bytes: bytes, *, max_rows: int = 8) -> None:
 # ── Navigation (recovered from utils/workday_scraper.py @ c095321^) ───────────
 
 
-def _wait_for_workday_content(page: Page) -> None:
+def _wait_for_workday_content(
+    page: Page, ready: Callable[[], bool] | None = None
+) -> None:
+    """Let the Workday SPA paint after a navigation.
+
+    With ``ready`` given, return as soon as it reports the next view is up
+    (polled), capped at ``RENDER_WAIT_MS``; otherwise fall back to the fixed
+    pause that older runs relied on. The cap is counted as summed poll steps
+    (not wall clock) so it still terminates promptly when ``wait_for_timeout``
+    is a test no-op.
+    """
     try:
         page.wait_for_load_state("domcontentloaded", timeout=30_000)
     except PWTimeout:
         pass
-    page.wait_for_timeout(RENDER_WAIT_MS)
+    if ready is None:
+        page.wait_for_timeout(RENDER_WAIT_MS)
+        return
+    waited = 0
+    step = 150
+    while waited < RENDER_WAIT_MS:
+        try:
+            if ready():
+                return
+        except Exception:  # noqa: BLE001
+            pass
+        page.wait_for_timeout(step)
+        waited += step
+
+
+def _any_visible(page: Page, *texts: str) -> Callable[[], bool]:
+    """Build a lightweight readiness check: any of ``texts`` currently visible.
+
+    Uses ``is_visible()`` with no timeout (an instant DOM check), so it is cheap
+    to poll and never adds its own waiting.
+    """
+
+    def _check() -> bool:
+        for t in texts:
+            try:
+                if page.get_by_text(t, exact=False).first.is_visible():
+                    return True
+            except Exception:  # noqa: BLE001
+                continue
+        return False
+
+    return _check
 
 
 def _student_selection_modal_visible(page: Page) -> bool:
@@ -171,7 +212,7 @@ def _dismiss_student_selection_modal(page: Page) -> bool:
         ):
             try:
                 target.click(timeout=5_000, force=True)
-                _wait_for_workday_content(page)
+                _wait_for_workday_content(page, lambda: _on_academic_progress_page(page))
                 page.wait_for_timeout(1_000)
                 if not _student_selection_modal_visible(page):
                     return True
@@ -223,8 +264,19 @@ def _finalize_report_page(page: Page) -> bool:
     return _on_academic_progress_page(page)
 
 
-def _click_labels(page: Page, labels: tuple[str, ...], *, role: str | None = None) -> bool:
-    """Click the first visible control matching any of ``labels``."""
+def _click_labels(
+    page: Page,
+    labels: tuple[str, ...],
+    *,
+    role: str | None = None,
+    ready: Callable[[], bool] | None = None,
+) -> bool:
+    """Click the first visible control matching any of ``labels``.
+
+    After a successful click, wait for the next view via ``ready`` (the element
+    the *next* step needs) instead of a blanket fixed pause — the win that turns
+    the ~4s-per-hop menu walk into "continue the moment it's painted".
+    """
     for label in labels:
         candidates: list[Any] = []
         if role:
@@ -245,7 +297,7 @@ def _click_labels(page: Page, labels: tuple[str, ...], *, role: str | None = Non
                 target.wait_for(state="visible", timeout=3_000)
                 target.click(timeout=5_000)
                 page.wait_for_timeout(400)
-                _wait_for_workday_content(page)
+                _wait_for_workday_content(page, ready)
                 return True
             except Exception:  # noqa: BLE001
                 continue
@@ -254,9 +306,13 @@ def _click_labels(page: Page, labels: tuple[str, ...], *, role: str | None = Non
 
 def _click_academic_progress_link(page: Page) -> bool:
     """Click *View My Academic Progress* when its menu group is already open."""
-    clicked = _click_labels(page, ("View My Academic Progress",), role="link") or _click_labels(
-        page, ("View My Academic Progress",)
-    )
+
+    def _report_or_modal() -> bool:
+        return _on_academic_progress_page(page) or _student_selection_modal_visible(page)
+
+    clicked = _click_labels(
+        page, ("View My Academic Progress",), role="link", ready=_report_or_modal
+    ) or _click_labels(page, ("View My Academic Progress",), ready=_report_or_modal)
     if not clicked:
         return False
     return _finalize_report_page(page)
@@ -269,15 +325,23 @@ def _try_home_academics_app(page: Page) -> bool:
         "View My Academic Progress…",
         flush=True,
     )
-    _wait_for_workday_content(page)
+    _wait_for_workday_content(page, _any_visible(page, "Academics", "SCU Academics"))
 
-    if not _click_labels(page, ("Academics", "SCU Academics"), role="link"):
-        if not _click_labels(page, ("Academics",)):
+    after_academics = _any_visible(page, "Academic Advising", "View More", "View All Apps")
+    if not _click_labels(
+        page, ("Academics", "SCU Academics"), role="link", ready=after_academics
+    ):
+        if not _click_labels(page, ("Academics",), ready=after_academics):
             return False
 
-    _click_labels(page, ("View More", "View All Apps", "View All Apps >", "View All"))
-    if not _click_labels(page, ("Academic Advising",)):
-        _click_labels(page, ("Academic Advising",), role="button")
+    _click_labels(
+        page,
+        ("View More", "View All Apps", "View All Apps >", "View All"),
+        ready=_any_visible(page, "Academic Advising"),
+    )
+    advising_ready = _any_visible(page, "View My Academic Progress")
+    if not _click_labels(page, ("Academic Advising",), ready=advising_ready):
+        _click_labels(page, ("Academic Advising",), role="button", ready=advising_ready)
 
     return _click_academic_progress_link(page)
 
@@ -285,8 +349,12 @@ def _try_home_academics_app(page: Page) -> bool:
 def _try_sidebar_menu(page: Page) -> bool:
     """Legacy/alternate layout: Academic Advising group already visible in a side nav."""
     print("Trying sidebar: Academic Advising → View My Academic Progress…", flush=True)
-    _wait_for_workday_content(page)
-    _click_labels(page, ("Academic Advising",))
+    _wait_for_workday_content(
+        page, _any_visible(page, "Academic Advising", "View My Academic Progress")
+    )
+    _click_labels(
+        page, ("Academic Advising",), ready=_any_visible(page, "View My Academic Progress")
+    )
     return _click_academic_progress_link(page)
 
 
@@ -311,6 +379,9 @@ def _try_search_for_report(page: Page) -> bool:
     if box is None:
         return False
 
+    def _report_ready() -> bool:
+        return _on_academic_progress_page(page) or _student_selection_modal_visible(page)
+
     try:
         box.fill(_SEARCH_QUERY)
         page.wait_for_timeout(1_500)
@@ -323,12 +394,12 @@ def _try_search_for_report(page: Page) -> bool:
         for sel in suggestion_selectors:
             try:
                 page.locator(sel).first.click(timeout=3_000)
-                _wait_for_workday_content(page)
+                _wait_for_workday_content(page, _report_ready)
                 if _on_academic_progress_page(page):
                     return True
             except Exception:  # noqa: BLE001
                 continue
-        _wait_for_workday_content(page)
+        _wait_for_workday_content(page, _report_ready)
         return _on_academic_progress_page(page)
     except Exception:  # noqa: BLE001
         return False
@@ -337,7 +408,13 @@ def _try_search_for_report(page: Page) -> bool:
 def _ensure_on_task(page: Page, task_url: str = TASK_URL) -> None:
     """Navigate to View My Academic Progress (Academics menu first — matches successful runs)."""
     print("Navigating to View My Academic Progress…", flush=True)
-    _wait_for_workday_content(page)
+
+    def _home_or_report() -> bool:
+        if _on_academic_progress_page(page) or _student_selection_modal_visible(page):
+            return True
+        return _any_visible(page, "Academics", "SCU Academics")()
+
+    _wait_for_workday_content(page, _home_or_report)
     if _finalize_report_page(page):
         print("Already on the Academic Progress report.", flush=True)
         return
@@ -351,9 +428,13 @@ def _ensure_on_task(page: Page, task_url: str = TASK_URL) -> None:
         return
 
     print("Opening task URL…", flush=True)
+
+    def _report_ready() -> bool:
+        return _on_academic_progress_page(page) or _student_selection_modal_visible(page)
+
     try:
         page.goto(task_url, timeout=NAV_TIMEOUT_MS, wait_until="domcontentloaded")
-        _wait_for_workday_content(page)
+        _wait_for_workday_content(page, _report_ready)
     except Exception:  # noqa: BLE001
         pass
     if _finalize_report_page(page):
