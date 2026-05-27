@@ -13,7 +13,6 @@ export type MemorySessionRow = {
 export type LeftPanelProps = {
   sessions: MemorySessionRow[];
   activeSessionId: string | null;
-  draftPlanActive: boolean;
   scheduleCourseCount: number;
   onSelectSession: (row: MemorySessionRow) => void;
   onDeleteSession?: (id: string) => void;
@@ -25,7 +24,6 @@ export type LeftPanelProps = {
 export function LeftPanel({
   sessions,
   activeSessionId,
-  draftPlanActive,
   scheduleCourseCount,
   onSelectSession,
   onDeleteSession,
@@ -40,7 +38,7 @@ export function LeftPanel({
       </div>
 
       <div className="space-y-2 px-4 py-4">
-        {draftPlanActive ? (
+        {scheduleCourseCount > 0 ? (
           <>
             <button
               type="button"

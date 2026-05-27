@@ -108,7 +108,6 @@ export default function App({ userId, onSignOut }: AppProps) {
     courseCode: string;
     section?: number;
   } | null>(null);
-  const [draftPlanActive, setDraftPlanActive] = useState(false);
   const [saveScheduleModalOpen, setSaveScheduleModalOpen] = useState(false);
   const [newPlanWarningOpen, setNewPlanWarningOpen] = useState(false);
   const [startNewPlanAfterSave, setStartNewPlanAfterSave] = useState(false);
@@ -218,6 +217,10 @@ export default function App({ userId, onSignOut }: AppProps) {
 
   const scheduleCourseCount = (effectiveRecommended ?? []).length;
 
+  const hasUnsavedScheduleEdits =
+    scheduleCourseCount > 0 &&
+    (localOverride !== null || (activeSessionId?.startsWith("draft-") ?? false));
+
   // Each conversation = one snapshot row. The most recent snapshot IS the
   // "current" conversation when active — no separate pseudo-row needed.
   const sessions: MemorySessionRow[] = useMemo(() => {
@@ -232,7 +235,6 @@ export default function App({ userId, onSignOut }: AppProps) {
   }, [planSnapshots]);
 
   const handleSelectSession = useCallback((row: MemorySessionRow) => {
-    setDraftPlanActive(false);
     setLocalOverride(null);
     setActiveSessionId(row.id);
     setSessionCalendarRecommended(row.recommended ?? null);
@@ -338,12 +340,10 @@ export default function App({ userId, onSignOut }: AppProps) {
 
   const beginNewPlanFlow = useCallback(() => {
     resetActivePlanState();
-    setDraftPlanActive(false);
     setPlanStartModalOpen(true);
   }, [resetActivePlanState]);
 
   const startDraftPlanSession = useCallback(() => {
-    setDraftPlanActive(true);
     setActiveSessionId(`draft-${Date.now()}`);
   }, []);
 
@@ -418,7 +418,10 @@ export default function App({ userId, onSignOut }: AppProps) {
             .catch(() => {});
         }
       } else {
-        const snapId = activeSessionId ?? `snap-${Date.now()}`;
+        const priorId = activeSessionId;
+        const snapId = priorId?.startsWith("draft-")
+          ? `snap-${Date.now()}`
+          : priorId ?? `snap-${Date.now()}`;
         setActiveSessionId(snapId);
         const snap = {
           id: snapId,
@@ -428,7 +431,10 @@ export default function App({ userId, onSignOut }: AppProps) {
           messages: msgs,
           fourYearPlan: fourYearPlan ?? null,
         };
-        setPlanSnapshots((prev) => [snap, ...prev.filter((s) => s.id !== snapId)]);
+        setPlanSnapshots((prev) => [
+          snap,
+          ...prev.filter((s) => s.id !== snapId && s.id !== priorId),
+        ]);
         if (userId) {
           void saveMemory(
             userId,
@@ -450,6 +456,10 @@ export default function App({ userId, onSignOut }: AppProps) {
             .catch(() => {});
         }
       }
+
+      setLocalOverride(null);
+      setSessionCalendarRecommended(recs);
+      setPlanResult({ recommended: recs });
       return true;
     },
     [
@@ -470,12 +480,12 @@ export default function App({ userId, onSignOut }: AppProps) {
   }, []);
 
   const handleNewPlan = useCallback(() => {
-    if (draftPlanActive && scheduleCourseCount > 0) {
+    if (hasUnsavedScheduleEdits) {
       setNewPlanWarningOpen(true);
       return;
     }
     beginNewPlanFlow();
-  }, [draftPlanActive, scheduleCourseCount, beginNewPlanFlow]);
+  }, [hasUnsavedScheduleEdits, beginNewPlanFlow]);
 
   const handleClearSchedule = useCallback(() => {
     setLocalOverride([]);
@@ -522,7 +532,6 @@ export default function App({ userId, onSignOut }: AppProps) {
     if (activeSessionId === id) {
       setActiveSessionId(null);
       setSessionCalendarRecommended(null);
-      setDraftPlanActive(false);
       setMessages([{ id: "m0", role: "assistant", content: WELCOME_TEXT }]);
     }
     if (userId && snap?.memoryId != null) {
@@ -937,7 +946,6 @@ export default function App({ userId, onSignOut }: AppProps) {
       <LeftPanel
         sessions={sessions}
         activeSessionId={activeSessionId}
-        draftPlanActive={draftPlanActive}
         scheduleCourseCount={scheduleCourseCount}
         onSelectSession={handleSelectSession}
         onDeleteSession={handleDeleteSession}
