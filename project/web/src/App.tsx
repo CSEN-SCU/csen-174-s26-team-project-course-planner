@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   deleteAllUserData,
   deleteMemory,
@@ -38,23 +38,52 @@ export type AppProps = {
   onSignOut: () => void;
 };
 
+type PlanSnapshot = {
+  id: string;
+  memoryId?: number;
+  title: string;
+  dateLabel: string;
+  recommended: Record<string, unknown>[];
+  messages?: ChatUiMessage[];
+  fourYearPlan?: FourYearPlan | null;
+};
+
+function totalUnitsFor(recs: Record<string, unknown>[]): number {
+  return recs.reduce((total, row) => {
+    const units = Number(row.units);
+    return Number.isFinite(units) ? total + units : total;
+  }, 0);
+}
+
+function withRecommendedCourses(
+  plan: Record<string, unknown> | null,
+  recs: Record<string, unknown>[],
+): Record<string, unknown> {
+  return {
+    ...(plan ?? {}),
+    recommended: recs,
+    total_units: totalUnitsFor(recs),
+  };
+}
+
+function snapshotMemoryPayload(snap: PlanSnapshot): string {
+  return JSON.stringify({
+    recommended: snap.recommended,
+    title: snap.title,
+    dateLabel: snap.dateLabel,
+    messages: snap.messages,
+    fourYearPlan: snap.fourYearPlan ?? null,
+  });
+}
+
 export default function App({ userId, onSignOut }: AppProps) {
   const [missingDetails, setMissingDetails] = useState<unknown[]>([]);
   const [planResult, setPlanResult] = useState<Record<string, unknown> | null>(null);
   const [messages, setMessages] = useState<ChatUiMessage[]>([
     { id: "m0", role: "assistant", content: WELCOME_TEXT },
   ]);
-  const [planSnapshots, setPlanSnapshots] = useState<
-    {
-      id: string;
-      memoryId?: number;
-      title: string;
-      dateLabel: string;
-      recommended: Record<string, unknown>[];
-      messages?: ChatUiMessage[];
-      fourYearPlan?: FourYearPlan | null;
-    }[]
-  >([]);
+  const [planSnapshots, setPlanSnapshots] = useState<PlanSnapshot[]>([]);
+  const snapshotPersistSeqRef = useRef<Record<string, number>>({});
   const [sessionCalendarRecommended, setSessionCalendarRecommended] =
     useState<Record<string, unknown>[] | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
@@ -216,6 +245,39 @@ export default function App({ userId, onSignOut }: AppProps) {
     }
   }, [setMessages, planSnapshots]);
 
+  const persistPlanSnapshot = useCallback(
+    (snapId: string, snap: PlanSnapshot, previousMemoryId?: number) => {
+      if (!userId) return;
+
+      const seq = (snapshotPersistSeqRef.current[snapId] ?? 0) + 1;
+      snapshotPersistSeqRef.current[snapId] = seq;
+
+      void saveMemory(userId, "plan_outcome", snapshotMemoryPayload(snap))
+        .then((r) => {
+          const newId = typeof r?.id === "number" ? r.id : undefined;
+
+          // If a newer save finished or is in-flight, discard this stale row so
+          // reload never resurrects an older version of the same conversation.
+          if (snapshotPersistSeqRef.current[snapId] !== seq) {
+            if (newId != null) {
+              void deleteMemory(userId, newId).catch(() => {});
+            }
+            return;
+          }
+
+          if (previousMemoryId != null && previousMemoryId !== newId) {
+            void deleteMemory(userId, previousMemoryId).catch(() => {});
+          }
+
+          setPlanSnapshots((prev) =>
+            prev.map((s) => (s.id === snapId ? { ...s, memoryId: newId } : s)),
+          );
+        })
+        .catch(() => {});
+    },
+    [userId],
+  );
+
   const handlePlanGenerated = useCallback((plan: Record<string, unknown>, msgs: ChatUiMessage[]) => {
     setLocalOverride(null);
     setSessionCalendarRecommended(null);
@@ -242,54 +304,21 @@ export default function App({ userId, onSignOut }: AppProps) {
       setPlanSnapshots((prev) =>
         prev.map((s) => (s.id === existing.id ? updated : s)),
       );
-
-      if (userId && existing.memoryId != null) {
-        // Replace the memory row so storage matches state
-        void deleteMemory(userId, existing.memoryId).catch(() => {});
-        void saveMemory(
-          userId,
-          "plan_outcome",
-          JSON.stringify({
-            recommended: recs,
-            title,
-            dateLabel: d,
-            messages: msgs,
-            fourYearPlan: existing.fourYearPlan ?? null,
-          }),
-        )
-          .then((r) => {
-            const newId = typeof r?.id === "number" ? r.id : undefined;
-            setPlanSnapshots((prev) =>
-              prev.map((s) =>
-                s.id === existing.id ? { ...s, memoryId: newId } : s,
-              ),
-            );
-          })
-          .catch(() => {});
-      }
+      persistPlanSnapshot(existing.id, updated, existing.memoryId);
     } else {
       const snapId = `snap-${Date.now()}`;
+      const snap: PlanSnapshot = {
+        id: snapId,
+        title,
+        dateLabel: d,
+        recommended: recs,
+        messages: msgs,
+      };
       setActiveSessionId(snapId);
-      setPlanSnapshots((prev) => [
-        { id: snapId, title, dateLabel: d, recommended: recs, messages: msgs },
-        ...prev,
-      ]);
-      if (userId) {
-        void saveMemory(
-          userId,
-          "plan_outcome",
-          JSON.stringify({ recommended: recs, title, dateLabel: d, messages: msgs }),
-        )
-          .then((r) => {
-            const memoryId = typeof r?.id === "number" ? r.id : undefined;
-            setPlanSnapshots((prev) =>
-              prev.map((s) => (s.id === snapId ? { ...s, memoryId } : s)),
-            );
-          })
-          .catch(() => {});
-      }
+      setPlanSnapshots((prev) => [snap, ...prev]);
+      persistPlanSnapshot(snapId, snap);
     }
-  }, [userId, activeSessionId, planSnapshots]);
+  }, [activeSessionId, persistPlanSnapshot, planSnapshots]);
 
   const resetActivePlanState = useCallback(() => {
     setLocalOverride(null);
@@ -343,10 +372,77 @@ export default function App({ userId, onSignOut }: AppProps) {
     }
   }, [planSnapshots, activeSessionId, userId, setMessages]);
 
+  const commitRecommendedPlan = useCallback(
+    (nextRecommended: Record<string, unknown>[]) => {
+      const recs = [...nextRecommended];
+      const nextPlan = withRecommendedCourses(planResult, recs);
+      setLocalOverride(null);
+      setPlanResult(nextPlan);
+      setSessionCalendarRecommended(recs.length > 0 ? recs : null);
+
+      const existing = activeSessionId
+        ? planSnapshots.find((s) => s.id === activeSessionId)
+        : null;
+
+      if (recs.length === 0) {
+        if (existing) {
+          setPlanSnapshots((prev) => prev.filter((s) => s.id !== existing.id));
+          if (existing.memoryId != null && userId) {
+            void deleteMemory(userId, existing.memoryId).catch(() => {});
+          }
+        }
+        if (activeSessionId === existing?.id) {
+          setActiveSessionId(null);
+        }
+        return;
+      }
+
+      const d = new Date().toLocaleDateString();
+      const title = `Plan · ${recs.length} courses`;
+      if (existing) {
+        const updated: PlanSnapshot = {
+          ...existing,
+          title,
+          dateLabel: d,
+          recommended: recs,
+          messages: existing.messages ?? messages,
+          fourYearPlan: existing.fourYearPlan ?? fourYearPlan,
+        };
+        setPlanSnapshots((prev) =>
+          prev.map((s) => (s.id === existing.id ? updated : s)),
+        );
+        persistPlanSnapshot(existing.id, updated, existing.memoryId);
+        return;
+      }
+
+      const snapId = `snap-${Date.now()}`;
+      const snap: PlanSnapshot = {
+        id: snapId,
+        title,
+        dateLabel: d,
+        recommended: recs,
+        messages,
+        fourYearPlan,
+      };
+      setActiveSessionId(snapId);
+      setPlanSnapshots((prev) => [snap, ...prev]);
+      persistPlanSnapshot(snapId, snap);
+    },
+    [
+      activeSessionId,
+      fourYearPlan,
+      messages,
+      persistPlanSnapshot,
+      planResult,
+      planSnapshots,
+      userId,
+    ],
+  );
+
   const handleRemoveCourse = useCallback((idx: number) => {
-    const base = localOverride ?? calendarRecommended ?? [];
-    setLocalOverride(base.filter((_, i) => i !== idx));
-  }, [localOverride, calendarRecommended]);
+    const base = effectiveRecommended ?? [];
+    commitRecommendedPlan(base.filter((_, i) => i !== idx));
+  }, [commitRecommendedPlan, effectiveRecommended]);
 
   // Manual "+ Add course": append picked courses (+ lab co-requisite) to the
   // live edit layer so they land on the calendar immediately — no AI call.
@@ -367,15 +463,15 @@ export default function App({ userId, onSignOut }: AppProps) {
   const appendPlanCourses = useCallback(
     (additions: Record<string, unknown>[]) => {
       if (additions.length === 0) return;
-      const base = localOverride ?? calendarRecommended ?? [];
-      setLocalOverride([...base, ...additions]);
+      const base = effectiveRecommended ?? [];
+      commitRecommendedPlan([...base, ...additions]);
     },
-    [localOverride, calendarRecommended],
+    [commitRecommendedPlan, effectiveRecommended],
   );
 
   const handleAddFromCatalog = useCallback(
     (sections: CatalogSection[], options?: CourseBrowserAddOptions) => {
-      const base = localOverride ?? calendarRecommended ?? [];
+      const base = effectiveRecommended ?? [];
       const present = new Set(
         base.map((r) => String((r as { course?: unknown }).course ?? "").trim().toUpperCase()),
       );
@@ -407,19 +503,19 @@ export default function App({ userId, onSignOut }: AppProps) {
         });
       appendPlanCourses(additions);
     },
-    [localOverride, calendarRecommended, appendPlanCourses],
+    [effectiveRecommended, appendPlanCourses],
   );
 
   // Add course from slot suggestion popover (R6)
   const handleAddFromSlotSuggestion = useCallback((course: Record<string, unknown>) => {
-    const base = localOverride ?? calendarRecommended ?? [];
+    const base = effectiveRecommended ?? [];
     const courseCode = String(course.course ?? "").trim().toUpperCase();
     const present = new Set(
       base.map((r) => String((r as { course?: unknown }).course ?? "").trim().toUpperCase()),
     );
     if (present.has(courseCode)) return;
-    setLocalOverride([...base, { ...course, _slotSuggestion: true }]);
-  }, [localOverride, calendarRecommended]);
+    commitRecommendedPlan([...base, { ...course, _slotSuggestion: true }]);
+  }, [commitRecommendedPlan, effectiveRecommended]);
 
   const effectiveCodes = useMemo(
     () =>
@@ -510,42 +606,14 @@ export default function App({ userId, onSignOut }: AppProps) {
         setPlanSnapshots((prev) =>
           prev.map((s) => (s.id === targetSnap.id ? updated : s)),
         );
-
-        // Replace the old memory entry with one that includes fourYearPlan
-        if (targetSnap.memoryId != null) {
-          await deleteMemory(userId, targetSnap.memoryId).catch(() => {
-            /* non-fatal */
-          });
-        }
-        void saveMemory(
-          userId,
-          "plan_outcome",
-          JSON.stringify({
-            recommended: targetSnap.recommended,
-            title: targetSnap.title,
-            dateLabel: targetSnap.dateLabel,
-            messages: targetSnap.messages,
-            fourYearPlan: plan,
-          }),
-        )
-          .then((r) => {
-            const newId = typeof r?.id === "number" ? r.id : undefined;
-            setPlanSnapshots((prev) =>
-              prev.map((s) =>
-                s.id === targetSnap.id ? { ...s, memoryId: newId } : s,
-              ),
-            );
-          })
-          .catch(() => {
-            /* non-fatal */
-          });
+        persistPlanSnapshot(targetSnap.id, updated, targetSnap.memoryId);
       }
     } catch (e) {
       console.error("Four-year plan generation failed:", e);
     } finally {
       setFourYearGenerating(false);
     }
-  }, [missingDetails, userId, fourYearGenerating, activeSessionId, planSnapshots]);
+  }, [missingDetails, userId, fourYearGenerating, activeSessionId, planSnapshots, persistPlanSnapshot]);
 
   const resetLocalPlannerState = useCallback(() => {
     clearLocalSession();
