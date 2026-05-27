@@ -709,7 +709,7 @@ export default function App({ userId, onSignOut }: AppProps) {
             }`}
             onClick={() => setViewMode("four-year")}
           >
-            4-Year Plan
+            Four-Year Plan
           </button>
           {viewMode === "calendar" && (
             <div className="ml-auto flex items-center pb-1 pr-1">

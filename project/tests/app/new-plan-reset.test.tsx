@@ -194,7 +194,7 @@ describe("App.handleNewPlan state reset (RT#4)", () => {
     render(<App userId="test-user" onSignOut={() => {}} />);
 
     // Switch to 4-year view
-    const fourYearBtn = screen.getByRole("button", { name: /4-year plan/i });
+    const fourYearBtn = screen.getByRole("button", { name: /four-year plan/i });
     await user.click(fourYearBtn);
 
     // Verify we're in 4-year view (by checking if the button has the active style)
@@ -271,7 +271,7 @@ describe("App.handleNewPlan state reset (RT#4)", () => {
     await user.click(newPlanBtn);
 
     // Switch to 4-year tab so FourYearPlanView is mounted
-    const fourYearBtn = screen.getByRole("button", { name: /4-year plan/i });
+    const fourYearBtn = screen.getByRole("button", { name: /four-year plan/i });
     await user.click(fourYearBtn);
 
     await waitFor(() => {
