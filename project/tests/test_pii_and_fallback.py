@@ -132,25 +132,23 @@ def test_api_plan_router_redacts_pii_in_memory_before_prompt(monkeypatch, tmp_pa
 
     Regression guard: plan.py previously passed raw memory snippets to
     run_planning_agent without calling _redact_pii.
+
+    With ``PLAN_ENGINE=constrained_v2`` (the default), course selection is
+    deterministic; the LLM is only called for ``assistant_reply`` / ``advice``
+    prose via ``planning_agent_v2._call_llm_for_prose``. This test stubs that
+    path and asserts memory snippets are redacted before they reach Gemini.
     """
     from fastapi.testclient import TestClient
 
+    from agents import planning_agent_v2
+
     captured_prompts: list[str] = []
-    plan_reply = json.dumps(
-        {
-            "recommended": [
-                {"course": "COEN 174", "title": "x", "category": "Core", "units": 4, "reason": "ok"}
-            ],
-            "total_units": 4,
-            "advice": "ok",
-            "assistant_reply": "ok",
-        }
-    )
+    prose_reply = json.dumps({"assistant_reply": "ok", "advice": "ok"})
 
     class _Models:
         def generate_content(self, model, contents, config):  # noqa: D401
             captured_prompts.append(contents)
-            return SimpleNamespace(text=plan_reply)
+            return SimpleNamespace(text=prose_reply)
 
     class _Client:
         models = _Models()
@@ -160,6 +158,8 @@ def test_api_plan_router_redacts_pii_in_memory_before_prompt(monkeypatch, tmp_pa
     mem_dir = tmp_path / "memory"
     mem_dir.mkdir()
     monkeypatch.setenv("COURSE_PLANNER_MEMORY_DIR", str(mem_dir))
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setenv("PLAN_ENGINE", "constrained_v2")
     from db.migrate import migrate
 
     migrate(str(tmp_path / "pii_api.db"))
@@ -172,10 +172,11 @@ def test_api_plan_router_redacts_pii_in_memory_before_prompt(monkeypatch, tmp_pa
         "Contact advisor.lee@scu.edu or call +1 (408) 555-9876 about COEN 174",
     )
 
-    # 3. Load the app and wire the stub Gemini client.
+    # 3. Load the app and wire the stub Gemini client for the v2 prose call.
     main = _load_api_main(monkeypatch, tmp_path)
     monkeypatch.setattr("routers.plan.get_genai_client", lambda **_kw: _Client())
     monkeypatch.setattr(planning_agent, "get_genai_client", lambda **_kw: _Client())
+    monkeypatch.setattr(planning_agent_v2, "get_genai_client", lambda **_kw: _Client())
 
     with TestClient(main.app) as client:
         resp = client.post(
@@ -191,10 +192,11 @@ def test_api_plan_router_redacts_pii_in_memory_before_prompt(monkeypatch, tmp_pa
 
     # 4. The combined prompt must NOT contain raw PII.
     full_prompt = " ".join(str(p) for p in captured_prompts)
+    assert captured_prompts, "constrained_v2 prose LLM call was not stubbed/captured"
     assert "advisor.lee@scu.edu" not in full_prompt, "email PII leaked into LLM prompt"
     assert "555-9876" not in full_prompt, "phone PII leaked into LLM prompt"
     # Redaction placeholders must appear instead.
     assert "[redacted-email]" in full_prompt
     assert "[redacted-phone]" in full_prompt
-    # Course codes must survive redaction.
+    # Course codes must survive redaction (in memory block and/or finalized plan).
     assert "COEN 174" in full_prompt
