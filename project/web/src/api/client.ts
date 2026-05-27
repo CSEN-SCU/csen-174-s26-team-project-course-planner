@@ -276,6 +276,8 @@ export type CatalogSearchParams = {
   days?: number[];
   meeting_time?: string[];
   tag?: string[];
+  /** When multiple tags are selected: "or" (any) or "and" (all — double-dip). */
+  tag_match?: "or" | "and";
   day_index?: number;
   start_min?: number;
   end_min?: number;
@@ -291,6 +293,7 @@ export async function searchCatalogSections(params: CatalogSearchParams = {}) {
   if (params.days?.length) q.set("days", params.days.join(","));
   if (params.meeting_time?.length) q.set("meeting_time", params.meeting_time.join(","));
   if (params.tag?.length) q.set("tag", params.tag.join(","));
+  if (params.tag_match === "and") q.set("tag_match", "and");
   if (params.day_index != null) q.set("day_index", String(params.day_index));
   if (params.start_min != null) q.set("start_min", String(params.start_min));
   if (params.end_min != null) q.set("end_min", String(params.end_min));

@@ -76,6 +76,30 @@ class TestCatalogSortAndRatings:
         assert out["instructor_balanced_score"] is not None
 
 
+class TestTagFilterMatchMode:
+    def test_tags_or_matches_any(self):
+        sections = [
+            {"course": "A", "course_tags": ["RTC 3", "ELSJ"]},
+            {"course": "B", "course_tags": ["RTC 3"]},
+            {"course": "C", "course_tags": ["ELSJ"]},
+        ]
+        out = filter_catalog_sections(
+            sections, tags=["RTC 3", "ELSJ"], tags_match="or"
+        )
+        assert {s["course"] for s in out} == {"A", "B", "C"}
+
+    def test_tags_and_requires_all(self):
+        sections = [
+            {"course": "A", "course_tags": ["RTC 3", "ELSJ"]},
+            {"course": "B", "course_tags": ["RTC 3"]},
+            {"course": "C", "course_tags": ["ELSJ"]},
+        ]
+        out = filter_catalog_sections(
+            sections, tags=["RTC 3", "ELSJ"], tags_match="and"
+        )
+        assert [s["course"] for s in out] == ["A"]
+
+
 class TestSectionOverlapsSlot:
     def test_class_ending_during_clicked_slot(self):
         section = {

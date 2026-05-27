@@ -60,6 +60,10 @@ def search_catalog_sections(
         description="Comma-separated meeting_time slot ids (days:start:end)",
     ),
     tag: str | None = Query(None, description="Comma-separated requirement tags"),
+    tag_match: str = Query(
+        "or",
+        description='Tag logic when multiple tags selected: "or" (any) or "and" (all)',
+    ),
     day_index: int | None = Query(None, ge=0, le=4),
     start_min: int | None = Query(None, ge=0),
     end_min: int | None = Query(None, ge=0),
@@ -85,6 +89,7 @@ def search_catalog_sections(
         days=_parse_csv_ints(days),
         meeting_time_slots=_parse_csv_strs(meeting_time),
         tags=_parse_csv_strs(tag),
+        tags_match=tag_match,
         day_index=day_index,
         start_min=start_min,
         end_min=end_min,

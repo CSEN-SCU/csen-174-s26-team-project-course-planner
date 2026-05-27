@@ -1368,11 +1368,16 @@ def filter_catalog_sections(
     days: list[int] | None = None,
     meeting_time_slots: list[str] | None = None,
     tags: list[str] | None = None,
+    tags_match: str = "or",
     day_index: int | None = None,
     start_min: int | None = None,
     end_min: int | None = None,
 ) -> list[dict[str, Any]]:
-    """Apply catalog browser filters (AND across filter types, OR within tags/days/buckets)."""
+    """Apply catalog browser filters (AND across filter types).
+
+    Within a filter type: days and meeting-time buckets use OR; tags use OR by
+    default or AND when ``tags_match="and"`` (double-dip / multi-requirement).
+    """
     q_norm = (q or "").strip().lower()
     subject_set = {s.strip().lower() for s in (subjects or []) if s.strip()}
     day_set = set(days or [])
@@ -1412,7 +1417,10 @@ def filter_catalog_sections(
 
         if tag_norms:
             sec_tags = {_normalize_tag_label(t) for t in (s.get("course_tags") or [])}
-            if not sec_tags.intersection(tag_norms):
+            if (tags_match or "or").strip().lower() == "and":
+                if not tag_norms.issubset(sec_tags):
+                    continue
+            elif not sec_tags.intersection(tag_norms):
                 continue
 
         if day_index is not None and start_min is not None and end_min is not None:

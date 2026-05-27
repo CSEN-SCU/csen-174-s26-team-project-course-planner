@@ -82,6 +82,7 @@ export function CourseBrowser({
   const [days, setDays] = useState<number[]>([]);
   const [meetingTimes, setMeetingTimes] = useState<string[]>([]);
   const [tags, setTags] = useState<string[]>([]);
+  const [tagsMatchAll, setTagsMatchAll] = useState(false);
   const [sections, setSections] = useState<CatalogSection[]>([]);
   const [total, setTotal] = useState(0);
   const [facets, setFacets] = useState<{
@@ -125,6 +126,7 @@ export function CourseBrowser({
         days: days.length ? days : undefined,
         meeting_time: meetingTimes.length ? meetingTimes : undefined,
         tag: tags.length ? tags : undefined,
+        tag_match: tags.length > 1 && tagsMatchAll ? "and" : undefined,
         limit: 100,
         sort,
         ...slotParams,
@@ -139,7 +141,7 @@ export function CourseBrowser({
     } finally {
       setLoading(false);
     }
-  }, [open, query, subjects, days, meetingTimes, tags, slotParams, sort]);
+  }, [open, query, subjects, days, meetingTimes, tags, tagsMatchAll, slotParams, sort]);
 
   useEffect(() => {
     if (!open) return;
@@ -154,6 +156,7 @@ export function CourseBrowser({
       setDays([]);
       setMeetingTimes([]);
       setTags([]);
+      setTagsMatchAll(false);
       setExpandedId(null);
       setSlotFilterActive(context.mode === "slot");
       setOpenDays(true);
@@ -177,6 +180,7 @@ export function CourseBrowser({
     setDays([]);
     setMeetingTimes([]);
     setTags([]);
+    setTagsMatchAll(false);
   };
 
   const toggleMeetingTime = (slotId: string) => {
@@ -347,6 +351,30 @@ export function CourseBrowser({
                     </label>
                   ))}
                 </div>
+                <label
+                  className={`mt-2 flex items-start gap-2 rounded-md border px-2 py-1.5 text-[11px] leading-snug ${
+                    tags.length > 1
+                      ? "border-neutral-200 bg-white text-neutral-700"
+                      : "border-neutral-100 bg-neutral-50 text-neutral-400"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 shrink-0"
+                    checked={tagsMatchAll}
+                    disabled={tags.length < 2}
+                    onChange={(e) => setTagsMatchAll(e.target.checked)}
+                    aria-describedby="tags-match-all-hint"
+                  />
+                  <span>
+                    <span className="font-medium text-neutral-800">Match all tags</span>
+                    <span id="tags-match-all-hint" className="mt-0.5 block text-neutral-500">
+                      {tags.length < 2
+                        ? "Select two or more tags to find double-dip courses."
+                        : "Show only courses that satisfy every selected requirement (AND)."}
+                    </span>
+                  </span>
+                </label>
               </FilterSection>
             )}
 
