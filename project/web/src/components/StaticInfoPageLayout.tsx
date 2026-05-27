@@ -1,4 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, type ReactNode } from "react";
+import { useLockDocumentScroll } from "../hooks/useLockDocumentScroll";
 import { resetPageScroll } from "../lib/scroll";
 import { BrandLink } from "./BrandLink";
 import { SiteFooter } from "./SiteFooter";
@@ -15,6 +16,8 @@ export function StaticInfoPageLayout({
   maxWidth = "max-w-2xl",
   roundPanelBottom = false,
 }: StaticInfoPageLayoutProps) {
+  useLockDocumentScroll(true);
+
   const mainRef = useRef<HTMLElement>(null);
   const anchorRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -79,7 +82,7 @@ export function StaticInfoPageLayout({
   }, [syncPanel]);
 
   return (
-    <div className="flex h-dvh min-h-dvh w-full max-w-full flex-col overflow-hidden bg-[var(--scu-white)]">
+    <div className="fixed inset-0 z-0 flex w-full max-w-full flex-col overflow-hidden bg-[var(--scu-white)]">
       <header
         ref={headerRef}
         className="relative z-20 shrink-0 border-b border-neutral-200 border-l-4 border-l-[var(--scu-red)] bg-[var(--scu-white)] px-6 py-5 shadow-sm"

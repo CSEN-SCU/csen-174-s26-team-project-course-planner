@@ -32,12 +32,12 @@ export function LeftPanel({
   onClearSchedule,
 }: LeftPanelProps) {
   return (
-    <aside className="flex w-[260px] shrink-0 flex-col border-l-4 border-[var(--scu-red)] bg-[var(--scu-white)] shadow-sm">
-      <div className="border-b border-neutral-200 px-4 py-5">
+    <aside className="flex h-full min-h-0 w-[260px] shrink-0 flex-col overflow-hidden border-l-4 border-[var(--scu-red)] bg-[var(--scu-white)] shadow-sm">
+      <div className="shrink-0 border-b border-neutral-200 px-4 py-5">
         <BrandLink />
       </div>
 
-      <div className="space-y-2 px-4 py-4">
+      <div className="shrink-0 space-y-2 px-4 py-4">
         {scheduleCourseCount > 0 ? (
           <>
             <button

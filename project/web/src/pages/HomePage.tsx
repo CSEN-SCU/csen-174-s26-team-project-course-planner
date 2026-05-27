@@ -31,7 +31,7 @@ export function HomePage({ externalAuthError, authPending }: HomePageProps) {
   }, []);
 
   return (
-    <div className="home-page flex min-h-dvh w-full max-w-full flex-col">
+    <div className="home-page flex min-h-dvh w-full max-w-full flex-col overflow-y-auto overflow-x-hidden">
       <main className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 py-12">
         <div className="home-hero w-full max-w-lg text-center">
           <div className="home-brand mb-6" aria-label="SCU Course Planner">

@@ -438,7 +438,7 @@ export function ChatPanel({
 
   return (
     <aside
-      className="relative flex w-[380px] shrink-0 flex-col border-l border-neutral-200 bg-[var(--scu-white)] shadow-sm"
+      className="relative flex h-full min-h-0 w-[380px] shrink-0 flex-col overflow-hidden border-l border-neutral-200 bg-[var(--scu-white)] shadow-sm"
       onDragEnter={onDragEnter}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
