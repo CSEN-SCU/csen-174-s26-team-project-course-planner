@@ -670,6 +670,75 @@ def purge_user_storage(
     return True
 
 
+def migrate_user_storage_id(
+    old_user_id,
+    new_user_id,
+    *,
+    db_path: Optional[str] = None,
+) -> bool:
+    """Move a user's Markdown memory file to a new stable id.
+
+    The per-file blocks also carry ``user_id`` in their JSON headers, so a
+    plain rename would make the old entries invisible to ``list_for_user``.
+    """
+    del db_path
+    old_uid = _validate_user_id(old_user_id)
+    new_uid = _validate_user_id(new_user_id)
+    if old_uid == new_uid:
+        return False
+
+    old_path = _user_file(old_uid)
+    if not old_path.is_file():
+        return False
+
+    old_raw = _read_raw(old_path)
+    old_prefix, old_tail = _split_transcript_tail(old_raw)
+    old_items = [
+        {**it, "user_id": new_uid}
+        for it in _parse_blocks(_strip_preamble(old_prefix))
+        if int(it["user_id"]) == old_uid
+    ]
+
+    new_path = _user_file(new_uid)
+    new_raw = _read_raw(new_path)
+    new_prefix, new_tail = _split_transcript_tail(new_raw)
+    new_items = [
+        it
+        for it in _parse_blocks(_strip_preamble(new_prefix))
+        if int(it["user_id"]) == new_uid
+    ]
+
+    used_ids = {int(it["id"]) for it in new_items}
+    next_id = max(used_ids, default=0) + 1
+    migrated: list[dict[str, Any]] = []
+    for it in old_items:
+        row = dict(it)
+        iid = int(row["id"])
+        if iid in used_ids:
+            row["id"] = next_id
+            next_id += 1
+        used_ids.add(int(row["id"]))
+        migrated.append(row)
+
+    all_items = new_items + migrated
+    body = "".join(
+        _serialize_block(
+            int(it["id"]),
+            new_uid,
+            str(it["kind"]),
+            str(it.get("created") or ""),
+            it.get("meta") if isinstance(it.get("meta"), dict) else None,
+            str(it.get("content") or ""),
+        )
+        for it in sorted(all_items, key=lambda x: int(x["id"]))
+    )
+    tail = new_tail or old_tail
+    suffix = ("\n\n" + tail) if tail else ""
+    _write_atomic(new_path, _FILE_PREAMBLE + body + suffix)
+    old_path.unlink()
+    return True
+
+
 def save_last_transcript_snapshot(user_id, snapshot: dict[str, Any]) -> None:
     """Append or replace a ``## Last Transcript`` JSON section at the end of the user's memory .md file."""
     uid = _validate_user_id(user_id)

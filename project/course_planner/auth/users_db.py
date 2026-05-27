@@ -22,6 +22,7 @@ Errors:
 
 from __future__ import annotations
 
+import hashlib
 import re
 import sqlite3
 from typing import Optional
@@ -39,6 +40,13 @@ class UserNotFoundError(Exception):
     """Raised when a lookup expects a user but none exists."""
 
 
+def _stable_user_id(google_sub: str) -> int:
+    """Return the stable positive SQLite id derived from Google's subject."""
+    sub_hash = hashlib.sha256(google_sub.strip().encode("utf-8")).digest()
+    uid = int.from_bytes(sub_hash[:8], byteorder="big") & 0x7FFFFFFFFFFFFFFF
+    return uid or 1
+
+
 def _validate_inputs(google_sub: str, email: str) -> None:
     if not isinstance(google_sub, str) or not google_sub.strip():
         raise ValueError("Google account id is missing.")
@@ -53,16 +61,9 @@ def create_user(
     db_path: Optional[str] = None,
 ) -> int:
     """Insert a new OAuth-backed user; returns its id."""
-    import hashlib
     normalized_sub = google_sub.strip()
     _validate_inputs(normalized_sub, email)
-    
-    # Calculate a stable unique integer ID from google_sub to prevent user ID collision
-    # and data sharing across serverless container restarts.
-    sub_hash = hashlib.sha256(normalized_sub.encode("utf-8")).digest()
-    uid = int.from_bytes(sub_hash[:8], byteorder="big") & 0x7FFFFFFFFFFFFFFF
-    if uid == 0:
-        uid = 1
+    uid = _stable_user_id(normalized_sub)
 
     conn = get_conn(db_path)
     try:
@@ -79,6 +80,61 @@ def create_user(
         return uid
     finally:
         close_conn(conn)
+
+
+def _migrate_existing_user_id(
+    user: dict,
+    *,
+    db_path: Optional[str] = None,
+) -> dict:
+    """Move legacy sequential ids to the stable Google-sub-derived id."""
+    old_uid = int(user["id"])
+    google_sub = str(user["google_sub"])
+    new_uid = _stable_user_id(google_sub)
+    if old_uid == new_uid:
+        return user
+
+    conn = get_conn(db_path)
+    try:
+        collision = conn.execute(
+            "SELECT id FROM users WHERE id = ? AND id != ?",
+            (new_uid, old_uid),
+        ).fetchone()
+        if collision is not None:
+            raise UserAlreadyExistsError("A user with that stable id already exists.")
+
+        # Existing pre-hash rows may have memory_items children; SQLite cannot
+        # update this INTEGER PRIMARY KEY with FK checks enabled because the
+        # schema has no ON UPDATE CASCADE.
+        conn.execute("PRAGMA foreign_keys = OFF")
+        try:
+            conn.execute("UPDATE users SET id = ? WHERE id = ?", (new_uid, old_uid))
+            conn.execute(
+                "UPDATE memory_items SET user_id = ? WHERE user_id = ?",
+                (new_uid, old_uid),
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.execute("PRAGMA foreign_keys = ON")
+    finally:
+        close_conn(conn)
+
+    try:
+        from agents.memory_agent import migrate_user_storage_id
+
+        migrate_user_storage_id(old_uid, new_uid)
+    except FileNotFoundError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError("User id migrated but memory storage could not be moved.") from exc
+
+    migrated = get_user_by_google_sub(google_sub, db_path=db_path)
+    if migrated is None:
+        raise RuntimeError("User id was migrated but could not be reloaded.")
+    return migrated
 
 
 def get_user_by_google_sub(
@@ -171,11 +227,11 @@ def get_or_create_user_for_google(
 
     existing = get_user_by_google_sub(normalized_sub, db_path=db_path)
     if existing is not None:
-        return existing
+        return _migrate_existing_user_id(existing, db_path=db_path)
 
     existing = get_user_by_email(normalized_email, db_path=db_path)
     if existing is not None:
-        return existing
+        return _migrate_existing_user_id(existing, db_path=db_path)
 
     try:
         create_user(normalized_sub, normalized_email, db_path=db_path)
