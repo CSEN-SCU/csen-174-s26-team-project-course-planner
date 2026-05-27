@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from agents.memory_agent import ALLOWED_KINDS, delete, list_for_user, write
+from deps.user_auth import require_matching_user
 
 router = APIRouter()
 
@@ -16,7 +17,8 @@ class MemoryWriteBody(BaseModel):
 
 
 @router.get("/{user_id}")
-def get_memory(user_id: str) -> dict[str, Any]:
+def get_memory(user_id: str, request: Request) -> dict[str, Any]:
+    require_matching_user(request, user_id)
     try:
         items = list_for_user(user_id)
     except ValueError as exc:
@@ -27,7 +29,8 @@ def get_memory(user_id: str) -> dict[str, Any]:
 
 
 @router.delete("/{user_id}/{item_id}")
-def delete_memory(user_id: str, item_id: int) -> dict[str, Any]:
+def delete_memory(user_id: str, item_id: int, request: Request) -> dict[str, Any]:
+    require_matching_user(request, user_id)
     try:
         found = delete(user_id, item_id)
     except ValueError as exc:
@@ -40,7 +43,8 @@ def delete_memory(user_id: str, item_id: int) -> dict[str, Any]:
 
 
 @router.post("/{user_id}")
-def append_memory(user_id: str, body: MemoryWriteBody) -> dict[str, Any]:
+def append_memory(user_id: str, body: MemoryWriteBody, request: Request) -> dict[str, Any]:
+    require_matching_user(request, user_id)
     kind = body.type.strip()
     if kind not in ALLOWED_KINDS:
         raise HTTPException(

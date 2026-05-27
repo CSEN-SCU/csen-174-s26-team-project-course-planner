@@ -62,6 +62,44 @@ def test_get_user_by_email_unknown_returns_none(db_path):
     assert users_db.get_user_by_email("nobody@example.com", db_path=db_path) is None
 
 
+def test_legacy_user_migrates_to_stable_id_on_login(db_path):
+    """Auto-increment ids (1, 2, …) must not be reused after OAuth login."""
+    import os
+    from pathlib import Path
+
+    from agents import memory_agent
+    from auth import users_db
+
+    mem_dir = Path(os.environ["COURSE_PLANNER_MEMORY_DIR"])
+
+    conn_path = db_path
+    from db.connection import close_conn, get_conn
+
+    conn = get_conn(conn_path)
+    try:
+        conn.execute(
+            "INSERT INTO users (id, google_sub, email) VALUES (?, ?, ?)",
+            (1, "legacy-google-sub", "legacy@example.com"),
+        )
+        conn.commit()
+    finally:
+        close_conn(conn)
+
+    memory_agent.write(1, "preference", "legacy user private note")
+
+    user = users_db.get_or_create_user_for_google(
+        "legacy@example.com",
+        "legacy-google-sub",
+        db_path=db_path,
+    )
+    stable = users_db.stable_user_id("legacy-google-sub")
+    assert user["id"] == stable
+    assert stable != 1
+    assert not (mem_dir / "1.md").exists()
+    rows = memory_agent.list_for_user(stable)
+    assert any("legacy user private note" in r["content"] for r in rows)
+
+
 def test_get_or_create_user_for_google_creates_then_returns_same(db_path):
     u1 = users_db.get_or_create_user_for_google(
         "newuser@example.com", "google-sub-12345", db_path=db_path

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
 from agents.memory_agent import write as memory_write
+from deps.user_auth import require_matching_user
 from utils.academic_progress_helpers import enrich_missing_details
 from utils.academic_progress_xlsx import parse_academic_progress_xlsx, sanitize_parsed_rows
 
@@ -14,6 +15,7 @@ _MAX_TRANSCRIPT_BYTES = 5 * 1024 * 1024  # 5 MiB
 
 @router.post("/transcript")
 async def upload_transcript(
+    request: Request,
     file: UploadFile = File(...),
     user_id: str = Form(""),
 ) -> dict:
@@ -40,6 +42,7 @@ async def upload_transcript(
 
     uid = user_id.strip()
     if uid:
+        require_matching_user(request, uid)
         try:
             memory_write(uid, "academic_progress", json.dumps(missing_details))
         except Exception:  # noqa: BLE001

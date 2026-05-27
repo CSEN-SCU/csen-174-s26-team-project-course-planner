@@ -655,6 +655,45 @@ def delete_all_for_user(
     return n
 
 
+def migrate_user_storage(old_user_id: int, new_user_id: int) -> None:
+    """Move a user's memory file to a stable id and rewrite block headers."""
+    old_uid = _validate_user_id(old_user_id)
+    new_uid = _validate_user_id(new_user_id)
+    if old_uid == new_uid:
+        return
+    old_path = _user_file(old_uid)
+    new_path = _user_file(new_uid)
+    if not old_path.is_file():
+        return
+    raw = _read_raw(old_path)
+    prefix_before_tr, tr_tail = _split_transcript_tail(raw)
+    body = _strip_preamble(prefix_before_tr)
+    items = _parse_blocks(body)
+    for it in items:
+        it["user_id"] = new_uid
+    new_body = "".join(
+        _serialize_block(
+            it["id"],
+            new_uid,
+            it["kind"],
+            it["created"],
+            it.get("meta"),
+            it["content"],
+        )
+        for it in items
+    )
+    suffix = ("\n\n" + tr_tail) if tr_tail else ""
+    migrated_text = _FILE_PREAMBLE + new_body + suffix
+    new_path.parent.mkdir(parents=True, exist_ok=True)
+    if new_path.is_file() and new_path != old_path:
+        # Do not merge polluted legacy shared files into an existing stable file.
+        old_path.unlink(missing_ok=True)
+        return
+    _write_atomic(new_path, migrated_text)
+    if old_path != new_path:
+        old_path.unlink(missing_ok=True)
+
+
 def purge_user_storage(
     user_id,
     *,

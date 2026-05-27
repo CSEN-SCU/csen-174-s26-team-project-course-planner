@@ -5,7 +5,7 @@ import os
 import re
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from google.genai import types
 from pydantic import BaseModel, Field
 
@@ -21,9 +21,16 @@ from agents.planning_agent import (
     suggest_courses_for_slot,
 )
 from agents.professor_agent import run_professor_agent
+from deps.user_auth import require_matching_user
 from middleware.rate_limit import limit
 
 router = APIRouter()
+
+
+def _require_plan_user(request: Request, user_id: str) -> None:
+    uid = (user_id or "").strip()
+    if uid:
+        require_matching_user(request, uid)
 
 # When MULTI_AGENT_PLAN=1, the legacy POST /api/plan transparently delegates
 # to the LangGraph multi-agent engine. Otherwise it stays on the single-shot
@@ -150,7 +157,8 @@ def _planning_context(body: PlanRequest) -> tuple[list[dict[str, Any]], list[str
 
 
 @router.post("", include_in_schema=True, dependencies=[Depends(limit("plan"))])
-def create_plan(body: PlanRequest) -> dict[str, Any]:
+def create_plan(body: PlanRequest, request: Request) -> dict[str, Any]:
+    _require_plan_user(request, body.user_id)
     # Optional global switch: route the default endpoint through the
     # multi-agent engine without any frontend change.
     if _MULTI_AGENT_DEFAULT:
@@ -339,7 +347,8 @@ def _run_multi_agent(body: PlanRequest, *, thread_id: str = "") -> dict[str, Any
 
 
 @router.post("/v2", dependencies=[Depends(limit("plan"))])
-def create_plan_v2(body: PlanV2Request) -> dict[str, Any]:
+def create_plan_v2(body: PlanV2Request, request: Request) -> dict[str, Any]:
+    _require_plan_user(request, body.user_id)
     """Explicit multi-agent (Planner ↔ Verifier ↔ InstructorSelector) engine.
 
     Always uses the LangGraph pipeline regardless of MULTI_AGENT_PLAN.
@@ -364,7 +373,8 @@ def _get_hitl_checkpointer():
 
 
 @router.post("/v2/review", dependencies=[Depends(limit("plan"))])
-def review_plan_v2(body: PlanV2Request) -> dict[str, Any]:
+def review_plan_v2(body: PlanV2Request, request: Request) -> dict[str, Any]:
+    _require_plan_user(request, body.user_id)
     """Run the multi-agent graph up to (not through) the commit step and
     return the draft for human approval. Requires a thread_id."""
     if not body.thread_id.strip():

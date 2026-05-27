@@ -35,6 +35,12 @@ if str(_API_DIR) not in sys.path:
 
 
 @pytest.fixture(autouse=True)
+def _disable_session_auth_in_tests(monkeypatch):
+    """API tests call endpoints without browser session tokens."""
+    monkeypatch.setenv("REQUIRE_PLANNER_SESSION", "0")
+
+
+@pytest.fixture(autouse=True)
 def _reset_rate_limiter():
     """Reset the global rate-limiter before every test (shared IP bucket across TestClient)."""
     try:

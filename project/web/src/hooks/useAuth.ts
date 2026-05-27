@@ -4,6 +4,7 @@ import {
   clearGoogleOauthPending,
   clearLocalSession,
   isGoogleOauthPending,
+  persistSessionToken,
   persistUserId,
   readStoredUserId,
 } from "../auth/session";
@@ -13,8 +14,9 @@ export function useAuth() {
   const [googleAuthError, setGoogleAuthError] = useState<string | null>(null);
   const [googleAuthPending, setGoogleAuthPending] = useState(() => isGoogleOauthPending());
 
-  const setUserId = useCallback((id: string | null) => {
+  const setUserId = useCallback((id: string | null, sessionToken?: string | null) => {
     persistUserId(id);
+    persistSessionToken(sessionToken ?? null);
     setUserIdState(id);
   }, []);
 
@@ -54,7 +56,7 @@ export function useAuth() {
     void exchangeGoogleOauth(token)
       .then((r) => {
         if (r.success && r.user_id) {
-          setUserId(String(r.user_id));
+          setUserId(String(r.user_id), r.session_token ?? null);
           setGoogleAuthError(null);
         } else {
           setGoogleAuthError("Google sign-in failed. Please try again.");

@@ -1,3 +1,5 @@
+import { readSessionToken } from "../auth/session";
+
 /**
  * Default: browser calls same-origin `/api/...`.
  * - Dev: Vite proxies `/api` → FastAPI (see `vite.config.ts`)
@@ -17,6 +19,13 @@ const API_BASE =
  */
 export function googleSignInUrl(): string {
   return `${API_BASE}/auth/google/start`;
+}
+
+function authHeaders(extra?: Record<string, string>): Record<string, string> {
+  const headers: Record<string, string> = { ...extra };
+  const token = readSessionToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return headers;
 }
 
 function errFromBody(data: unknown): string {
@@ -46,6 +55,7 @@ export async function uploadTranscript(file: File, userId?: string) {
   if (userId) formData.append("user_id", userId);
   const res = await fetch(`${API_BASE}/upload/transcript`, {
     method: "POST",
+    headers: authHeaders(),
     body: formData,
   });
   const data = await res.json();
@@ -74,7 +84,7 @@ export async function generatePlan(
   const endpoint = _USE_PLAN_V2 ? `${API_BASE}/plan/v2` : `${API_BASE}/plan`;
   const res = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({
       missing_details,
       user_preference,
@@ -90,7 +100,9 @@ export async function generatePlan(
 }
 
 export async function getMemory(user_id: string) {
-  const res = await fetch(`${API_BASE}/memory/${user_id}`);
+  const res = await fetch(`${API_BASE}/memory/${user_id}`, {
+    headers: authHeaders(),
+  });
   const data = await res.json();
   if (!res.ok) throw new Error(errFromBody(data));
   return data;
@@ -111,7 +123,10 @@ export async function transcribeAudio(blob: Blob): Promise<string> {
 }
 
 export async function deleteMemory(userId: string, itemId: number) {
-  const res = await fetch(`${API_BASE}/memory/${userId}/${itemId}`, { method: "DELETE" });
+  const res = await fetch(`${API_BASE}/memory/${userId}/${itemId}`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
   const data = await res.json();
   if (!res.ok) throw new Error(errFromBody(data));
   return data;
@@ -120,7 +135,7 @@ export async function deleteMemory(userId: string, itemId: number) {
 export async function saveMemory(userId: string, type: string, content: string) {
   const res = await fetch(`${API_BASE}/memory/${userId}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ type, content }),
   });
   const data = await res.json();
@@ -135,7 +150,7 @@ export async function generateFourYearPlan(
 ) {
   const res = await fetch(`${API_BASE}/four-year-plan`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ missing_details, user_id, preferences: preferences ?? "" }),
   });
   const data = await res.json();
@@ -155,7 +170,7 @@ export async function exchangeGoogleOauth(token: string) {
   });
   const data = await res.json();
   if (!res.ok) throw new Error(errFromBody(data));
-  return data as { success: boolean; user_id: string };
+  return data as { success: boolean; user_id: string; session_token?: string };
 }
 
 /** Delete user data on server: wipe memory + SQLite account (best-effort). */
@@ -164,6 +179,7 @@ export async function deleteAllUserData(userId: string) {
   const timeout = window.setTimeout(() => controller.abort(), 20_000);
   try {
     const res = await fetch(`${API_BASE}/auth/user/${encodeURIComponent(userId)}/data`, {
+      headers: authHeaders(),
       method: "DELETE",
       signal: controller.signal,
     });

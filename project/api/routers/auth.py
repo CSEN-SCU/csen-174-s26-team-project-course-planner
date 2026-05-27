@@ -14,6 +14,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
 from auth import oauth_state
+from auth.session_token import mint_session_token
 from agents.memory_agent import delete_all_for_user, purge_user_storage
 from auth.users_db import (
     delete_user_by_id,
@@ -169,16 +170,23 @@ def google_exchange(body: GoogleExchangeBody) -> dict[str, Any]:
         user_id = _verify_handoff_token(body.token)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"success": True, "user_id": user_id}
+    return {
+        "success": True,
+        "user_id": user_id,
+        "session_token": mint_session_token(user_id),
+    }
 
 
 @router.delete("/user/{user_id}/data")
-def delete_user_data(user_id: str) -> dict[str, Any]:
+def delete_user_data(user_id: str, request: Request) -> dict[str, Any]:
     """Remove all stored data for this user (memory file + SQLite account).
 
     Purges memory first so a stale browser session still clears data even when
     the SQLite user row was lost (e.g. ephemeral disk on Render after redeploy).
     """
+    from deps.user_auth import require_matching_user
+
+    require_matching_user(request, user_id)
     try:
         uid = int(user_id)
     except (TypeError, ValueError) as exc:

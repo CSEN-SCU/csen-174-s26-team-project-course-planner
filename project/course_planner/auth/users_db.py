@@ -22,6 +22,7 @@ Errors:
 
 from __future__ import annotations
 
+import hashlib
 import re
 import sqlite3
 from typing import Optional
@@ -39,6 +40,16 @@ class UserNotFoundError(Exception):
     """Raised when a lookup expects a user but none exists."""
 
 
+def stable_user_id(google_sub: str) -> int:
+    """Deterministic positive int from Google ``sub`` (stable across deploys)."""
+    normalized_sub = (google_sub or "").strip()
+    if not normalized_sub:
+        raise ValueError("Google account id is missing.")
+    sub_hash = hashlib.sha256(normalized_sub.encode("utf-8")).digest()
+    uid = int.from_bytes(sub_hash[:8], byteorder="big") & 0x7FFFFFFFFFFFFFFF
+    return uid if uid else 1
+
+
 def _validate_inputs(google_sub: str, email: str) -> None:
     if not isinstance(google_sub, str) or not google_sub.strip():
         raise ValueError("Google account id is missing.")
@@ -53,16 +64,9 @@ def create_user(
     db_path: Optional[str] = None,
 ) -> int:
     """Insert a new OAuth-backed user; returns its id."""
-    import hashlib
     normalized_sub = google_sub.strip()
     _validate_inputs(normalized_sub, email)
-    
-    # Calculate a stable unique integer ID from google_sub to prevent user ID collision
-    # and data sharing across serverless container restarts.
-    sub_hash = hashlib.sha256(normalized_sub.encode("utf-8")).digest()
-    uid = int.from_bytes(sub_hash[:8], byteorder="big") & 0x7FFFFFFFFFFFFFFF
-    if uid == 0:
-        uid = 1
+    uid = stable_user_id(normalized_sub)
 
     conn = get_conn(db_path)
     try:
@@ -149,6 +153,49 @@ def get_user_by_email(
         close_conn(conn)
 
 
+def _migrate_user_row_to_stable_id(
+    existing: dict,
+    *,
+    db_path: Optional[str] = None,
+) -> dict:
+    """Move legacy auto-increment ids to stable ids and rename memory files."""
+    from agents import memory_agent
+
+    stable_id = stable_user_id(str(existing["google_sub"]))
+    old_id = int(existing["id"])
+    if old_id == stable_id:
+        return existing
+
+    memory_agent.migrate_user_storage(old_id, stable_id)
+
+    conn = get_conn(db_path)
+    try:
+        conflict = conn.execute(
+            "SELECT id, google_sub FROM users WHERE id = ?",
+            (stable_id,),
+        ).fetchone()
+        if conflict is not None:
+            if str(conflict["google_sub"]) == str(existing["google_sub"]):
+                conn.execute("DELETE FROM users WHERE id = ?", (old_id,))
+            else:
+                raise RuntimeError(
+                    "Cannot migrate user: stable id already assigned to another account."
+                )
+        else:
+            conn.execute(
+                "UPDATE users SET id = ? WHERE id = ?",
+                (stable_id, old_id),
+            )
+        conn.commit()
+    finally:
+        close_conn(conn)
+
+    migrated = get_user_by_id(stable_id, db_path=db_path)
+    if migrated is None:
+        raise RuntimeError("User migration failed.")
+    return migrated
+
+
 def get_or_create_user_for_google(
     email: str,
     google_sub: str,
@@ -160,6 +207,9 @@ def get_or_create_user_for_google(
     Idempotent and TOCTOU-safe: if another callback races us and inserts the
     same identity between our reads and ``create_user``, we re-read the row
     instead of bubbling :class:`UserAlreadyExistsError` up to the user.
+
+    Legacy rows created with auto-increment ids (1, 2, 3, …) are migrated to
+    stable ids on every login so memory files no longer collide on serverless.
     """
     if not _EMAIL_RE.match((email or "").strip()):
         raise ValueError("Google account email is missing or invalid.")
@@ -171,11 +221,11 @@ def get_or_create_user_for_google(
 
     existing = get_user_by_google_sub(normalized_sub, db_path=db_path)
     if existing is not None:
-        return existing
+        return _migrate_user_row_to_stable_id(existing, db_path=db_path)
 
     existing = get_user_by_email(normalized_email, db_path=db_path)
     if existing is not None:
-        return existing
+        return _migrate_user_row_to_stable_id(existing, db_path=db_path)
 
     try:
         create_user(normalized_sub, normalized_email, db_path=db_path)
@@ -183,10 +233,10 @@ def get_or_create_user_for_google(
         # Concurrent callback inserted the same email or Google subject; re-read.
         existing = get_user_by_google_sub(normalized_sub, db_path=db_path)
         if existing is not None:
-            return existing
+            return _migrate_user_row_to_stable_id(existing, db_path=db_path)
         existing = get_user_by_email(normalized_email, db_path=db_path)
         if existing is not None:
-            return existing
+            return _migrate_user_row_to_stable_id(existing, db_path=db_path)
         raise
     user = get_user_by_google_sub(normalized_sub, db_path=db_path)
     if user is None:
