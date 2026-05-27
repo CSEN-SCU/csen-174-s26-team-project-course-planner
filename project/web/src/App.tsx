@@ -79,7 +79,6 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
   const [fourYearGenerating, setFourYearGenerating] = useState(false);
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
   const [studentMajorId, setStudentMajorId] = useState<string | null>(null);
-  const [studentMajorName, setStudentMajorName] = useState<string | null>(null);
   const [majorConfirmed, setMajorConfirmed] = useState(false);
   const [majorDetection, setMajorDetection] = useState<MajorDetection | null>(null);
   const [majorEditMode, setMajorEditMode] = useState(false);
@@ -170,7 +169,6 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
             };
             if (sm.major_id) {
               setStudentMajorId(sm.major_id);
-              setStudentMajorName(sm.name ?? sm.major_id);
               setMajorConfirmed(Boolean(sm.confirmed));
             }
           } catch { /* ignore */ }
@@ -225,7 +223,6 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
         setMajorDetection(det);
         if (det.major_id && !studentMajorId) {
           setStudentMajorId(det.major_id);
-          setStudentMajorName(det.name ?? det.major_id);
         }
       }
     } catch {
@@ -1095,9 +1092,8 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
           detection={majorDetection}
           selectedMajorId={studentMajorId}
           majorConfirmed={majorConfirmed && !majorEditMode}
-          onSelectMajor={(id, name) => {
+          onSelectMajor={(id) => {
             setStudentMajorId(id);
-            setStudentMajorName(name);
           }}
           onConfirmed={() => {
             setMajorConfirmed(true);
@@ -1135,10 +1131,8 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
           setMajorEditMode(false);
           if (det?.major_id) {
             setStudentMajorId(det.major_id);
-            setStudentMajorName(det.name ?? det.major_id);
           } else {
             setStudentMajorId(null);
-            setStudentMajorName(null);
           }
         }}
       />
