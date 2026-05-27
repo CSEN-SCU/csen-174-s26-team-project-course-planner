@@ -181,7 +181,7 @@ export function ChatPanel({
           id: `a-${Date.now()}`,
           role: "assistant",
           content:
-            "Please upload your Academic Progress (.xlsx) from Workday using the paperclip below.",
+            "Please upload your Academic Progress Report (.xlsx) from Workday using the paperclip below.",
         },
       ]);
       return;
@@ -430,6 +430,11 @@ export function ChatPanel({
       : voiceStatus === "processing"
       ? "Transcribing…"
       : "Tap to speak";
+  const uploadHelperText = fileUploaded
+    ? "Academic Progress is saved. Use the paperclip if you want to update it."
+    : canDropFiles
+    ? "Drag and drop your Academic Progress (.xlsx or .xlsm files) here, or use the paperclip to upload."
+    : "Upload your Academic Progress (.xlsx) file with the paperclip.";
 
   return (
     <aside
@@ -533,7 +538,7 @@ export function ChatPanel({
               type="button"
               onClick={onFilePick}
               className="rounded-md p-2 text-neutral-500 hover:bg-neutral-100"
-              title="Upload Academic Progress"
+              title={fileUploaded ? "Update Academic Progress" : "Upload Academic Progress"}
             >
               <PaperclipIcon />
             </button>
@@ -563,9 +568,7 @@ export function ChatPanel({
           </div>
         </div>
         <p className="mt-1.5 text-[10px] text-neutral-400">
-          {canDropFiles
-            ? "Drag and drop your Academic Progress (.xlsx or .xlsm files) here, or use the paperclip to upload."
-            : "Upload your Academic Progress (.xlsx) file with the paperclip."}
+          {uploadHelperText}
         </p>
       </div>
     </aside>

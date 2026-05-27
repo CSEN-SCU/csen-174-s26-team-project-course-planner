@@ -21,9 +21,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import App from "../../web/src/App";
 import type { ChatPanelProps } from "../../web/src/components/ChatPanel";
 
+const apiMocks = vi.hoisted(() => ({
+  getMemory: vi.fn(async () => ({ memories: [] })),
+}));
+
 // Mock API client
 vi.mock("../../web/src/api/client", () => ({
-  getMemory: vi.fn(async () => ({ memories: [] })),
+  getMemory: apiMocks.getMemory,
   saveMemory: vi.fn(async () => ({ id: 1 })),
   deleteMemory: vi.fn(async () => {}),
   deleteAllUserData: vi.fn(async () => {}),
@@ -149,6 +153,7 @@ async function markFileUploaded() {
 describe("App.handleNewPlan state reset (RT#4)", () => {
   beforeEach(() => {
     lastChatProps = null;
+    apiMocks.getMemory.mockResolvedValue({ memories: [] });
   });
 
   // ── baseline ──────────────────────────────────────────────────────────────
@@ -226,6 +231,34 @@ describe("App.handleNewPlan state reset (RT#4)", () => {
     // slotPopoverOpen starts false — the popover must not be mounted
     await waitFor(() => {
       expect(screen.queryByTestId("slot-suggestion-popover")).not.toBeInTheDocument();
+    });
+  });
+
+  it("[pin] restored parsed transcript rows count as uploaded academic progress", async () => {
+    apiMocks.getMemory.mockResolvedValueOnce({
+      memories: [
+        {
+          id: 7,
+          kind: "parsed_rows",
+          content: JSON.stringify([
+            {
+              course_code: "CSEN 10",
+              status: "Satisfied",
+              term: "Fall 2025",
+            },
+          ]),
+          created_at: "2026-05-01T00:00:00Z",
+        },
+      ],
+    });
+
+    render(<App userId="test-user" onSignOut={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("file-uploaded")).toHaveTextContent("true");
+      expect(screen.getByTestId("latest-message")).toHaveTextContent(
+        "Your Academic Progress is already loaded. Tell me what kind of schedule you want for next quarter.",
+      );
     });
   });
 

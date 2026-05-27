@@ -29,6 +29,10 @@ const WELCOME_TEXT =
   "Upload your Academic Progress file or describe your preferences to get started.";
 const NEW_PLAN_AI_TEXT =
   "Started a new plan. Upload your Academic Progress file (.xlsx) if you have not yet, then describe your preferences for next quarter.";
+const PROGRESS_LOADED_TEXT =
+  "Your Academic Progress is already loaded. Tell me what kind of schedule you want for next quarter.";
+const NEW_PLAN_AI_WITH_PROGRESS_TEXT =
+  "Started a new plan. Your Academic Progress is already loaded, so tell me your preferences for next quarter.";
 const NEW_PLAN_MANUAL_TEXT =
   "Started a new plan. Use Browse courses to search the catalog, or click a time slot on the calendar.";
 const INTRO_SEEN_KEY_PREFIX = "scu_planner_intro_seen:";
@@ -101,6 +105,7 @@ export default function App({ userId, onSignOut }: AppProps) {
     void getMemory(userId)
       .then((r) => {
         const mems: Record<string, unknown>[] = Array.isArray(r.memories) ? r.memories : [];
+        let restoredAcademicProgress = false;
 
         // Restore academic progress
         const progressItems = mems
@@ -112,6 +117,7 @@ export default function App({ userId, onSignOut }: AppProps) {
             if (Array.isArray(details) && details.length > 0) {
               setMissingDetails(details);
               setFileUploaded(true);
+              restoredAcademicProgress = true;
             }
           } catch { /* ignore */ }
         }
@@ -125,6 +131,8 @@ export default function App({ userId, onSignOut }: AppProps) {
             const rows = JSON.parse(String(parsedRowItems[0].content ?? "[]")) as ParsedRow[];
             if (Array.isArray(rows) && rows.length > 0) {
               setParsedRows(rows);
+              setFileUploaded(true);
+              restoredAcademicProgress = true;
             }
           } catch { /* ignore */ }
         }
@@ -154,6 +162,14 @@ export default function App({ userId, onSignOut }: AppProps) {
           return [];
         });
         setPlanSnapshots(loadedSnaps);
+
+        if (restoredAcademicProgress) {
+          setMessages((prev) =>
+            prev.length === 1 && prev[0]?.content === WELCOME_TEXT
+              ? [{ ...prev[0], content: PROGRESS_LOADED_TEXT }]
+              : prev,
+          );
+        }
       })
       .catch(() => { /* ignore */ });
   }, [userId]);
@@ -325,10 +341,14 @@ export default function App({ userId, onSignOut }: AppProps) {
   const handlePlanStartAi = useCallback(() => {
     setPlanStartModalOpen(false);
     resetActivePlanState();
-    setMessages([{ id: `m-new-${Date.now()}`, role: "assistant", content: NEW_PLAN_AI_TEXT }]);
+    setMessages([{
+      id: `m-new-${Date.now()}`,
+      role: "assistant",
+      content: fileUploaded ? NEW_PLAN_AI_WITH_PROGRESS_TEXT : NEW_PLAN_AI_TEXT,
+    }]);
     setViewMode("calendar");
     setChatFocusNonce((n) => n + 1);
-  }, [resetActivePlanState, setMessages]);
+  }, [fileUploaded, resetActivePlanState, setMessages]);
 
   const handleDeleteSession = useCallback((id: string) => {
     const snap = planSnapshots.find((s) => s.id === id);
