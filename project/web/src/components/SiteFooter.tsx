@@ -17,7 +17,7 @@ const linkClass =
   "text-xs font-medium text-white/90 underline-offset-2 transition hover:text-white hover:underline";
 const dividerClass = "text-xs text-white/40";
 
-export function SiteFooter({ userId, onDeleteUserData, onOpenHelp }: SiteFooterProps = {}) {
+export function SiteFooter({ onDeleteUserData, onOpenHelp }: SiteFooterProps = {}) {
   const showDeleteUserData = Boolean(onDeleteUserData);
 
   return (

@@ -190,15 +190,6 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
     setFirstLoginCarouselOpen(!hasSeenFirstLoginCarousel(userId));
   }, [userId]);
 
-  useEffect(() => {
-    const url = new URL(window.location.href);
-    if (url.searchParams.get("delete-user-data") !== "1") return;
-
-    setDeleteDataOpen(true);
-    url.searchParams.delete("delete-user-data");
-    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
-  }, []);
-
   // Base calendar data from current session or plan result
   const calendarRecommended = useMemo(() => {
     if (sessionCalendarRecommended !== null && sessionCalendarRecommended.length > 0) {
