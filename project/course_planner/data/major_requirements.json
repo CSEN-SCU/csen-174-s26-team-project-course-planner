@@ -1,0 +1,619 @@
+{
+  "version": "2025-26",
+  "source": "SCU Undergraduate Bulletin — per-major markdown in data/majors/",
+  "majors": {
+    "csen": {
+      "id": "csen",
+      "name": "Computer Science and Engineering",
+      "school": "engineering",
+      "detect_patterns": [
+        "computer science and engineering",
+        "csen/coen",
+        "csen major",
+        "coen major"
+      ],
+      "required_courses": [
+        "ENGL 181",
+        "MATH 11",
+        "AMTH 106",
+        "AMTH 108",
+        "MATH 53",
+        "AMTH 118",
+        "CHEM 11",
+        "PHYS 31",
+        "PHYS 34",
+        "MATH 101",
+        "ENGR 1",
+        "ENGR 1L",
+        "ECEN 21",
+        "CSEN 21",
+        "CSEN 10",
+        "CSEN 11",
+        "CSEN 192",
+        "ENGR 194",
+        "CSEN 195",
+        "ENGR 195",
+        "CSEN 196",
+        "ENGR 196",
+        "CSEN 101",
+        "ECEN 115",
+        "CSEN 193",
+        "CSEN 199"
+      ],
+      "senior_design_sequence": [
+        "CSEN 192",
+        "CSEN 194",
+        "CSEN 195",
+        "CSEN 196"
+      ],
+      "senior_design_final_year_only": true,
+      "markdown_path": "majors/csen.md"
+    },
+    "wede": {
+      "id": "wede",
+      "name": "Web Design and Engineering",
+      "school": "engineering",
+      "detect_patterns": [
+        "web design and engineering",
+        "wede"
+      ],
+      "required_courses": [
+        "ENGL 181",
+        "ARTS 74",
+        "COMM 12",
+        "SOCI 49",
+        "MATH 11",
+        "AMTH 108",
+        "ENGR 1",
+        "CSEN 10",
+        "CSEN 60",
+        "CSEN 192",
+        "ENGR 194",
+        "CSEN 195",
+        "ENGR 195",
+        "CSEN 196",
+        "ENGR 196"
+      ],
+      "senior_design_sequence": [
+        "CSEN 192",
+        "CSEN 194",
+        "CSEN 195",
+        "CSEN 196"
+      ],
+      "senior_design_final_year_only": true,
+      "markdown_path": "majors/wede.md"
+    },
+    "ecen": {
+      "id": "ecen",
+      "name": "Electrical and Computer Engineering",
+      "school": "engineering",
+      "detect_patterns": [
+        "electrical and computer engineering",
+        "electrical engineering major",
+        "ecen major",
+        "elen major"
+      ],
+      "required_courses": [
+        "MATH 11",
+        "AMTH 106",
+        "AMTH 108",
+        "CHEM 11",
+        "PHYS 31",
+        "PHYS 34",
+        "MATH 51",
+        "CHEM 12",
+        "PHYS 113",
+        "MATH 53",
+        "ENGR 1",
+        "CSEN 10",
+        "CSEN 11",
+        "MECH 121",
+        "ECEN 20",
+        "ECEN 100",
+        "ECEN 116",
+        "ECEN 118",
+        "ECEN 105",
+        "ECEN 164",
+        "ECEN 121",
+        "ECEN 188",
+        "ECEN 189",
+        "ENGR 110",
+        "ECEN 199",
+        "CSCI 163",
+        "MATH 105",
+        "ECEN 123"
+      ],
+      "senior_design_sequence": [
+        "ECEN 192",
+        "ECEN 194",
+        "ECEN 195",
+        "ECEN 196"
+      ],
+      "senior_design_final_year_only": true,
+      "markdown_path": "majors/ecen.md"
+    },
+    "elen": {
+      "id": "elen",
+      "name": "Electrical Engineering",
+      "school": "engineering",
+      "detect_patterns": [
+        "electrical engineering",
+        "elen major"
+      ],
+      "required_courses": [
+        "MATH 11",
+        "AMTH 106",
+        "AMTH 108",
+        "CHEM 11",
+        "PHYS 31",
+        "PHYS 34",
+        "MATH 51",
+        "CHEM 12",
+        "PHYS 113",
+        "MATH 53",
+        "ENGR 1",
+        "CSEN 10",
+        "CSEN 11",
+        "MECH 121",
+        "ECEN 20",
+        "ECEN 100",
+        "ECEN 116",
+        "ECEN 118",
+        "ECEN 105",
+        "ECEN 164",
+        "ECEN 121",
+        "ECEN 188",
+        "ECEN 189",
+        "ENGR 110",
+        "ECEN 199",
+        "MATH 105",
+        "ECEN 123"
+      ],
+      "senior_design_sequence": [
+        "ECEN 192",
+        "ECEN 194",
+        "ECEN 195",
+        "ECEN 196"
+      ],
+      "senior_design_final_year_only": true,
+      "markdown_path": "majors/elen.md"
+    },
+    "mech": {
+      "id": "mech",
+      "name": "Mechanical Engineering",
+      "school": "engineering",
+      "detect_patterns": [
+        "mechanical engineering",
+        "mech major"
+      ],
+      "required_courses": [
+        "MATH 11",
+        "MECH 103",
+        "AMTH 118",
+        "MATH 166",
+        "CHEM 11",
+        "PHYS 31",
+        "MECH 15",
+        "ENGR 1",
+        "MECH 45",
+        "PHYS 70",
+        "MECH 10L",
+        "MECH 1",
+        "MECH 199"
+      ],
+      "senior_design_sequence": [
+        "MECH 192",
+        "MECH 194",
+        "MECH 195",
+        "MECH 196"
+      ],
+      "senior_design_final_year_only": true,
+      "markdown_path": "majors/mech.md"
+    },
+    "bioe": {
+      "id": "bioe",
+      "name": "Bioengineering",
+      "school": "engineering",
+      "detect_patterns": [
+        "bioengineering",
+        "bioe major"
+      ],
+      "required_courses": [
+        "BIOE 180",
+        "ENGR 19",
+        "BIOE 21",
+        "CHEM 11",
+        "PHYS 31",
+        "BIOE 24",
+        "BIOE 22",
+        "MATH 11",
+        "AMTH 106",
+        "BIOE 120",
+        "AMTH 108",
+        "ENGR 1",
+        "BIOE 1",
+        "BIOE 32",
+        "BIOE 153",
+        "BIOE 194",
+        "BIOE 100",
+        "CHEM 111",
+        "PHYS 171",
+        "AMTH 118"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": true,
+      "markdown_path": "majors/bioe.md"
+    },
+    "ceng": {
+      "id": "ceng",
+      "name": "Civil, Environmental, and Sustainable Engineering",
+      "school": "engineering",
+      "detect_patterns": [
+        "civil engineering",
+        "civil, environmental",
+        "ceng major"
+      ],
+      "required_courses": [
+        "MATH 11",
+        "AMTH 106",
+        "AMTH 112",
+        "AMTH 108",
+        "CHEM 11",
+        "CHEM 11T",
+        "PHYS 31",
+        "CENG 20",
+        "ENGR 1",
+        "CENG 7",
+        "CENG 122",
+        "CENG 160",
+        "CENG 182"
+      ],
+      "senior_design_sequence": [
+        "CENG 192A",
+        "CENG 193",
+        "CENG 194"
+      ],
+      "senior_design_final_year_only": true,
+      "markdown_path": "majors/ceng.md"
+    },
+    "fnce": {
+      "id": "fnce",
+      "name": "Finance",
+      "school": "business",
+      "detect_patterns": [
+        "finance major",
+        "majoring in finance"
+      ],
+      "required_courses": [
+        "FNCE 124",
+        "MATH 12",
+        "FNCE 186",
+        "FNCE 118",
+        "FNCE 127",
+        "FNCE 129",
+        "FNCE 131",
+        "ACTG 11",
+        "ACTG 11A",
+        "FNCE 121",
+        "FNCE 128",
+        "ECON 156",
+        "FNCE 143",
+        "OMIS 114",
+        "OMIS 115",
+        "OMIS 116",
+        "OMIS 118"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/fnce.md"
+    },
+    "actg": {
+      "id": "actg",
+      "name": "Accounting",
+      "school": "business",
+      "detect_patterns": [
+        "accounting major",
+        "majoring in accounting"
+      ],
+      "required_courses": [
+        "ACTG 120",
+        "ACTG 130",
+        "ACTG 134",
+        "OMIS 30",
+        "OMIS 105",
+        "ACTG 155",
+        "OMIS 107",
+        "OMIS 150"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/actg.md"
+    },
+    "econ": {
+      "id": "econ",
+      "name": "Economics",
+      "school": "business",
+      "detect_patterns": [
+        "economics major",
+        "majoring in economics"
+      ],
+      "required_courses": [
+        "ECON 1",
+        "MATH 30",
+        "MATH 11",
+        "MATH 8",
+        "OMIS 40",
+        "MATH 122",
+        "AMTH 108",
+        "ECON 41",
+        "OMIS 41",
+        "ECON 113",
+        "ECON 181"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/econ.md"
+    },
+    "mktg": {
+      "id": "mktg",
+      "name": "Marketing",
+      "school": "business",
+      "detect_patterns": [
+        "marketing major",
+        "majoring in marketing"
+      ],
+      "required_courses": [
+        "MKTG 182",
+        "MKTG 185",
+        "MKTG 173",
+        "MKTG 165",
+        "MKTG 198",
+        "MKTG 179"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/mktg.md"
+    },
+    "mgmt": {
+      "id": "mgmt",
+      "name": "Management",
+      "school": "business",
+      "detect_patterns": [
+        "management major",
+        "majoring in management"
+      ],
+      "required_courses": [
+        "MGMT 174",
+        "MGMT 110"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/mgmt.md"
+    },
+    "omis": {
+      "id": "omis",
+      "name": "Management Information Systems",
+      "school": "business",
+      "detect_patterns": [
+        "management information systems",
+        "mis major",
+        "omis major"
+      ],
+      "required_courses": [
+        "OMIS 30",
+        "OMIS 109",
+        "ACTG 134",
+        "ACTG 155",
+        "OMIS 105",
+        "OMIS 113",
+        "OMIS 114",
+        "ECON 173",
+        "ECON 174",
+        "OMIS 111",
+        "ACTG 1",
+        "OMIS 107",
+        "OMIS 31",
+        "OMIS 150",
+        "OMIS 106",
+        "OMIS 40",
+        "OMIS 108",
+        "OMIS 108E",
+        "OMIS 118"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/omis.md"
+    },
+    "bsan": {
+      "id": "bsan",
+      "name": "Business Analytics",
+      "school": "business",
+      "detect_patterns": [
+        "business analytics",
+        "bsan"
+      ],
+      "required_courses": [
+        "MATH 12",
+        "OMIS 30",
+        "OMIS 109",
+        "ACTG 134",
+        "ACTG 155",
+        "OMIS 105",
+        "OMIS 113",
+        "OMIS 114",
+        "ECON 173",
+        "ECON 174",
+        "OMIS 111",
+        "ACTG 1",
+        "OMIS 107",
+        "OMIS 31",
+        "OMIS 150",
+        "OMIS 106",
+        "MATH 11",
+        "OMIS 40",
+        "MATH 8",
+        "MATH 122",
+        "OMIS 108",
+        "OMIS 108E",
+        "OMIS 118"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/bsan.md"
+    },
+    "csci": {
+      "id": "csci",
+      "name": "Computer Science",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "computer science major",
+        "major in computer science",
+        "mathematics and computer science"
+      ],
+      "required_courses": [
+        "MATH 11",
+        "CSCI 10",
+        "PHYS 31",
+        "CHEM 11",
+        "ECEN 21",
+        "MATH 122",
+        "CSCI 161",
+        "CSCI 162",
+        "CSCI 16",
+        "CSCI 146",
+        "MATH 101",
+        "CSCI 183",
+        "CSCI 127",
+        "MATH 123",
+        "CSEN 166",
+        "MATH 178",
+        "CSCI 180",
+        "CSCI 181",
+        "MATH 175",
+        "CSCI 169",
+        "CSCI 187"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/csci.md"
+    },
+    "math": {
+      "id": "math",
+      "name": "Mathematics",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "mathematics major",
+        "major in mathematics"
+      ],
+      "required_courses": [
+        "CSCI 10",
+        "MATH 11",
+        "CSCI 162",
+        "MATH 102",
+        "MATH 103",
+        "MATH 101",
+        "MATH 176",
+        "MATH 122",
+        "MATH 100",
+        "MATH 105",
+        "MATH 125",
+        "MATH 166",
+        "CSCI 184",
+        "CSCI 127",
+        "MATH 146",
+        "MATH 144",
+        "CSCI 161",
+        "CSCI 16",
+        "CSCI 146",
+        "CSCI 183",
+        "MATH 123",
+        "MATH 178",
+        "CSCI 180",
+        "CSCI 181",
+        "MATH 175",
+        "CSCI 169",
+        "CSCI 187"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/math.md"
+    },
+    "psyc": {
+      "id": "psyc",
+      "name": "Psychology",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "psychology major",
+        "majoring in psychology"
+      ],
+      "required_courses": [
+        "PSYC 1",
+        "MATH 8",
+        "MATH 6",
+        "PSYC 165",
+        "PSYC 172",
+        "PSYC 115",
+        "PSYC 150",
+        "PSYC 120",
+        "PSYC 111"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/psyc.md"
+    },
+    "biol": {
+      "id": "biol",
+      "name": "Biology",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "biology major",
+        "majoring in biology"
+      ],
+      "required_courses": [
+        "BIOL 1A",
+        "CHEM 11",
+        "PHYS 11",
+        "PHYS 31",
+        "MATH 35",
+        "MATH 11",
+        "BIOL 101"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/biol.md"
+    }
+  },
+  "prerequisites": {},
+  "course_aliases": {
+    "CSEN 21": [
+      "ECEN 21"
+    ],
+    "ECEN 21": [
+      "CSEN 21"
+    ],
+    "CSEN 194": [
+      "COEN 194",
+      "ENGR 194"
+    ],
+    "CSEN 195": [
+      "COEN 195",
+      "ENGR 195"
+    ],
+    "CSEN 196": [
+      "COEN 196",
+      "ENGR 196"
+    ],
+    "COEN 194": [
+      "CSEN 194",
+      "ENGR 194"
+    ],
+    "COEN 195": [
+      "CSEN 195",
+      "ENGR 195"
+    ],
+    "COEN 196": [
+      "CSEN 196",
+      "ENGR 196"
+    ]
+  }
+}

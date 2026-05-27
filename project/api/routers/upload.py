@@ -8,6 +8,7 @@ from agents.memory_agent import write as memory_write
 from deps.user_auth import require_matching_user
 from utils.academic_progress_helpers import enrich_missing_details
 from utils.academic_progress_xlsx import parse_academic_progress_xlsx, sanitize_parsed_rows
+from utils.major_requirements import detect_major_detailed
 
 router = APIRouter()
 _MAX_TRANSCRIPT_BYTES = 5 * 1024 * 1024  # 5 MiB
@@ -54,7 +55,10 @@ async def upload_transcript(
         except Exception:  # noqa: BLE001
             pass
 
+    major_detection = detect_major_detailed(missing_details, parsed_rows)
+
     return {
         "missing_details": missing_details,
         "parsed_rows": parsed_rows,
+        "major_detection": major_detection,
     }

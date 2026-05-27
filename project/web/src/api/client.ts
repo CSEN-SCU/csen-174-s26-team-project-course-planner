@@ -71,6 +71,64 @@ export async function uploadTranscript(file: File, userId?: string) {
  */
 const _USE_PLAN_V2 = (import.meta.env.VITE_USE_PLAN_V2 as string | undefined) === "1";
 
+export type MajorListEntry = {
+  major_id: string;
+  name: string;
+  school?: string;
+  markdown_path?: string;
+};
+
+export type MajorDetection = {
+  major_id?: string | null;
+  name?: string | null;
+  confidence?: string;
+  message?: string;
+  needs_confirmation?: boolean;
+  candidates?: { major_id: string; name: string; score?: number }[];
+  source?: string;
+};
+
+export async function listMajors() {
+  const res = await fetch(`${API_BASE}/majors`, { headers: authHeaders() });
+  const data = await res.json();
+  if (!res.ok) throw new Error(errFromBody(data));
+  return data as { majors: MajorListEntry[]; version?: string };
+}
+
+export async function detectStudentMajor(
+  missing_details: unknown[],
+  parsed_rows: unknown[],
+  confirmed_major_id?: string,
+) {
+  const res = await fetch(`${API_BASE}/majors/detect`, {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({
+      missing_details,
+      parsed_rows,
+      confirmed_major_id: confirmed_major_id ?? "",
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(errFromBody(data));
+  return data as MajorDetection;
+}
+
+export async function confirmStudentMajor(
+  user_id: string,
+  major_id: string,
+  source = "user",
+) {
+  const res = await fetch(`${API_BASE}/majors/confirm`, {
+    method: "POST",
+    headers: authHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ user_id, major_id, source }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(errFromBody(data));
+  return data;
+}
+
 export async function generatePlan(
   missing_details: any[],
   user_preference: string,
@@ -79,6 +137,7 @@ export async function generatePlan(
   options?: {
     parsed_rows?: unknown[];
     completed_course_codes?: string[];
+    student_major_id?: string;
   },
 ) {
   const endpoint = _USE_PLAN_V2 ? `${API_BASE}/plan/v2` : `${API_BASE}/plan`;
@@ -92,6 +151,7 @@ export async function generatePlan(
       previous_plan: previous_plan ?? null,
       parsed_rows: options?.parsed_rows ?? [],
       completed_course_codes: options?.completed_course_codes ?? [],
+      student_major_id: options?.student_major_id ?? "",
     }),
   });
   const data = await res.json();
@@ -147,11 +207,19 @@ export async function generateFourYearPlan(
   missing_details: any[],
   user_id: string,
   preferences?: string,
+  parsed_rows?: any[],
+  student_major_id?: string,
 ) {
   const res = await fetch(`${API_BASE}/four-year-plan`, {
     method: "POST",
     headers: authHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify({ missing_details, user_id, preferences: preferences ?? "" }),
+    body: JSON.stringify({
+      missing_details,
+      parsed_rows: parsed_rows ?? [],
+      user_id,
+      preferences: preferences ?? "",
+      student_major_id: student_major_id ?? "",
+    }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(errFromBody(data));

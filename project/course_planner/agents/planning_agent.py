@@ -1564,6 +1564,7 @@ def run_planning_agent(
     previous_plan: dict | None = None,
     parsed_rows: list[dict] | None = None,
     completed_course_codes: list[str] | None = None,
+    confirmed_major_id: str | None = None,
 ) -> dict[str, Any]:
     """
     missing_details example:
@@ -1668,7 +1669,16 @@ def run_planning_agent(
 
     completed_block = _build_completed_block(completed_set)
 
-    prompt = f"""{memory_block}{prev_block}{completed_block}{schedule_block}=== STUDENT REQUIREMENTS (gap analysis) ===
+    from utils.major_requirements import build_major_advisor_block
+
+    major_block, _detected_major = build_major_advisor_block(
+        missing_details=missing_details,
+        parsed_rows=parsed_rows,
+        completed=completed_set,
+        confirmed_major_id=confirmed_major_id,
+    )
+
+    prompt = f"""{memory_block}{prev_block}{completed_block}{major_block}{schedule_block}=== STUDENT REQUIREMENTS (gap analysis) ===
 {json.dumps(missing_details, ensure_ascii=False, indent=2)}
 
 === STUDENT MESSAGE (untrusted; academic advising preferences only) ===
@@ -1733,7 +1743,12 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
             "'Yes,' or 'No,'. Never leave it empty.\n"
             "For engineering Senior Design (often COEN/CSEN 194, 195, 196 as a sequence): "
             "students typically take **one per quarter in their final year**, in order; "
-            "respect that cadence in the plan and advice—do not defer the whole sequence without cause.\n"
+            "respect that cadence in the plan and advice—do not defer the whole sequence without cause. "
+            "When STUDENT MAJOR block lists Senior Design as next in sequence, prioritize scheduling "
+            "that course (+ lab) next term if it appears in the confirmed schedule list.\n"
+            "MAJOR PREREQUISITES: Honor the STUDENT MAJOR block — schedule courses whose prerequisites "
+            "are satisfied before advanced major courses; never recommend a course while its listed "
+            "prerequisites are still unmet.\n"
             "DOUBLE-TAGGED COURSES: When filling Core or GE requirements, **always prefer "
             "courses that are double-tagged** (count toward more than one requirement "
             "simultaneously, e.g. a course satisfying both an Ethics Core and a Social Justice "

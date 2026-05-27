@@ -40,3 +40,6 @@ project/course_planner/~$*.xlsx
 project/course_planner/data/*
 # ...DO track seed/config data checked into the repo (not user data):
 !project/course_planner/data/instructor_ratings.csv
+!project/course_planner/data/major_requirements.json
+!project/course_planner/data/majors/
+!project/course_planner/data/majors/**

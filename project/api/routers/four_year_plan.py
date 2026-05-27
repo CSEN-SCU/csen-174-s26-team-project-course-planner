@@ -14,8 +14,10 @@ router = APIRouter()
 
 class FourYearPlanRequest(BaseModel):
     missing_details: list[dict[str, Any]] = Field(default_factory=list)
+    parsed_rows: list[dict[str, Any]] = Field(default_factory=list)
     user_id: str = ""
     preferences: str = ""
+    student_major_id: str = ""
 
 
 @router.post(
@@ -35,6 +37,8 @@ def create_four_year_plan(body: FourYearPlanRequest, request: Request) -> dict[s
         plan = run_four_year_plan_agent(
             body.missing_details,
             preferences=body.preferences or None,
+            parsed_rows=body.parsed_rows or None,
+            confirmed_major_id=body.student_major_id or None,
         )
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

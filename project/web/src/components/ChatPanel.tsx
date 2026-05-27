@@ -11,6 +11,7 @@ import {
   generatePlan,
   transcribeAudio,
   uploadTranscript,
+  type MajorDetection,
 } from "../api/client";
 import type { ParsedRow } from "../types";
 import { PlannerColumnHeader } from "./PlannerColumnHeader";
@@ -51,6 +52,9 @@ export type ChatPanelProps = {
   focusNonce?: number;
   setParsedRows?: (v: ParsedRow[]) => void;
   onSignOut?: () => void;
+  studentMajorId?: string | null;
+  majorConfirmed?: boolean;
+  onTranscriptUploaded?: (detection: MajorDetection | null) => void;
 };
 
 function planSummaryText(plan: Record<string, unknown>): string {
@@ -115,6 +119,9 @@ export function ChatPanel({
   focusNonce,
   setParsedRows,
   onSignOut,
+  studentMajorId = null,
+  majorConfirmed = false,
+  onTranscriptUploaded,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -158,13 +165,18 @@ export function ChatPanel({
       const pr = (data.parsed_rows as ParsedRow[]) ?? [];
       setParsedRows?.(pr);
       setFileUploaded(true);
-      const reply = `Got it! Found ${md.length} missing requirements${userId ? " and saved your progress" : ""}. What are your preferences for next quarter?`;
+      const det = (data.major_detection as MajorDetection | undefined) ?? null;
+      onTranscriptUploaded?.(det);
+      const majorHint = det?.message
+        ? `\n\n${det.message}`
+        : "";
+      const reply = `Got it! Found ${md.length} missing requirements${userId ? " and saved your progress" : ""}.${majorHint} Confirm your major above, then tell me your preferences for next quarter.`;
       setMessages((m) => [...m, { id: `a-${Date.now()}`, role: "assistant", content: reply }]);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setMessages((m) => [...m, { id: `a-${Date.now()}`, role: "assistant", content: `Upload failed: ${msg}` }]);
     }
-  }, [userId, setMissingDetails, setParsedRows, setFileUploaded, setMessages]);
+  }, [userId, setMissingDetails, setParsedRows, setFileUploaded, setMessages, onTranscriptUploaded]);
 
   const sendText = useCallback(async (text: string) => {
     const trimmed = text.trim();
@@ -186,6 +198,19 @@ export function ChatPanel({
           role: "assistant",
           content:
             "Please upload your Academic Progress Report (.xlsx) from Workday using the paperclip below.",
+        },
+      ]);
+      return;
+    }
+
+    if (!majorConfirmed || !studentMajorId) {
+      setMessages((m) => [
+        ...m,
+        {
+          id: `a-${Date.now()}`,
+          role: "assistant",
+          content:
+            "请先在上方的专业确认栏选择并确认你的专业（系统会根据 Academic Progress 推断，也可手动修改），然后再描述你想要的课表。",
         },
       ]);
       return;
@@ -215,6 +240,7 @@ export function ChatPanel({
         {
           parsed_rows: parsedRows,
           completed_course_codes: completedCourseCodesFromRows(parsedRows),
+          student_major_id: studentMajorId ?? undefined,
         },
       );
 

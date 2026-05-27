@@ -66,12 +66,19 @@ def _compaction_summary_max_chars() -> int:
 
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
-ALLOWED_KINDS = ("preference", "plan_outcome", "note", "academic_progress", "parsed_rows")
+ALLOWED_KINDS = (
+    "preference",
+    "plan_outcome",
+    "note",
+    "academic_progress",
+    "parsed_rows",
+    "student_major",
+)
 
 # Singleton kinds: only one entry per user; writing a new one replaces the old.
 # Used for large structured payloads that always supersede older versions
 # (transcript snapshots) so the file doesn't accumulate stale copies.
-_SINGLETON_KINDS = frozenset(("academic_progress", "parsed_rows"))
+_SINGLETON_KINDS = frozenset(("academic_progress", "parsed_rows", "student_major"))
 
 # Never include these kinds in the text-summarization compaction batches —
 # their JSON structure must remain intact so the frontend can parse them.
@@ -80,7 +87,7 @@ _SINGLETON_KINDS = frozenset(("academic_progress", "parsed_rows"))
 # is plain text (PREF/GAP/PLAN lines), not structured JSON, so compaction
 # is safe.  academic_progress and parsed_rows are singletons that contain
 # transcript JSON the frontend parses directly — they must never be merged.
-_NEVER_COMPACT_KINDS = frozenset(("academic_progress", "parsed_rows"))
+_NEVER_COMPACT_KINDS = frozenset(("academic_progress", "parsed_rows", "student_major"))
 
 _BLOCK_RE = re.compile(
     r"^<<<MEMORY (.+?)>>>\n(.*?)<<<END_MEMORY>>>\s*",

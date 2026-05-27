@@ -263,6 +263,8 @@ def _is_transient(exc: Exception) -> bool:
 def run_four_year_plan_agent(
     missing_details: list[dict],
     preferences: str | None = None,
+    parsed_rows: list[dict] | None = None,
+    confirmed_major_id: str | None = None,
 ) -> dict[str, Any]:
     """
     Generate a multi-quarter graduation plan from all remaining requirements.
@@ -281,6 +283,12 @@ def run_four_year_plan_agent(
         _normalize_open_req_text,
         _resolve_item_codes,
         _resolve_open_requirement,
+    )
+    from utils.academic_progress_helpers import extract_completed_course_codes
+    from utils.major_requirements import (
+        build_major_advisor_block,
+        enforce_senior_design_in_final_quarters,
+        resolve_major_id,
     )
     from utils.scu_course_schedule_xlsx import (
         course_title_for,
@@ -386,6 +394,14 @@ def run_four_year_plan_agent(
 
     pref_block = f"\nStudent preferences / constraints:\n{preferences.strip()}\n" if preferences and preferences.strip() else ""
 
+    completed_set = extract_completed_course_codes(parsed_rows)
+    major_block, detected_major = build_major_advisor_block(
+        missing_details=missing_details,
+        parsed_rows=parsed_rows,
+        completed=completed_set,
+        confirmed_major_id=confirmed_major_id,
+    )
+
     prompt = f"""You are an SCU academic advisor building a MULTI-QUARTER graduation plan.
 
 TODAY: {date.today().isoformat()} — SCU uses Fall / Winter / Spring quarters.
@@ -403,7 +419,7 @@ PLAN-LENGTH BUDGET (HARD):
 REMAINING REQUIREMENTS ({len(missing_details)} courses, {total_units} total units):
 {json.dumps(missing_details, ensure_ascii=False, indent=2)}
 
-{open_req_block}{pref_block}
+{open_req_block}{major_block}{pref_block}
 RULES:
 1. The plan MUST cover EVERY item in REMAINING REQUIREMENTS — both the
    specific major / lab courses (CSEN 122, CSEN 194/L, CSEN 195/L,
@@ -424,11 +440,11 @@ RULES:
     unless prereqs or term-offering rules force it.
 5. Respect typical prerequisites: introductory/numbered-lower courses before advanced ones.
 6. Group lecture + lab pairs (e.g. CSEN 194 + CSEN 194L) in the SAME quarter.
-7. CSEN 194 / CSEN 195 / CSEN 196 are a 3-quarter Senior Design sequence —
-   schedule them in three CONSECUTIVE quarters (one per quarter) with their
-   labs. Senior Design should be CONCURRENT with other remaining major /
-   Core courses (a typical senior quarter is "CSEN 19x/L + 1–2 other
-   remaining courses"), NOT in its own otherwise-empty quarters.
+7. CSEN/COEN/ECEN 194 / 195 / 196 are a 3-quarter Senior Design sequence for
+   engineering majors — place them in the LAST THREE quarters of this plan
+   (one lecture + lab per quarter), in order 194 → 195 → 196. Senior Design
+   runs CONCURRENT with other remaining major / Core courses (typical senior
+   quarter: "CSEN 19x/L + 1–2 other courses"), NOT in otherwise-empty quarters.
 8. If a course is only offered in certain quarters (Fall/Spring), note that in reason.
 9. Each course must appear in EXACTLY ONE quarter — no duplicates, no omissions.
 10. Use only the term names from the NEXT TERMS list above.
@@ -639,7 +655,22 @@ Output JSON matching the schema exactly.
                     int(c.get("units") or 0) for c in (quarter.get("courses") or [])
                 )
 
+    # Pin Senior Design to final three quarters for engineering majors.
+    major_id = detected_major or resolve_major_id(
+        confirmed_major_id=confirmed_major_id,
+        missing_details=missing_details,
+        parsed_rows=parsed_rows,
+    )
+    parsed = enforce_senior_design_in_final_quarters(
+        parsed, major_id, completed=completed_set
+    )
+
     # ────────────────────────────────────────────────────────────────────────
     parsed.setdefault("total_remaining_units", total_units)
-    parsed["meta"] = {"provider": "gemini", "model": candidate, "request_id": request_id}
+    parsed["meta"] = {
+        "provider": "gemini",
+        "model": candidate,
+        "request_id": request_id,
+        "detected_major": major_id,
+    }
     return parsed

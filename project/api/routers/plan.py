@@ -138,6 +138,7 @@ class PlanRequest(BaseModel):
     previous_plan: dict[str, Any] | None = None
     parsed_rows: list[dict[str, Any]] = Field(default_factory=list)
     completed_course_codes: list[str] = Field(default_factory=list)
+    student_major_id: str = ""
 
 
 def _load_parsed_rows_from_memory(user_id: str) -> list[dict[str, Any]]:
@@ -215,6 +216,7 @@ def create_plan(body: PlanRequest, request: Request) -> dict[str, Any]:
             previous_plan=body.previous_plan,
             parsed_rows=parsed_rows,
             completed_course_codes=completed_codes,
+            confirmed_major_id=body.student_major_id or None,
         )
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc

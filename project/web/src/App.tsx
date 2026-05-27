@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   deleteMemory,
+  detectStudentMajor,
   generateFourYearPlan,
   getMemory,
   saveMemory,
+  type MajorDetection,
 } from "./api/client";
+import { MajorConfirmPanel } from "./components/MajorConfirmPanel";
 import { CalendarView } from "./components/CalendarView";
 import { ChatPanel, type ChatUiMessage } from "./components/ChatPanel";
 import {
@@ -74,6 +77,11 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
   const [fourYearPlan, setFourYearPlan] = useState<FourYearPlan | null>(null);
   const [fourYearGenerating, setFourYearGenerating] = useState(false);
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
+  const [studentMajorId, setStudentMajorId] = useState<string | null>(null);
+  const [studentMajorName, setStudentMajorName] = useState<string | null>(null);
+  const [majorConfirmed, setMajorConfirmed] = useState(false);
+  const [majorDetection, setMajorDetection] = useState<MajorDetection | null>(null);
+  const [majorEditMode, setMajorEditMode] = useState(false);
   const [firstLoginCarouselOpen, setFirstLoginCarouselOpen] = useState(false);
   // Slot suggestion popover state (R6)
   const [slotPopoverOpen, setSlotPopoverOpen] = useState(false);
@@ -149,6 +157,24 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
           } catch { /* ignore */ }
         }
 
+        const majorItems = mems
+          .filter((m) => m.kind === "student_major")
+          .sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")));
+        if (majorItems.length > 0) {
+          try {
+            const sm = JSON.parse(String(majorItems[0].content ?? "{}")) as {
+              major_id?: string;
+              name?: string;
+              confirmed?: boolean;
+            };
+            if (sm.major_id) {
+              setStudentMajorId(sm.major_id);
+              setStudentMajorName(sm.name ?? sm.major_id);
+              setMajorConfirmed(Boolean(sm.confirmed));
+            }
+          } catch { /* ignore */ }
+        }
+
         // Restore past plan snapshots
         const planMems = mems
           .filter((m) => m.kind === "plan_outcome")
@@ -185,6 +211,32 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
       })
       .catch(() => { /* ignore */ });
   }, [userId]);
+
+  const refreshMajorDetection = useCallback(async () => {
+    if (!fileUploaded || missingDetails.length === 0) return;
+    try {
+      const det = await detectStudentMajor(
+        missingDetails,
+        parsedRows,
+        majorConfirmed ? studentMajorId ?? undefined : undefined,
+      );
+      if (!majorConfirmed) {
+        setMajorDetection(det);
+        if (det.major_id && !studentMajorId) {
+          setStudentMajorId(det.major_id);
+          setStudentMajorName(det.name ?? det.major_id);
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [fileUploaded, missingDetails, parsedRows, majorConfirmed, studentMajorId]);
+
+  useEffect(() => {
+    if (fileUploaded && !majorConfirmed) {
+      void refreshMajorDetection();
+    }
+  }, [fileUploaded, missingDetails, parsedRows, majorConfirmed, refreshMajorDetection]);
 
   useEffect(() => {
     setFirstLoginCarouselOpen(!hasSeenFirstLoginCarousel(userId));
@@ -739,10 +791,25 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
     if (!missingDetails.length || fourYearGenerating) return;
     setFourYearGenerating(true);
     try {
+      if (!majorConfirmed || !studentMajorId) {
+        setMessages((m) => [
+          ...m,
+          {
+            id: `a-${Date.now()}`,
+            role: "assistant",
+            content: "请先在上方的专业确认栏选择并确认你的专业，再生成四年规划。",
+          },
+        ]);
+        setFourYearGenerating(false);
+        return;
+      }
+
       const result = await generateFourYearPlan(
         missingDetails,
         userId ?? "anonymous",
         preferences.trim() || undefined,
+        parsedRows,
+        studentMajorId,
       );
       const plan = result as FourYearPlan;
       setFourYearPlan(plan);
@@ -1003,10 +1070,33 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
         )}
       </div>
 
+      {fileUploaded && (
+        <MajorConfirmPanel
+          userId={userId}
+          detection={majorDetection}
+          selectedMajorId={studentMajorId}
+          majorConfirmed={majorConfirmed && !majorEditMode}
+          onSelectMajor={(id, name) => {
+            setStudentMajorId(id);
+            setStudentMajorName(name);
+          }}
+          onConfirmed={() => {
+            setMajorConfirmed(true);
+            setMajorEditMode(false);
+          }}
+          onRequestChange={() => {
+            setMajorEditMode(true);
+            setMajorConfirmed(false);
+          }}
+        />
+      )}
+
       <ChatPanel
         userId={userId}
         parsedRows={parsedRows}
         missingDetails={missingDetails}
+        studentMajorId={studentMajorId}
+        majorConfirmed={majorConfirmed && !majorEditMode}
         planResult={planResult}
         messages={messages}
         setMessages={setMessages}
@@ -1020,6 +1110,18 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
         focusNonce={chatFocusNonce}
         setParsedRows={setParsedRows}
         onSignOut={onSignOut}
+        onTranscriptUploaded={(det) => {
+          setMajorDetection(det ?? null);
+          setMajorConfirmed(false);
+          setMajorEditMode(false);
+          if (det?.major_id) {
+            setStudentMajorId(det.major_id);
+            setStudentMajorName(det.name ?? det.major_id);
+          } else {
+            setStudentMajorId(null);
+            setStudentMajorName(null);
+          }
+        }}
       />
       </div>
       <SiteFooter
