@@ -525,19 +525,6 @@ export function FourYearPlanView({
             {plan && <SummaryBar plan={plan} />}
             <Legend />
 
-            {/* Prompt to generate if we have completed data but no plan */}
-            {hasCompletedData && !plan && (
-              <div className="flex items-center gap-3 rounded-lg border border-dashed border-neutral-300 bg-white px-4 py-3 text-xs text-neutral-500">
-                <span>Completed courses loaded from your Academic Progress export.</span>
-                <button
-                  onClick={() => onGenerate("")}
-                  className="ml-auto shrink-0 rounded-md bg-[var(--scu-red)] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-red-700"
-                >
-                  Generate Remaining Plan
-                </button>
-              </div>
-            )}
-
             {sortedYears.map((y) => (
               <YearSection key={y.acYear} year={y} />
             ))}
