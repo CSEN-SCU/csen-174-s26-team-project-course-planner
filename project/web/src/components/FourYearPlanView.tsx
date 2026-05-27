@@ -399,12 +399,6 @@ function SummaryBar({ plan }: { plan: FourYearPlan }) {
         <span className="font-semibold text-[var(--scu-text)]">Scheduled: </span>
         {totalScheduled} units
       </div>
-      {plan.advice && (
-        <>
-          <div className="h-4 w-px bg-neutral-200" />
-          <p className="flex-1 text-neutral-500 italic min-w-0">{plan.advice}</p>
-        </>
-      )}
     </div>
   );
 }
@@ -464,7 +458,7 @@ export function FourYearPlanView({
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#F5F5F5]">
       <header className="flex shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-4 py-3 shadow-sm">
-        <h1 className="text-sm font-semibold text-[var(--scu-text)]">4-Year Graduation Plan</h1>
+        <h1 className="text-sm font-semibold text-[var(--scu-text)]">Four-Year Plan</h1>
         <button
           onClick={() => onGenerate("")}
           disabled={isGenerating || !hasTranscript}
