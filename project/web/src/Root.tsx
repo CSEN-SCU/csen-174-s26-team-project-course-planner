@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import App from "./App";
 import { useAuth } from "./hooks/useAuth";
+import { usePlannerShell } from "./hooks/usePlannerShell";
 import {
   ACADEMIC_PROGRESS_TUTORIAL_PATH,
   COURSE_PLANNER_TUTORIAL_PATH,
@@ -17,11 +18,14 @@ export function Root() {
   const [route, setRoute] = useState(resolveClientRoute);
   const { userId, googleAuthError, googleAuthPending, signOut } = useAuth();
 
-  useEffect(() => {
-    resetPageScroll();
-  }, []);
+  const isInfoRoute =
+    route === DATA_DISCLOSURE_PATH ||
+    route === ACADEMIC_PROGRESS_TUTORIAL_PATH ||
+    route === COURSE_PLANNER_TUTORIAL_PATH;
 
-  useEffect(() => {
+  usePlannerShell(Boolean(userId) || isInfoRoute);
+
+  useLayoutEffect(() => {
     resetPageScroll();
   }, [route, userId]);
 
@@ -59,5 +63,9 @@ export function Root() {
     );
   }
 
-  return <App userId={userId} onSignOut={signOut} />;
+  return (
+    <div className="planner-app-root">
+      <App userId={userId} onSignOut={signOut} />
+    </div>
+  );
 }

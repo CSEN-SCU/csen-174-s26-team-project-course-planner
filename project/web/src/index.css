@@ -34,6 +34,39 @@ body {
   overflow-x: clip;
 }
 
+/* Full-screen planner: prevent document scroll from clipping the sidebar header */
+html.planner-shell {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+html.planner-shell body {
+  height: 100%;
+  margin: 0;
+  width: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+html.planner-shell #root {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.planner-app-root {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  background: var(--scu-white);
+}
+
 /* Landing page */
 .home-page {
   background:

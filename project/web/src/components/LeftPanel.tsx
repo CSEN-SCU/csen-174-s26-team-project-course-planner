@@ -1,3 +1,5 @@
+import { useLayoutEffect, useRef } from "react";
+import { resetPageScroll } from "../lib/scroll";
 import { BrandLink } from "./BrandLink";
 
 export type MemorySessionRow = {
@@ -31,13 +33,25 @@ export function LeftPanel({
   onSaveSchedule,
   onClearSchedule,
 }: LeftPanelProps) {
-  return (
-    <aside className="flex h-full min-h-0 w-[260px] shrink-0 flex-col overflow-hidden border-l-4 border-[var(--scu-red)] bg-[var(--scu-white)] shadow-sm">
-      <div className="shrink-0 border-b border-neutral-200 px-4 py-5">
-        <BrandLink />
-      </div>
+  const asideRef = useRef<HTMLElement>(null);
+  const sessionsRef = useRef<HTMLDivElement>(null);
 
-      <div className="shrink-0 space-y-2 px-4 py-4">
+  useLayoutEffect(() => {
+    resetPageScroll();
+    if (asideRef.current) asideRef.current.scrollTop = 0;
+    if (sessionsRef.current) sessionsRef.current.scrollTop = 0;
+  }, []);
+
+  return (
+    <aside
+      ref={asideRef}
+      className="grid h-full min-h-0 w-[260px] shrink-0 grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden border-l-4 border-[var(--scu-red)] bg-[var(--scu-white)] shadow-sm"
+    >
+      <header className="z-10 border-b border-neutral-200 bg-[var(--scu-white)] px-4 py-5">
+        <BrandLink />
+      </header>
+
+      <div className="space-y-2 bg-[var(--scu-white)] px-4 py-4">
         {scheduleCourseCount > 0 ? (
           <>
             <button
@@ -77,7 +91,7 @@ export function LeftPanel({
         )}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
+      <div ref={sessionsRef} className="min-h-0 overflow-y-auto px-2 pb-4">
         <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">
           Past sessions
         </p>

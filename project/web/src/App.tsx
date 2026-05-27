@@ -23,7 +23,6 @@ import { SlotSuggestionPopover } from "./components/SlotSuggestionPopover";
 import type { CatalogSection, CourseBrowserLaunchContext } from "./api/client";
 import { CALENDAR_START_HOUR } from "./types";
 import { clearLocalSession } from "./auth/session";
-import { useLockDocumentScroll } from "./hooks/useLockDocumentScroll";
 import { SiteFooter } from "./components/SiteFooter";
 import { CourseSwapModal } from "./components/CourseSwapModal";
 import { SaveScheduleModal } from "./components/SaveScheduleModal";
@@ -112,8 +111,6 @@ export default function App({ userId, onSignOut }: AppProps) {
   const [saveScheduleModalOpen, setSaveScheduleModalOpen] = useState(false);
   const [newPlanWarningOpen, setNewPlanWarningOpen] = useState(false);
   const [startNewPlanAfterSave, setStartNewPlanAfterSave] = useState(false);
-
-  useLockDocumentScroll(true);
 
   // Load academic progress + past plan snapshots for this user
   useEffect(() => {
@@ -878,7 +875,7 @@ export default function App({ userId, onSignOut }: AppProps) {
   }, []);
 
   return (
-    <div className="fixed inset-0 z-0 flex w-full max-w-full flex-col overflow-hidden bg-[var(--scu-white)]">
+    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
       <DeleteUserDataConfirm
         open={deleteDataOpen}
         busy={deleteDataBusy}
@@ -945,7 +942,7 @@ export default function App({ userId, onSignOut }: AppProps) {
         }}
         onSwap={handleSwapCourseSection}
       />
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div className="flex h-full min-h-0 flex-1 overflow-hidden">
       <LeftPanel
         sessions={sessions}
         activeSessionId={activeSessionId}
