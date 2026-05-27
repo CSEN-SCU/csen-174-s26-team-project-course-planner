@@ -53,21 +53,30 @@ def create_user(
     db_path: Optional[str] = None,
 ) -> int:
     """Insert a new OAuth-backed user; returns its id."""
+    import hashlib
     normalized_sub = google_sub.strip()
     _validate_inputs(normalized_sub, email)
+    
+    # Calculate a stable unique integer ID from google_sub to prevent user ID collision
+    # and data sharing across serverless container restarts.
+    sub_hash = hashlib.sha256(normalized_sub.encode("utf-8")).digest()
+    uid = int.from_bytes(sub_hash[:8], byteorder="big") & 0x7FFFFFFFFFFFFFFF
+    if uid == 0:
+        uid = 1
+
     conn = get_conn(db_path)
     try:
         try:
-            cur = conn.execute(
-                "INSERT INTO users (google_sub, email) VALUES (?, ?)",
-                (normalized_sub, email),
+            conn.execute(
+                "INSERT INTO users (id, google_sub, email) VALUES (?, ?, ?)",
+                (uid, normalized_sub, email),
             )
             conn.commit()
         except sqlite3.IntegrityError as exc:
             raise UserAlreadyExistsError(
                 "A user with that Google account or email already exists."
             ) from exc
-        return int(cur.lastrowid)
+        return uid
     finally:
         close_conn(conn)
 
