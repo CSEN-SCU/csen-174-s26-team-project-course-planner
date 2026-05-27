@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { GoogleSignInButton } from "../components/GoogleSignInButton";
 import { SiteFooter } from "../components/SiteFooter";
+import { resetPageScroll } from "../lib/scroll";
 
 const TAGLINE =
   "Build your upcoming SCU schedule, perzonalized with on your major requirements and course preferences.";
@@ -12,6 +13,10 @@ export type HomePageProps = {
 
 export function HomePage({ externalAuthError, authPending }: HomePageProps) {
   const [deleteDataNotice, setDeleteDataNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    resetPageScroll();
+  }, []);
 
   useEffect(() => {
     try {
@@ -26,7 +31,7 @@ export function HomePage({ externalAuthError, authPending }: HomePageProps) {
   }, []);
 
   return (
-    <div className="home-page flex min-h-screen w-screen flex-col overflow-hidden">
+    <div className="home-page flex min-h-dvh w-full max-w-full flex-col">
       <main className="flex min-h-0 flex-1 flex-col items-center justify-center px-6 py-12">
         <div className="home-hero w-full max-w-lg text-center">
           <div className="home-brand mb-6" aria-label="SCU Course Planner">

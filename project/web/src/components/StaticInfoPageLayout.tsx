@@ -1,4 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, type ReactNode } from "react";
+import { resetPageScroll } from "../lib/scroll";
 import { BrandLink } from "./BrandLink";
 import { SiteFooter } from "./SiteFooter";
 
@@ -55,6 +56,8 @@ export function StaticInfoPageLayout({
   }, [roundPanelBottom]);
 
   useLayoutEffect(() => {
+    resetPageScroll();
+    mainRef.current?.scrollTo(0, 0);
     syncPanel();
     const main = mainRef.current;
     if (!main) return;
@@ -76,7 +79,7 @@ export function StaticInfoPageLayout({
   }, [syncPanel]);
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--scu-white)]">
+    <div className="flex h-dvh min-h-dvh w-full max-w-full flex-col overflow-hidden bg-[var(--scu-white)]">
       <header
         ref={headerRef}
         className="relative z-20 shrink-0 border-b border-neutral-200 border-l-4 border-l-[var(--scu-red)] bg-[var(--scu-white)] px-6 py-5 shadow-sm"

@@ -11,10 +11,27 @@ import { AcademicProgressExportTutorialPage } from "./pages/AcademicProgressExpo
 import { CoursePlannerTutorialPage } from "./pages/CoursePlannerTutorialPage";
 import { DataDisclosurePage } from "./pages/DataDisclosurePage";
 import { HomePage } from "./pages/HomePage";
+import { resetPageScroll } from "./lib/scroll";
 
 export function Root() {
   const [route, setRoute] = useState(resolveClientRoute);
   const { userId, googleAuthError, googleAuthPending, signOut } = useAuth();
+
+  useEffect(() => {
+    resetPageScroll();
+  }, []);
+
+  useEffect(() => {
+    resetPageScroll();
+  }, [route, userId]);
+
+  useEffect(() => {
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) resetPageScroll();
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
 
   useEffect(() => {
     const sync = () => setRoute(resolveClientRoute());

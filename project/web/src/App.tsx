@@ -866,7 +866,7 @@ export default function App({ userId, onSignOut }: AppProps) {
   }, []);
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[var(--scu-white)]">
+    <div className="flex h-dvh min-h-dvh w-full max-w-full flex-col overflow-hidden bg-[var(--scu-white)]">
       <DeleteUserDataConfirm
         open={deleteDataOpen}
         busy={deleteDataBusy}
