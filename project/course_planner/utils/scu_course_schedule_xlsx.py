@@ -811,6 +811,108 @@ def load_instructor_ratings(
     return out
 
 
+def _balanced_instructor_score(
+    rating: float | None, difficulty: float | None
+) -> float | None:
+    """Higher is better: average of normalized quality and easiness (RMP-style)."""
+    if rating is None and difficulty is None:
+        return None
+    if rating is not None and difficulty is not None:
+        r01 = max(0.0, min(1.0, float(rating) / 5.0))
+        d01 = max(0.0, min(1.0, 1.0 - float(difficulty) / 5.0))
+        return (r01 + d01) / 2.0
+    if rating is not None:
+        return max(0.0, min(1.0, float(rating) / 5.0))
+    if difficulty is not None:
+        return max(0.0, min(1.0, 1.0 - float(difficulty) / 5.0))
+    return None
+
+
+def _best_instructor_rating_for_section(
+    section: dict[str, Any], ratings: dict[str, dict[str, Any]]
+) -> dict[str, Any]:
+    """Pick the highest-rated instructor listed for a section (fallback: first name)."""
+    names = section.get("instructors") or []
+    if not names:
+        return instructor_rating_for("", ratings)
+    best_rec: dict[str, Any] | None = None
+    best_rating = -1.0
+    for raw in names:
+        name = str(raw).strip()
+        if not name:
+            continue
+        rec = instructor_rating_for(name, ratings)
+        r = rec.get("rating")
+        if r is not None and float(r) > best_rating:
+            best_rating = float(r)
+            best_rec = rec
+    if best_rec is not None:
+        return best_rec
+    return instructor_rating_for(str(names[0]).strip(), ratings)
+
+
+def enrich_section_instructor_rating(
+    section: dict[str, Any], ratings: dict[str, dict[str, Any]] | None = None
+) -> dict[str, Any]:
+    """Attach RateMyProfessors-derived fields for catalog UI (primary instructor)."""
+    ratings = ratings if ratings is not None else load_instructor_ratings()
+    rec = _best_instructor_rating_for_section(section, ratings)
+    rating = rec.get("rating")
+    difficulty = rec.get("difficulty")
+    out = dict(section)
+    out["instructor_display"] = rec.get("instructor") or (
+        (section.get("instructors") or [None])[0]
+    )
+    out["instructor_rating"] = rating
+    out["instructor_difficulty"] = difficulty
+    out["instructor_wta_pct"] = rec.get("would_take_again_pct")
+    out["instructor_rating_source"] = rec.get("source")
+    out["instructor_balanced_score"] = _balanced_instructor_score(rating, difficulty)
+    return out
+
+
+def sort_catalog_sections(
+    sections: list[dict[str, Any]], sort: str | None = None
+) -> list[dict[str, Any]]:
+    """Sort catalog rows for the browser (sections should already be rating-enriched)."""
+    mode = (sort or "default").strip().lower()
+    if mode in ("", "default", "course"):
+        return list(sections)
+
+    def _course_key(s: dict[str, Any]) -> tuple:
+        return (s.get("subject") or "", s.get("course") or "", s.get("section") or 0)
+
+    if mode == "rating":
+        return sorted(
+            sections,
+            key=lambda s: (
+                s.get("instructor_rating") is None,
+                -(float(s.get("instructor_rating") or 0)),
+                _course_key(s),
+            ),
+        )
+    if mode == "difficulty":
+        # Lower difficulty = easier = sort ascending; missing last
+        return sorted(
+            sections,
+            key=lambda s: (
+                s.get("instructor_difficulty") is None,
+                float(s.get("instructor_difficulty") if s.get("instructor_difficulty") is not None else 999),
+                _course_key(s),
+            ),
+        )
+    if mode == "balanced":
+        return sorted(
+            sections,
+            key=lambda s: (
+                s.get("instructor_balanced_score") is None,
+                -(float(s.get("instructor_balanced_score") or 0)),
+                _course_key(s),
+            ),
+        )
+    return list(sections)
+
+
 def instructor_rating_for(
     name: str, ratings: dict[str, dict[str, Any]] | None = None
 ) -> dict[str, Any]:

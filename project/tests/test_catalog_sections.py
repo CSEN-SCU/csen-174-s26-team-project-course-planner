@@ -8,12 +8,72 @@ from support import schedule_xlsx_available
 from utils.scu_course_schedule_xlsx import (
     catalog_facets,
     catalog_time_windows,
+    enrich_section_instructor_rating,
     filter_catalog_sections,
     list_offered_sections,
     section_matches_time_window,
     section_overlaps_slot,
     section_overlaps_time_window,
+    sort_catalog_sections,
 )
+
+
+class TestCatalogSortAndRatings:
+    def test_sort_by_rating_desc_nulls_last(self):
+        rows = [
+            {"subject": "CSEN", "course": "A", "section": 1, "instructor_rating": 3.0},
+            {"subject": "CSEN", "course": "B", "section": 1, "instructor_rating": 4.5},
+            {"subject": "CSEN", "course": "C", "section": 1, "instructor_rating": None},
+        ]
+        out = sort_catalog_sections(rows, "rating")
+        assert [r["course"] for r in out] == ["B", "A", "C"]
+
+    def test_sort_by_difficulty_asc_nulls_last(self):
+        rows = [
+            {"subject": "CSEN", "course": "Hard", "section": 1, "instructor_difficulty": 4.5},
+            {"subject": "CSEN", "course": "Easy", "section": 1, "instructor_difficulty": 2.0},
+            {"subject": "CSEN", "course": "Unknown", "section": 1, "instructor_difficulty": None},
+        ]
+        out = sort_catalog_sections(rows, "difficulty")
+        assert [r["course"] for r in out] == ["Easy", "Hard", "Unknown"]
+
+    def test_sort_by_balanced(self):
+        rows = [
+            {
+                "subject": "CSEN",
+                "course": "Low",
+                "section": 1,
+                "instructor_balanced_score": 0.3,
+            },
+            {
+                "subject": "CSEN",
+                "course": "High",
+                "section": 1,
+                "instructor_balanced_score": 0.9,
+            },
+        ]
+        out = sort_catalog_sections(rows, "balanced")
+        assert out[0]["course"] == "High"
+
+    def test_enrich_adds_rating_fields(self):
+        ratings = {
+            "jane doe": {
+                "instructor": "Jane Doe",
+                "rating": 4.2,
+                "difficulty": 3.1,
+                "would_take_again_pct": 82.0,
+                "source": "rmp",
+            }
+        }
+        section = {
+            "course": "CSEN 999",
+            "section": 1,
+            "instructors": ["Jane Doe"],
+        }
+        out = enrich_section_instructor_rating(section, ratings)
+        assert out["instructor_rating"] == 4.2
+        assert out["instructor_difficulty"] == 3.1
+        assert out["instructor_balanced_score"] is not None
 
 
 class TestSectionOverlapsSlot:

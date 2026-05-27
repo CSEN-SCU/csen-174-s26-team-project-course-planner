@@ -13,17 +13,25 @@ export type MemorySessionRow = {
 export type LeftPanelProps = {
   sessions: MemorySessionRow[];
   activeSessionId: string | null;
+  draftPlanActive: boolean;
+  scheduleCourseCount: number;
   onSelectSession: (row: MemorySessionRow) => void;
   onDeleteSession?: (id: string) => void;
   onNewPlan: () => void;
+  onSaveSchedule: () => void;
+  onClearSchedule: () => void;
 };
 
 export function LeftPanel({
   sessions,
   activeSessionId,
+  draftPlanActive,
+  scheduleCourseCount,
   onSelectSession,
   onDeleteSession,
   onNewPlan,
+  onSaveSchedule,
+  onClearSchedule,
 }: LeftPanelProps) {
   return (
     <aside className="flex w-[260px] shrink-0 flex-col border-l-4 border-[var(--scu-red)] bg-[var(--scu-white)] shadow-sm">
@@ -31,14 +39,44 @@ export function LeftPanel({
         <BrandLink />
       </div>
 
-      <div className="px-4 py-4">
-        <button
-          type="button"
-          onClick={onNewPlan}
-          className="w-full rounded-md bg-[var(--scu-red)] px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--scu-dark-red)]"
-        >
-          New Plan
-        </button>
+      <div className="space-y-2 px-4 py-4">
+        {draftPlanActive ? (
+          <>
+            <button
+              type="button"
+              onClick={onSaveSchedule}
+              disabled={scheduleCourseCount === 0}
+              className="w-full rounded-md bg-[var(--scu-red)] px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--scu-dark-red)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Save schedule
+            </button>
+            <button
+              type="button"
+              onClick={onClearSchedule}
+              disabled={scheduleCourseCount === 0}
+              className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2.5 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Clear schedule
+            </button>
+            <div className="border-t border-neutral-200 pt-2">
+              <button
+                type="button"
+                onClick={onNewPlan}
+                className="w-full rounded-md border border-neutral-300 bg-neutral-50 px-3 py-2 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100"
+              >
+                New plan
+              </button>
+            </div>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={onNewPlan}
+            className="w-full rounded-md bg-[var(--scu-red)] px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--scu-dark-red)]"
+          >
+            New Plan
+          </button>
+        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-4">
@@ -46,6 +84,9 @@ export function LeftPanel({
           Past sessions
         </p>
         <ul className="space-y-1">
+          {sessions.length === 0 && (
+            <li className="px-2 py-2 text-xs text-neutral-400">No saved schedules yet.</li>
+          )}
           {sessions.map((s) => {
             const active = s.id === activeSessionId;
             return (

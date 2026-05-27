@@ -227,6 +227,13 @@ export type CatalogSection = {
   location: string | null;
   course_tags: string[];
   lab_partner: string | null;
+  /** Best instructor on the section (Rate My Professor). */
+  instructor_display?: string | null;
+  instructor_rating?: number | null;
+  instructor_difficulty?: number | null;
+  instructor_wta_pct?: number | null;
+  instructor_rating_source?: string | null;
+  instructor_balanced_score?: number | null;
 };
 
 export type CatalogMeetingTimeSlot = {
@@ -258,6 +265,7 @@ export type CatalogSearchParams = {
   end_min?: number;
   limit?: number;
   offset?: number;
+  sort?: "default" | "rating" | "difficulty" | "balanced";
 };
 
 export async function searchCatalogSections(params: CatalogSearchParams = {}) {
@@ -272,6 +280,7 @@ export async function searchCatalogSections(params: CatalogSearchParams = {}) {
   if (params.end_min != null) q.set("end_min", String(params.end_min));
   if (params.limit != null) q.set("limit", String(params.limit));
   if (params.offset != null) q.set("offset", String(params.offset));
+  if (params.sort && params.sort !== "default") q.set("sort", params.sort);
   const qs = q.toString();
   const res = await fetch(`${API_BASE}/catalog/sections${qs ? `?${qs}` : ""}`);
   const data = await res.json();

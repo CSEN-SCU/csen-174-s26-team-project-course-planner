@@ -25,6 +25,8 @@ import { CALENDAR_START_HOUR } from "./types";
 import { clearLocalSession } from "./auth/session";
 import { SiteFooter } from "./components/SiteFooter";
 import { CourseSwapModal } from "./components/CourseSwapModal";
+import { SaveScheduleModal } from "./components/SaveScheduleModal";
+import { NewPlanWarningModal } from "./components/NewPlanWarningModal";
 
 const WELCOME_TEXT =
   "Upload your Academic Progress file or describe your preferences to get started.";
@@ -106,6 +108,10 @@ export default function App({ userId, onSignOut }: AppProps) {
     courseCode: string;
     section?: number;
   } | null>(null);
+  const [draftPlanActive, setDraftPlanActive] = useState(false);
+  const [saveScheduleModalOpen, setSaveScheduleModalOpen] = useState(false);
+  const [newPlanWarningOpen, setNewPlanWarningOpen] = useState(false);
+  const [startNewPlanAfterSave, setStartNewPlanAfterSave] = useState(false);
 
   // Load academic progress + past plan snapshots for this user
   useEffect(() => {
@@ -210,6 +216,8 @@ export default function App({ userId, onSignOut }: AppProps) {
     [localOverride, calendarRecommended],
   );
 
+  const scheduleCourseCount = (effectiveRecommended ?? []).length;
+
   // Each conversation = one snapshot row. The most recent snapshot IS the
   // "current" conversation when active — no separate pseudo-row needed.
   const sessions: MemorySessionRow[] = useMemo(() => {
@@ -224,6 +232,7 @@ export default function App({ userId, onSignOut }: AppProps) {
   }, [planSnapshots]);
 
   const handleSelectSession = useCallback((row: MemorySessionRow) => {
+    setDraftPlanActive(false);
     setLocalOverride(null);
     setActiveSessionId(row.id);
     setSessionCalendarRecommended(row.recommended ?? null);
@@ -327,6 +336,133 @@ export default function App({ userId, onSignOut }: AppProps) {
     setSlotActionData(null);
   }, []);
 
+  const beginNewPlanFlow = useCallback(() => {
+    resetActivePlanState();
+    setDraftPlanActive(false);
+    setPlanStartModalOpen(true);
+  }, [resetActivePlanState]);
+
+  const startDraftPlanSession = useCallback(() => {
+    setDraftPlanActive(true);
+    setActiveSessionId(`draft-${Date.now()}`);
+  }, []);
+
+  const persistScheduleSnapshot = useCallback(
+    (scheduleName: string) => {
+      const recs = localOverride ?? calendarRecommended ?? [];
+      if (recs.length === 0) return false;
+
+      const title = scheduleName.trim();
+      if (!title) return false;
+
+      const d = new Date().toLocaleDateString();
+      const msgs = messages;
+      const existing = activeSessionId
+        ? planSnapshots.find((s) => s.id === activeSessionId)
+        : null;
+
+      if (existing) {
+        const updated = {
+          ...existing,
+          title,
+          dateLabel: d,
+          recommended: recs,
+          messages: msgs,
+        };
+        setPlanSnapshots((prev) =>
+          prev.map((s) => (s.id === existing.id ? updated : s)),
+        );
+
+        if (userId && existing.memoryId != null) {
+          void deleteMemory(userId, existing.memoryId).catch(() => {});
+          void saveMemory(
+            userId,
+            "plan_outcome",
+            JSON.stringify({
+              recommended: recs,
+              title,
+              dateLabel: d,
+              messages: msgs,
+              fourYearPlan: existing.fourYearPlan ?? null,
+            }),
+          )
+            .then((r) => {
+              const newId = typeof r?.id === "number" ? r.id : undefined;
+              setPlanSnapshots((prev) =>
+                prev.map((s) =>
+                  s.id === existing.id ? { ...s, memoryId: newId } : s,
+                ),
+              );
+            })
+            .catch(() => {});
+        } else if (userId) {
+          void saveMemory(
+            userId,
+            "plan_outcome",
+            JSON.stringify({
+              recommended: recs,
+              title,
+              dateLabel: d,
+              messages: msgs,
+              fourYearPlan: existing.fourYearPlan ?? null,
+            }),
+          )
+            .then((r) => {
+              const newId = typeof r?.id === "number" ? r.id : undefined;
+              setPlanSnapshots((prev) =>
+                prev.map((s) =>
+                  s.id === existing.id ? { ...s, memoryId: newId } : s,
+                ),
+              );
+            })
+            .catch(() => {});
+        }
+      } else {
+        const snapId = activeSessionId ?? `snap-${Date.now()}`;
+        setActiveSessionId(snapId);
+        const snap = {
+          id: snapId,
+          title,
+          dateLabel: d,
+          recommended: recs,
+          messages: msgs,
+          fourYearPlan: fourYearPlan ?? null,
+        };
+        setPlanSnapshots((prev) => [snap, ...prev.filter((s) => s.id !== snapId)]);
+        if (userId) {
+          void saveMemory(
+            userId,
+            "plan_outcome",
+            JSON.stringify({
+              recommended: recs,
+              title,
+              dateLabel: d,
+              messages: msgs,
+              fourYearPlan: fourYearPlan ?? null,
+            }),
+          )
+            .then((r) => {
+              const memoryId = typeof r?.id === "number" ? r.id : undefined;
+              setPlanSnapshots((prev) =>
+                prev.map((s) => (s.id === snapId ? { ...s, memoryId } : s)),
+              );
+            })
+            .catch(() => {});
+        }
+      }
+      return true;
+    },
+    [
+      localOverride,
+      calendarRecommended,
+      messages,
+      activeSessionId,
+      planSnapshots,
+      userId,
+      fourYearPlan,
+    ],
+  );
+
   const openCourseBrowser = useCallback((ctx: CourseBrowserLaunchContext) => {
     setCourseBrowserContext(ctx);
     setCourseBrowserOpen(true);
@@ -334,20 +470,43 @@ export default function App({ userId, onSignOut }: AppProps) {
   }, []);
 
   const handleNewPlan = useCallback(() => {
-    resetActivePlanState();
-    setPlanStartModalOpen(true);
-  }, [resetActivePlanState]);
+    if (draftPlanActive && scheduleCourseCount > 0) {
+      setNewPlanWarningOpen(true);
+      return;
+    }
+    beginNewPlanFlow();
+  }, [draftPlanActive, scheduleCourseCount, beginNewPlanFlow]);
+
+  const handleClearSchedule = useCallback(() => {
+    setLocalOverride([]);
+    setPlanResult({ recommended: [] });
+    setSessionCalendarRecommended([]);
+  }, []);
+
+  const handleSaveScheduleNamed = useCallback(
+    (name: string) => {
+      if (!persistScheduleSnapshot(name)) return;
+      setSaveScheduleModalOpen(false);
+      if (startNewPlanAfterSave) {
+        setStartNewPlanAfterSave(false);
+        beginNewPlanFlow();
+      }
+    },
+    [persistScheduleSnapshot, startNewPlanAfterSave, beginNewPlanFlow],
+  );
 
   const handlePlanStartManual = useCallback(() => {
     setPlanStartModalOpen(false);
     resetActivePlanState();
+    startDraftPlanSession();
     setMessages([{ id: `m-new-${Date.now()}`, role: "assistant", content: NEW_PLAN_MANUAL_TEXT }]);
     openCourseBrowser({ mode: "open" });
-  }, [resetActivePlanState, openCourseBrowser, setMessages]);
+  }, [resetActivePlanState, startDraftPlanSession, openCourseBrowser, setMessages]);
 
   const handlePlanStartAi = useCallback(() => {
     setPlanStartModalOpen(false);
     resetActivePlanState();
+    startDraftPlanSession();
     setMessages([{
       id: `m-new-${Date.now()}`,
       role: "assistant",
@@ -355,7 +514,7 @@ export default function App({ userId, onSignOut }: AppProps) {
     }]);
     setViewMode("calendar");
     setChatFocusNonce((n) => n + 1);
-  }, [fileUploaded, resetActivePlanState, setMessages]);
+  }, [fileUploaded, resetActivePlanState, startDraftPlanSession, setMessages]);
 
   const handleDeleteSession = useCallback((id: string) => {
     const snap = planSnapshots.find((s) => s.id === id);
@@ -363,6 +522,7 @@ export default function App({ userId, onSignOut }: AppProps) {
     if (activeSessionId === id) {
       setActiveSessionId(null);
       setSessionCalendarRecommended(null);
+      setDraftPlanActive(false);
       setMessages([{ id: "m0", role: "assistant", content: WELCOME_TEXT }]);
     }
     if (userId && snap?.memoryId != null) {
@@ -724,6 +884,33 @@ export default function App({ userId, onSignOut }: AppProps) {
         onAi={handlePlanStartAi}
         onClose={() => setPlanStartModalOpen(false)}
       />
+      <SaveScheduleModal
+        open={saveScheduleModalOpen}
+        defaultName={
+          scheduleCourseCount > 0
+            ? `Plan · ${scheduleCourseCount} courses`
+            : ""
+        }
+        courseCount={scheduleCourseCount}
+        onSave={handleSaveScheduleNamed}
+        onClose={() => {
+          setSaveScheduleModalOpen(false);
+          setStartNewPlanAfterSave(false);
+        }}
+      />
+      <NewPlanWarningModal
+        open={newPlanWarningOpen}
+        onSaveFirst={() => {
+          setNewPlanWarningOpen(false);
+          setStartNewPlanAfterSave(true);
+          setSaveScheduleModalOpen(true);
+        }}
+        onStartWithoutSaving={() => {
+          setNewPlanWarningOpen(false);
+          beginNewPlanFlow();
+        }}
+        onCancel={() => setNewPlanWarningOpen(false)}
+      />
       <CourseBrowser
         open={courseBrowserOpen}
         context={courseBrowserContext}
@@ -750,9 +937,13 @@ export default function App({ userId, onSignOut }: AppProps) {
       <LeftPanel
         sessions={sessions}
         activeSessionId={activeSessionId}
+        draftPlanActive={draftPlanActive}
+        scheduleCourseCount={scheduleCourseCount}
         onSelectSession={handleSelectSession}
         onDeleteSession={handleDeleteSession}
         onNewPlan={handleNewPlan}
+        onSaveSchedule={() => setSaveScheduleModalOpen(true)}
+        onClearSchedule={handleClearSchedule}
       />
 
       {/* Main view area with tab toggle */}

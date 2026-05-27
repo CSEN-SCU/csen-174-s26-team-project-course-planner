@@ -12,8 +12,11 @@ from utils.scu_course_schedule_xlsx import (
     _find_schedule_path,
     catalog_facets,
     clear_schedule_caches,
+    enrich_section_instructor_rating,
     filter_catalog_sections,
     list_offered_sections,
+    load_instructor_ratings,
+    sort_catalog_sections,
 )
 
 router = APIRouter()
@@ -60,6 +63,10 @@ def search_catalog_sections(
     day_index: int | None = Query(None, ge=0, le=4),
     start_min: int | None = Query(None, ge=0),
     end_min: int | None = Query(None, ge=0),
+    sort: str | None = Query(
+        None,
+        description="Sort: default, rating (quality desc), difficulty (easier first), balanced",
+    ),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> dict[str, Any]:
@@ -82,8 +89,11 @@ def search_catalog_sections(
         start_min=start_min,
         end_min=end_min,
     )
-    total = len(filtered)
-    page = filtered[offset : offset + limit]
+    ratings = load_instructor_ratings()
+    enriched = [enrich_section_instructor_rating(s, ratings) for s in filtered]
+    sorted_rows = sort_catalog_sections(enriched, sort)
+    total = len(sorted_rows)
+    page = sorted_rows[offset : offset + limit]
     facets = catalog_facets(all_sections)
 
     return {

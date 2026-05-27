@@ -6,6 +6,11 @@ import {
   type CourseBrowserLaunchContext,
 } from "../api/client";
 import { WEEKDAY_LABELS } from "../types";
+import {
+  CATALOG_SORT_OPTIONS,
+  InstructorRatingLine,
+  type CatalogSortMode,
+} from "./InstructorRatingLine";
 
 export type CourseBrowserAddOptions = {
   slotAnchor?: {
@@ -92,6 +97,7 @@ export function CourseBrowser({
   const [openMeetingTimes, setOpenMeetingTimes] = useState(true);
   const [openTags, setOpenTags] = useState(true);
   const [openSubjects, setOpenSubjects] = useState(true);
+  const [sort, setSort] = useState<CatalogSortMode>("default");
   const wasOpenRef = useRef(false);
 
   const existing = useMemo(
@@ -120,6 +126,7 @@ export function CourseBrowser({
         meeting_time: meetingTimes.length ? meetingTimes : undefined,
         tag: tags.length ? tags : undefined,
         limit: 100,
+        sort,
         ...slotParams,
       });
       setSections(data.sections);
@@ -132,7 +139,7 @@ export function CourseBrowser({
     } finally {
       setLoading(false);
     }
-  }, [open, query, subjects, days, meetingTimes, tags, slotParams]);
+  }, [open, query, subjects, days, meetingTimes, tags, slotParams, sort]);
 
   useEffect(() => {
     if (!open) return;
@@ -153,6 +160,7 @@ export function CourseBrowser({
       setOpenMeetingTimes(true);
       setOpenTags(true);
       setOpenSubjects(true);
+      setSort("default");
     }
     wasOpenRef.current = open;
   }, [open, context.mode]);
@@ -383,7 +391,7 @@ export function CourseBrowser({
           </aside>
 
           <div className="flex min-w-0 flex-1 flex-col">
-            <div className="shrink-0 border-b border-neutral-100 p-3">
+            <div className="shrink-0 space-y-2 border-b border-neutral-100 p-3">
               <input
                 type="search"
                 value={query}
@@ -391,6 +399,26 @@ export function CourseBrowser({
                 placeholder="Search code, title, instructor…"
                 className="w-full rounded border border-neutral-300 px-3 py-2.5 text-sm outline-none focus:border-[var(--scu-red)] focus:ring-1 focus:ring-[var(--scu-red)]"
               />
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="flex items-center gap-2 text-xs text-neutral-600">
+                  <span className="font-semibold text-neutral-700">Sort by</span>
+                  <select
+                    value={sort}
+                    onChange={(e) => setSort(e.target.value as CatalogSortMode)}
+                    className="rounded border border-neutral-300 bg-white px-2 py-1 text-xs text-neutral-800 outline-none focus:border-[var(--scu-red)] focus:ring-1 focus:ring-[var(--scu-red)]"
+                    aria-label="Sort course results"
+                  >
+                    {CATALOG_SORT_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <p className="text-[11px] text-neutral-500">
+                  Professor ratings from Rate My Professor
+                </p>
+              </div>
             </div>
             <div className="min-h-0 flex-1 overflow-auto">
               {loading && <p className="p-4 text-sm text-neutral-400">Loading…</p>}
@@ -434,8 +462,9 @@ export function CourseBrowser({
                             {sec.title && (
                               <p className="mt-0.5 text-sm text-neutral-600">{sec.title}</p>
                             )}
+                            <InstructorRatingLine section={sec} className="mt-1" />
                             {!expanded && sec.meeting_pattern && (
-                              <p className="mt-1 truncate text-xs text-neutral-500">
+                              <p className="mt-0.5 truncate text-xs text-neutral-500">
                                 {sec.meeting_pattern}
                               </p>
                             )}
@@ -472,6 +501,9 @@ export function CourseBrowser({
                                 </dt>
                                 <dd className="mt-0.5">
                                   {(sec.instructors ?? []).join(", ") || "TBA"}
+                                </dd>
+                                <dd className="mt-1">
+                                  <InstructorRatingLine section={sec} showInstructor={false} />
                                 </dd>
                               </div>
                               <div>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { searchCatalogSections, type CatalogSection } from "../api/client";
+import { InstructorRatingLine } from "./InstructorRatingLine";
 
 type CourseSwapModalProps = {
   open: boolean;
@@ -32,12 +33,11 @@ export function CourseSwapModal({
     if (!target) return;
     setLoading(true);
     setError(null);
-    void searchCatalogSections({ q: target, limit: 300 })
+    void searchCatalogSections({ q: target, limit: 300, sort: "rating" })
       .then((res) => {
         const sameCourse = (res.sections ?? []).filter(
           (s) => normalizeCourse(s.course) === target,
         );
-        sameCourse.sort((a, b) => a.section - b.section);
         setSections(sameCourse);
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
@@ -111,7 +111,8 @@ export function CourseSwapModal({
                     <p className="mt-1 text-xs text-neutral-600">
                       {(sec.instructors ?? []).join(", ") || "TBA"}
                     </p>
-                    <p className="text-xs text-neutral-500">
+                    <InstructorRatingLine section={sec} className="mt-1" />
+                    <p className="mt-0.5 text-xs text-neutral-500">
                       {sec.meeting_pattern || "Time not posted"}
                     </p>
                   </button>
