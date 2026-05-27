@@ -96,14 +96,6 @@ html.planner-shell #root {
   overflow-anchor: none;
 }
 
-.planner-sidebar__brand {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  min-height: 4.5rem;
-  background-color: var(--scu-white);
-}
-
 .planner-sidebar__sessions {
   overflow-y: auto;
   overflow-anchor: none;

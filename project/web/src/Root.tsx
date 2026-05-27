@@ -13,10 +13,12 @@ import { CoursePlannerTutorialPage } from "./pages/CoursePlannerTutorialPage";
 import { DataDisclosurePage } from "./pages/DataDisclosurePage";
 import { HomePage } from "./pages/HomePage";
 import { resetPageScroll } from "./lib/scroll";
+import { useDeleteUserDataModal } from "./hooks/useDeleteUserDataModal";
 
 export function Root() {
   const [route, setRoute] = useState(resolveClientRoute);
   const { userId, googleAuthError, googleAuthPending, signOut } = useAuth();
+  const { openDeleteModal, deleteModal } = useDeleteUserDataModal(userId);
 
   const isInfoRoute =
     route === DATA_DISCLOSURE_PATH ||
@@ -38,6 +40,16 @@ export function Root() {
   }, []);
 
   useEffect(() => {
+    if (!userId) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("delete-user-data") !== "1") return;
+    openDeleteModal();
+    params.delete("delete-user-data");
+    const q = params.toString();
+    window.history.replaceState({}, document.title, q ? `?${q}` : window.location.pathname);
+  }, [userId, openDeleteModal]);
+
+  useEffect(() => {
     const sync = () => setRoute(resolveClientRoute());
     window.addEventListener("hashchange", sync);
     window.addEventListener("popstate", sync);
@@ -47,14 +59,35 @@ export function Root() {
     };
   }, []);
 
+  const chromeProps = {
+    userId,
+    onSignOut: userId ? signOut : undefined,
+    onDeleteUserData: userId ? openDeleteModal : undefined,
+  };
+
   if (route === DATA_DISCLOSURE_PATH) {
-    return <DataDisclosurePage isLoggedIn={Boolean(userId)} />;
+    return (
+      <>
+        {deleteModal}
+        <DataDisclosurePage {...chromeProps} />
+      </>
+    );
   }
   if (route === ACADEMIC_PROGRESS_TUTORIAL_PATH) {
-    return <AcademicProgressExportTutorialPage />;
+    return (
+      <>
+        {deleteModal}
+        <AcademicProgressExportTutorialPage {...chromeProps} />
+      </>
+    );
   }
   if (route === COURSE_PLANNER_TUTORIAL_PATH) {
-    return <CoursePlannerTutorialPage />;
+    return (
+      <>
+        {deleteModal}
+        <CoursePlannerTutorialPage {...chromeProps} />
+      </>
+    );
   }
 
   if (!userId) {
@@ -64,8 +97,11 @@ export function Root() {
   }
 
   return (
-    <div className="planner-app-root">
-      <App userId={userId} onSignOut={signOut} />
-    </div>
+    <>
+      {deleteModal}
+      <div className="planner-app-root">
+        <App userId={userId} onSignOut={signOut} onDeleteUserData={openDeleteModal} />
+      </div>
+    </>
   );
 }

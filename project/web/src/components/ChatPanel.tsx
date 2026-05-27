@@ -13,6 +13,8 @@ import {
   uploadTranscript,
 } from "../api/client";
 import type { ParsedRow } from "../types";
+import { PlannerColumnHeader } from "./PlannerColumnHeader";
+import { SignOutButton } from "./SignOutButton";
 
 export type ChatUiMessage = {
   id: string;
@@ -48,6 +50,7 @@ export type ChatPanelProps = {
   /** Bump to focus the input without injecting text (e.g. on "New Plan"). */
   focusNonce?: number;
   setParsedRows?: (v: ParsedRow[]) => void;
+  onSignOut?: () => void;
 };
 
 function planSummaryText(plan: Record<string, unknown>): string {
@@ -111,6 +114,7 @@ export function ChatPanel({
   onPrefillConsumed,
   focusNonce,
   setParsedRows,
+  onSignOut,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -438,12 +442,16 @@ export function ChatPanel({
 
   return (
     <aside
-      className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-l border-neutral-200 bg-[var(--scu-white)] shadow-sm"
+      className="relative grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border-l border-neutral-200 bg-[var(--scu-white)] shadow-sm"
       onDragEnter={onDragEnter}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
+      <PlannerColumnHeader align="end">
+        {onSignOut ? <SignOutButton onClick={onSignOut} /> : null}
+      </PlannerColumnHeader>
+
       {isDragOver && canDropFiles && (
         <div
           className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-white/90 px-6 text-center ring-2 ring-inset ring-[var(--scu-red)]"
@@ -455,7 +463,7 @@ export function ChatPanel({
         </div>
       )}
 
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
+      <div className="relative min-h-0 space-y-3 overflow-y-auto px-4 py-4">
         {messages.map((msg) => (
           <div
             key={msg.id}

@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from "react";
 import { resetPageScroll } from "../lib/scroll";
 import { BrandLink } from "./BrandLink";
+import { PlannerColumnHeader } from "./PlannerColumnHeader";
 
 export type MemorySessionRow = {
   id: string;
@@ -47,9 +48,9 @@ export function LeftPanel({
       ref={asideRef}
       className="planner-sidebar w-full border-l-4 border-[var(--scu-red)] bg-[var(--scu-white)] shadow-sm"
     >
-      <header className="planner-sidebar__brand border-b border-neutral-200 px-4 py-5">
+      <PlannerColumnHeader>
         <BrandLink />
-      </header>
+      </PlannerColumnHeader>
 
       <div className="space-y-2 px-4 py-4">
         {scheduleCourseCount > 0 ? (

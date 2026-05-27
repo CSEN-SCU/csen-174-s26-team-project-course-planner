@@ -1,6 +1,8 @@
 import { useCallback, useLayoutEffect, useRef, type ReactNode } from "react";
 import { resetPageScroll } from "../lib/scroll";
 import { BrandLink } from "./BrandLink";
+import { PlannerColumnHeader } from "./PlannerColumnHeader";
+import { SignOutButton } from "./SignOutButton";
 import { SiteFooter } from "./SiteFooter";
 
 type StaticInfoPageLayoutProps = {
@@ -8,12 +10,18 @@ type StaticInfoPageLayoutProps = {
   maxWidth?: "max-w-2xl" | "max-w-3xl";
   /** Round the panel bottom when content ends above the footer (data disclosure only). */
   roundPanelBottom?: boolean;
+  userId?: string | null;
+  onSignOut?: () => void;
+  onDeleteUserData?: () => void;
 };
 
 export function StaticInfoPageLayout({
   children,
   maxWidth = "max-w-2xl",
   roundPanelBottom = false,
+  userId = null,
+  onSignOut,
+  onDeleteUserData,
 }: StaticInfoPageLayoutProps) {
   const mainRef = useRef<HTMLElement>(null);
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -80,12 +88,15 @@ export function StaticInfoPageLayout({
 
   return (
     <div className="planner-app-root">
-      <header
+      <div
         ref={headerRef}
-        className="relative z-20 shrink-0 border-b border-neutral-200 border-l-4 border-l-[var(--scu-red)] bg-[var(--scu-white)] px-6 py-5 shadow-sm"
+        className="relative z-20 shrink-0 border-l-4 border-l-[var(--scu-red)] bg-[var(--scu-white)] shadow-sm"
       >
-        <BrandLink />
-      </header>
+        <PlannerColumnHeader align="between">
+          <BrandLink />
+          {userId && onSignOut ? <SignOutButton onClick={onSignOut} /> : null}
+        </PlannerColumnHeader>
+      </div>
 
       <div className="relative min-h-0 flex-1">
         <div
@@ -110,7 +121,7 @@ export function StaticInfoPageLayout({
       </div>
 
       <div ref={footerWrapRef} className="relative z-20 shrink-0 bg-white">
-        <SiteFooter />
+        <SiteFooter userId={userId} onDeleteUserData={onDeleteUserData} />
       </div>
     </div>
   );

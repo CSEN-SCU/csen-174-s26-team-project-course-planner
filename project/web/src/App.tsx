@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  deleteAllUserData,
   deleteMemory,
   generateFourYearPlan,
   getMemory,
@@ -15,18 +14,17 @@ import {
 import { FourYearPlanView } from "./components/FourYearPlanView";
 import { LeftPanel, type MemorySessionRow } from "./components/LeftPanel";
 import type { FourYearPlan, ParsedRow } from "./types";
-import { DeleteUserDataConfirm } from "./components/DeleteUserDataConfirm";
 import { FirstLoginCarousel } from "./components/FirstLoginCarousel";
 import { PlanStartModal } from "./components/PlanStartModal";
 import { SlotActionModal } from "./components/SlotActionModal";
 import { SlotSuggestionPopover } from "./components/SlotSuggestionPopover";
 import type { CatalogSection, CourseBrowserLaunchContext } from "./api/client";
 import { CALENDAR_START_HOUR } from "./types";
-import { clearLocalSession } from "./auth/session";
 import { SiteFooter } from "./components/SiteFooter";
 import { CourseSwapModal } from "./components/CourseSwapModal";
 import { SaveScheduleModal } from "./components/SaveScheduleModal";
 import { NewPlanWarningModal } from "./components/NewPlanWarningModal";
+import { DeleteScheduleConfirmModal } from "./components/DeleteScheduleConfirmModal";
 
 const WELCOME_TEXT =
   "Upload your Academic Progress file or describe your preferences to get started.";
@@ -43,9 +41,10 @@ const INTRO_SEEN_KEY_PREFIX = "scu_planner_intro_seen:";
 export type AppProps = {
   userId: string;
   onSignOut: () => void;
+  onDeleteUserData: () => void;
 };
 
-export default function App({ userId, onSignOut }: AppProps) {
+export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
   const [missingDetails, setMissingDetails] = useState<unknown[]>([]);
   const [planResult, setPlanResult] = useState<Record<string, unknown> | null>(null);
   const [messages, setMessages] = useState<ChatUiMessage[]>([
@@ -75,9 +74,6 @@ export default function App({ userId, onSignOut }: AppProps) {
   const [fourYearPlan, setFourYearPlan] = useState<FourYearPlan | null>(null);
   const [fourYearGenerating, setFourYearGenerating] = useState(false);
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
-  const [deleteDataOpen, setDeleteDataOpen] = useState(false);
-  const [deleteDataBusy, setDeleteDataBusy] = useState(false);
-  const [deleteDataNotice, setDeleteDataNotice] = useState<string | null>(null);
   const [firstLoginCarouselOpen, setFirstLoginCarouselOpen] = useState(false);
   // Slot suggestion popover state (R6)
   const [slotPopoverOpen, setSlotPopoverOpen] = useState(false);
@@ -111,6 +107,10 @@ export default function App({ userId, onSignOut }: AppProps) {
   const [saveScheduleModalOpen, setSaveScheduleModalOpen] = useState(false);
   const [newPlanWarningOpen, setNewPlanWarningOpen] = useState(false);
   const [startNewPlanAfterSave, setStartNewPlanAfterSave] = useState(false);
+  const [pendingDeleteSchedule, setPendingDeleteSchedule] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
 
   // Load academic progress + past plan snapshots for this user
   useEffect(() => {
@@ -539,6 +539,21 @@ export default function App({ userId, onSignOut }: AppProps) {
     }
   }, [planSnapshots, activeSessionId, userId, setMessages]);
 
+  const requestDeleteSession = useCallback(
+    (id: string) => {
+      const snap = planSnapshots.find((s) => s.id === id);
+      if (!snap) return;
+      setPendingDeleteSchedule({ id, title: snap.title });
+    },
+    [planSnapshots],
+  );
+
+  const handleConfirmDeleteSession = useCallback(() => {
+    if (!pendingDeleteSchedule) return;
+    handleDeleteSession(pendingDeleteSchedule.id);
+    setPendingDeleteSchedule(null);
+  }, [pendingDeleteSchedule, handleDeleteSession]);
+
   const handleRemoveCourse = useCallback((idx: number) => {
     const base = localOverride ?? calendarRecommended ?? [];
     setLocalOverride(base.filter((_, i) => i !== idx));
@@ -789,64 +804,6 @@ export default function App({ userId, onSignOut }: AppProps) {
     }
   }, [missingDetails, userId, fourYearGenerating, activeSessionId, planSnapshots]);
 
-  const resetLocalPlannerState = useCallback(() => {
-    clearLocalSession();
-    onSignOut();
-    setMissingDetails([]);
-    setPlanResult(null);
-    setMessages([{ id: "m0", role: "assistant", content: WELCOME_TEXT }]);
-    setPlanSnapshots([]);
-    setSessionCalendarRecommended(null);
-    setActiveSessionId(null);
-    setFileUploaded(false);
-    setLocalOverride(null);
-    setChatPrefill(null);
-    setViewMode("calendar");
-    setFourYearPlan(null);
-    setFourYearGenerating(false);
-    setParsedRows([]);
-  }, [onSignOut]);
-
-  const finishDeleteUserData = useCallback(
-    (serverNotice: string | null) => {
-      setDeleteDataOpen(false);
-      setDeleteDataBusy(false);
-      setDeleteDataNotice(null);
-      resetLocalPlannerState();
-      if (serverNotice) {
-        try {
-          sessionStorage.setItem("scu_delete_user_data_notice", serverNotice);
-        } catch {
-          /* ignore */
-        }
-      }
-      window.location.href = "/";
-    },
-    [resetLocalPlannerState],
-  );
-
-  const handleConfirmDeleteUserData = useCallback(async () => {
-    setDeleteDataBusy(true);
-    setDeleteDataNotice(null);
-    let serverNotice: string | null = null;
-    try {
-      await deleteAllUserData(userId);
-    } catch (e) {
-      const hint = e instanceof Error ? e.message : "Could not reach the server.";
-      serverNotice =
-        "Signed out on this device. Server data could not be cleared (" +
-        hint +
-        ") — upload Academic Progress again after your next sign-in.";
-    }
-    finishDeleteUserData(serverNotice);
-  }, [userId, finishDeleteUserData]);
-
-  const handleCancelDeleteUserData = useCallback(() => {
-    if (deleteDataBusy) return;
-    setDeleteDataOpen(false);
-    setDeleteDataNotice(null);
-  }, [deleteDataBusy]);
-
   const handleFinishFirstLoginCarousel = useCallback(() => {
     markFirstLoginCarouselSeen(userId);
     setFirstLoginCarouselOpen(false);
@@ -876,13 +833,6 @@ export default function App({ userId, onSignOut }: AppProps) {
 
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
-      <DeleteUserDataConfirm
-        open={deleteDataOpen}
-        busy={deleteDataBusy}
-        error={deleteDataNotice}
-        onConfirm={() => void handleConfirmDeleteUserData()}
-        onCancel={handleCancelDeleteUserData}
-      />
       <FirstLoginCarousel
         open={firstLoginCarouselOpen}
         onFinish={handleFinishFirstLoginCarousel}
@@ -920,6 +870,12 @@ export default function App({ userId, onSignOut }: AppProps) {
         }}
         onCancel={() => setNewPlanWarningOpen(false)}
       />
+      <DeleteScheduleConfirmModal
+        open={pendingDeleteSchedule !== null}
+        scheduleTitle={pendingDeleteSchedule?.title ?? ""}
+        onConfirm={handleConfirmDeleteSession}
+        onCancel={() => setPendingDeleteSchedule(null)}
+      />
       <CourseBrowser
         open={courseBrowserOpen}
         context={courseBrowserContext}
@@ -948,7 +904,7 @@ export default function App({ userId, onSignOut }: AppProps) {
         activeSessionId={activeSessionId}
         scheduleCourseCount={scheduleCourseCount}
         onSelectSession={handleSelectSession}
-        onDeleteSession={handleDeleteSession}
+        onDeleteSession={requestDeleteSession}
         onNewPlan={handleNewPlan}
         onSaveSchedule={() => setSaveScheduleModalOpen(true)}
         onClearSchedule={handleClearSchedule}
@@ -1072,11 +1028,12 @@ export default function App({ userId, onSignOut }: AppProps) {
         onPrefillConsumed={() => setChatPrefill(null)}
         focusNonce={chatFocusNonce}
         setParsedRows={setParsedRows}
+        onSignOut={onSignOut}
       />
       </div>
       <SiteFooter
         userId={userId}
-        onDeleteUserData={() => setDeleteDataOpen(true)}
+        onDeleteUserData={onDeleteUserData}
         onOpenHelp={() => setFirstLoginCarouselOpen(true)}
       />
     </div>

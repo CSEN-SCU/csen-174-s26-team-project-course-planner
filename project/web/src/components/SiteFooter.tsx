@@ -18,7 +18,7 @@ const linkClass =
 const dividerClass = "text-xs text-white/40";
 
 export function SiteFooter({ userId, onDeleteUserData, onOpenHelp }: SiteFooterProps = {}) {
-  const showDeleteUserData = Boolean(userId && onDeleteUserData);
+  const showDeleteUserData = Boolean(onDeleteUserData);
 
   return (
     <footer className="site-footer relative shrink-0 px-4 py-3 text-center">

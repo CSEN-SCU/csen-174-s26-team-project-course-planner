@@ -29,9 +29,24 @@ const STEPS = [
   },
 ] as const;
 
-export function CoursePlannerTutorialPage() {
+type TutorialPageChromeProps = {
+  userId?: string | null;
+  onSignOut?: () => void;
+  onDeleteUserData?: () => void;
+};
+
+export function CoursePlannerTutorialPage({
+  userId = null,
+  onSignOut,
+  onDeleteUserData,
+}: TutorialPageChromeProps = {}) {
   return (
-    <StaticInfoPageLayout maxWidth="max-w-3xl">
+    <StaticInfoPageLayout
+      maxWidth="max-w-3xl"
+      userId={userId}
+      onSignOut={onSignOut}
+      onDeleteUserData={onDeleteUserData}
+    >
       <h1 className="mb-4 text-center text-xl font-bold tracking-tight text-[var(--scu-text)] sm:text-2xl">
         SCU Course Planner Tutorial
       </h1>
