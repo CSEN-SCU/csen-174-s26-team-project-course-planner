@@ -11,22 +11,16 @@ from datetime import date
 from threading import Lock
 from typing import Any
 
-from google.genai import types
-
-from agents.gemini_client import get_genai_client
-from agents.planning_agent import _normalize_open_req_text, _resolve_item_codes, _resolve_open_requirement
-from utils.scu_course_schedule_xlsx import (
-    course_title_for,
-    course_units_for,
-    load_category_course_index,
-    load_course_titles_index,
-    load_course_units_index,
-    load_schedule_section_index,
-    planned_section_keys,
-)
+try:
+    from google.genai import types
+except ModuleNotFoundError:  # pragma: no cover
+    types = None  # type: ignore[assignment]
 
 DEFAULT_MODEL = "gemini-2.5-flash"
 FALLBACK_MODELS = ("gemini-2.5-flash-lite", "gemini-1.5-flash")
+
+# 4 academic years at SCU = 12 quarters (Fall/Winter/Spring).
+FOUR_YEAR_TERM_COUNT = 12
 
 # Known SCU term name prefixes (case-insensitive). The model is given a list
 # of concrete "<Season> YYYY" terms but for empty quarters we only verify the
@@ -188,6 +182,24 @@ def _parse_json_from_response(text: str) -> dict[str, Any]:
         text = m.group(1).strip()
     return json.loads(text)
 
+def _drop_empty_quarters(plan: dict[str, Any]) -> dict[str, Any]:
+    """Remove quarters with no courses; recompute graduation_term safely."""
+    quarters = plan.get("quarters") or []
+    if not isinstance(quarters, list):
+        return plan
+    kept = []
+    for q in quarters:
+        if not isinstance(q, dict):
+            continue
+        courses = q.get("courses") or []
+        if isinstance(courses, list) and len(courses) == 0:
+            continue
+        kept.append(q)
+    plan["quarters"] = kept
+    if kept:
+        plan["graduation_term"] = str(kept[-1].get("term") or plan.get("graduation_term") or "")
+    return plan
+
 
 def _is_transient(exc: Exception) -> bool:
     msg = str(exc).lower()
@@ -204,6 +216,27 @@ def run_four_year_plan_agent(
     Returns a dict with keys: quarters, graduation_term, total_remaining_units, advice.
     Each quarter has: term (str), courses (list), total_units (int).
     """
+    if types is None:
+        raise RuntimeError(
+            "google-genai is not installed; four-year plan generation is unavailable."
+        )
+    # Import heavier dependencies lazily so light unit tests can import this module
+    # without requiring the full runtime dependency set (openpyxl, google-genai, etc.).
+    from agents.gemini_client import get_genai_client
+    from agents.planning_agent import (
+        _normalize_open_req_text,
+        _resolve_item_codes,
+        _resolve_open_requirement,
+    )
+    from utils.scu_course_schedule_xlsx import (
+        course_title_for,
+        course_units_for,
+        load_category_course_index,
+        load_course_titles_index,
+        load_course_units_index,
+        load_schedule_section_index,
+        planned_section_keys,
+    )
     if not missing_details:
         return {
             "quarters": [],
@@ -213,8 +246,8 @@ def run_four_year_plan_agent(
         }
 
     start_q, start_year = _next_starting_term()
-    # Give the model up to 16 terms to work with (4 academic years)
-    term_list = _generate_term_sequence(start_q, start_year, 16)
+    # Give the model ONLY 4 academic years (Fall/Winter/Spring) = 12 terms.
+    term_list = _generate_term_sequence(start_q, start_year, FOUR_YEAR_TERM_COUNT)
 
     total_units = sum(
         int(item.get("units") or 0)
@@ -311,6 +344,8 @@ RULES:
 3. Never emit placeholder names like "Core - RTC 3", "Open Elective", or
    "Educational Enrichment" — use a real course code.
 4. Target 12–16 units per quarter; never exceed 20.
+4b. Use as FEW quarters as possible; do NOT include empty quarters.
+    Avoid quarters with only 1 course unless absolutely necessary.
 5. Respect typical prerequisites: introductory/numbered-lower courses before advanced ones.
 6. Group lecture + lab pairs (e.g. CSEN 194 + CSEN 194L) in the SAME quarter.
 7. CSEN 194 / CSEN 195 / CSEN 196 are a 3-quarter Senior Design sequence —
@@ -494,6 +529,14 @@ Output JSON matching the schema exactly.
             )
         quarter["courses"] = filtered
         quarter["total_units"] = sum(int(c.get("units") or 0) for c in filtered)
+
+    # Drop empty quarters (the UI renders all returned terms).
+    parsed = _drop_empty_quarters(parsed)
+    if len(parsed.get("quarters") or []) > FOUR_YEAR_TERM_COUNT:
+        raise InconsistentPlanError(
+            f"Plan exceeds 4 academic years ({FOUR_YEAR_TERM_COUNT} quarters).",
+            detail={"quarters": len(parsed.get("quarters") or [])},
+        )
 
     # ── Title + units override: schedule xlsx is authoritative for both ──
     titles_index = load_course_titles_index()

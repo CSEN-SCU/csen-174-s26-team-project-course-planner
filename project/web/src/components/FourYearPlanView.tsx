@@ -1,4 +1,3 @@
-import { useState } from "react";
 import type { FourYearPlan, ParsedRow, PlanCourse, QuarterPlan } from "../types";
 
 export type FourYearPlanViewProps = {
@@ -447,9 +446,6 @@ export function FourYearPlanView({
   onGenerate,
   parsedRows,
 }: FourYearPlanViewProps) {
-  const [preferences, setPreferences] = useState("");
-  const [goalsOpen, setGoalsOpen] = useState(false);
-
   const completedByTerm = buildCompletedByTerm(parsedRows);
   const planQuarters = plan?.quarters ?? [];
 
@@ -470,7 +466,7 @@ export function FourYearPlanView({
       <header className="flex shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-4 py-3 shadow-sm">
         <h1 className="text-sm font-semibold text-[var(--scu-text)]">4-Year Graduation Plan</h1>
         <button
-          onClick={() => onGenerate(preferences)}
+          onClick={() => onGenerate("")}
           disabled={isGenerating || !hasTranscript}
           className="flex items-center gap-1.5 rounded-md bg-[var(--scu-red)] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
         >
@@ -486,42 +482,6 @@ export function FourYearPlanView({
           )}
         </button>
       </header>
-
-      {/* ── Electives & Goals input (RT#5) ─────────────────────────────── */}
-      {hasTranscript && (
-        <div className="shrink-0 border-b border-neutral-200 bg-white px-4 py-2">
-          <button
-            type="button"
-            onClick={() => setGoalsOpen((o) => !o)}
-            className="flex items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-700 transition select-none"
-          >
-            <span className={`transition-transform ${goalsOpen ? "rotate-90" : ""}`}>▶</span>
-            <span className="font-medium">Electives &amp; goals</span>
-            {preferences.trim() && (
-              <span className="ml-1 rounded-full bg-[var(--scu-red)] px-1.5 py-px text-[10px] font-bold text-white">✓</span>
-            )}
-            <span className="text-neutral-400">(optional — e.g. interests, preferred load)</span>
-          </button>
-          {goalsOpen && (
-            <div className="mt-2">
-              <textarea
-                value={preferences}
-                onChange={(e) => setPreferences(e.target.value)}
-                placeholder={
-                  "Tell the planner about your elective interests and any extra goals.\n" +
-                  "Examples: “I enjoy machine learning and want to take AI electives.” " +
-                  "“I prefer a light senior year.” “Interested in entrepreneurship or ethics courses.”"
-                }
-                rows={3}
-                className="w-full resize-none rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-700 placeholder:text-neutral-400 focus:border-[var(--scu-red)] focus:outline-none focus:ring-1 focus:ring-[var(--scu-red)]"
-              />
-              <p className="mt-1 text-[10px] text-neutral-400">
-                The AI advisor uses this as extra guidance alongside your required courses. It does not override mandatory requirements.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
 
       <div className="min-h-0 flex-1 overflow-auto p-4 space-y-4">
         {/* No transcript uploaded yet */}
@@ -542,7 +502,7 @@ export function FourYearPlanView({
               Click "Generate Plan" to distribute all remaining requirements across quarters.
             </p>
             <button
-              onClick={() => onGenerate(preferences)}
+              onClick={() => onGenerate("")}
               className="mt-4 rounded-md bg-[var(--scu-red)] px-5 py-2 text-sm font-semibold text-white shadow hover:bg-red-700 transition"
             >
               Generate 4-Year Plan
@@ -570,7 +530,7 @@ export function FourYearPlanView({
               <div className="flex items-center gap-3 rounded-lg border border-dashed border-neutral-300 bg-white px-4 py-3 text-xs text-neutral-500">
                 <span>Completed courses loaded from your Academic Progress export.</span>
                 <button
-                  onClick={() => onGenerate(preferences)}
+                  onClick={() => onGenerate("")}
                   className="ml-auto shrink-0 rounded-md bg-[var(--scu-red)] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-red-700"
                 >
                   Generate Remaining Plan
