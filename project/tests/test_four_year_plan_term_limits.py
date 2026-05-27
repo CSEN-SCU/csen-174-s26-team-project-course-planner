@@ -1,7 +1,9 @@
 from agents.four_year_planning_agent import (
     FOUR_YEAR_TERM_COUNT,
     _drop_empty_quarters,
+    _estimate_quarter_budget,
     _generate_term_sequence,
+    _has_senior_design,
 )
 
 
@@ -34,4 +36,52 @@ def test_drop_empty_quarters_removes_empties_and_updates_graduation_term() -> No
     out = _drop_empty_quarters(plan)
     assert [q["term"] for q in out["quarters"]] == ["Winter 2027"]
     assert out["graduation_term"] == "Winter 2027"
+
+
+# ── Senior Design detection ──────────────────────────────────────────────────
+
+
+def test_has_senior_design_detects_csen_194() -> None:
+    assert _has_senior_design([{"requirement": "CSEN 194"}])
+
+
+def test_has_senior_design_detects_slash_subjects_and_labs() -> None:
+    assert _has_senior_design([{"requirement": "CSEN/COEN 195 & 195L"}])
+    assert _has_senior_design([{"category": "Major: COEN 196L"}])
+
+
+def test_has_senior_design_false_when_absent() -> None:
+    assert not _has_senior_design([{"requirement": "CSEN 122"}])
+    assert not _has_senior_design([])
+
+
+# ── Quarter budget ───────────────────────────────────────────────────────────
+
+
+def test_budget_packs_small_remaining_into_few_quarters() -> None:
+    # 22 units, senior design present → 3 consecutive quarters required, target 3.
+    budget = _estimate_quarter_budget(total_units=22, has_senior_design=True)
+    assert budget["min_quarters"] == 3
+    assert budget["target_quarters"] == 3
+    # Allow at most one slack quarter so the LLM cannot spray courses across 6+.
+    assert budget["max_quarters"] <= 4
+
+
+def test_budget_no_senior_design_small_load_uses_2_quarters() -> None:
+    # 16 units, no senior design → 2 quarters fits comfortably.
+    budget = _estimate_quarter_budget(total_units=16, has_senior_design=False)
+    assert budget["target_quarters"] <= 2
+    assert budget["max_quarters"] <= 3
+
+
+def test_budget_caps_at_four_years() -> None:
+    # Even with very heavy remaining load, never exceed 12 quarters.
+    budget = _estimate_quarter_budget(total_units=300, has_senior_design=True)
+    assert budget["max_quarters"] <= FOUR_YEAR_TERM_COUNT
+
+
+def test_budget_zero_units_no_senior_design_is_one_quarter() -> None:
+    budget = _estimate_quarter_budget(total_units=0, has_senior_design=False)
+    assert budget["min_quarters"] >= 1
+    assert budget["max_quarters"] >= 1
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import time
@@ -182,6 +183,59 @@ def _parse_json_from_response(text: str) -> dict[str, Any]:
         text = m.group(1).strip()
     return json.loads(text)
 
+# ── Plan-length budget ───────────────────────────────────────────────────────
+# Average target load per quarter; SCU CoE recommends 14–16 units.
+_TARGET_UNITS_PER_QUARTER = 14
+# Hard cap on per-quarter units (matches the prompt rule "never exceed 20").
+_HARD_UNIT_CAP_PER_QUARTER = 16
+
+# Senior design sequence (CSEN/COEN 194, 195, 196 — with or without trailing L).
+_SENIOR_DESIGN_RE = re.compile(
+    r"\b(?:CSEN|COEN)\s*/?\s*(?:CSEN|COEN)?\s+19[456]L?\b",
+    re.IGNORECASE,
+)
+
+
+def _has_senior_design(missing_details: list[dict]) -> bool:
+    """True if any remaining requirement references CSEN/COEN 194/195/196."""
+    for item in missing_details or []:
+        for field in ("requirement", "category", "course"):
+            val = item.get(field) if isinstance(item, dict) else None
+            if isinstance(val, str) and _SENIOR_DESIGN_RE.search(val):
+                return True
+    return False
+
+
+def _estimate_quarter_budget(
+    *,
+    total_units: int,
+    has_senior_design: bool,
+) -> dict[str, int]:
+    """Compute the minimum / target / max number of quarters for the plan.
+
+    The LLM tends to spray a small number of courses across many quarters
+    when given a 12-term window. We trim that window down to (target + 1)
+    so it is forced to pack quarters near the 14-unit target.
+    """
+    units = max(0, int(total_units or 0))
+    # Absolute minimum quarters from the unit cap.
+    min_quarters_units = max(1, math.ceil(units / _HARD_UNIT_CAP_PER_QUARTER)) if units > 0 else 1
+    # Quarters needed to hit the 14-unit target.
+    target_quarters_units = max(1, math.ceil(units / _TARGET_UNITS_PER_QUARTER)) if units > 0 else 1
+    # Senior Design forces three consecutive quarters at the end of the plan.
+    floor = 3 if has_senior_design else 1
+    min_quarters = max(min_quarters_units, floor)
+    target_quarters = max(target_quarters_units, floor)
+    # Allow one quarter of slack so prereq ordering isn't impossible, but
+    # never give the LLM the full 12-term window when far fewer are needed.
+    max_quarters = min(FOUR_YEAR_TERM_COUNT, max(target_quarters + 1, min_quarters))
+    return {
+        "min_quarters": min_quarters,
+        "target_quarters": target_quarters,
+        "max_quarters": max_quarters,
+    }
+
+
 def _drop_empty_quarters(plan: dict[str, Any]) -> dict[str, Any]:
     """Remove quarters with no courses; recompute graduation_term safely."""
     quarters = plan.get("quarters") or []
@@ -246,13 +300,23 @@ def run_four_year_plan_agent(
         }
 
     start_q, start_year = _next_starting_term()
-    # Give the model ONLY 4 academic years (Fall/Winter/Spring) = 12 terms.
-    term_list = _generate_term_sequence(start_q, start_year, FOUR_YEAR_TERM_COUNT)
 
     total_units = sum(
         int(item.get("units") or 0)
         for item in missing_details
         if isinstance(item.get("units"), (int, float, str))
+    )
+
+    # Trim the candidate term list to a tight budget derived from remaining
+    # units. Giving the model 12 terms when only ~3 are needed leads it to
+    # spread courses one-per-quarter across many years. We give it (target+1)
+    # terms instead so it is forced to pack near 14 units/quarter.
+    has_senior_design = _has_senior_design(missing_details)
+    budget = _estimate_quarter_budget(
+        total_units=total_units, has_senior_design=has_senior_design
+    )
+    term_list = _generate_term_sequence(
+        start_q, start_year, budget["max_quarters"]
     )
 
     # Build a candidate-course block for OPEN Core/GE requirements that have
@@ -328,6 +392,14 @@ TODAY: {date.today().isoformat()} — SCU uses Fall / Winter / Spring quarters.
 
 NEXT TERMS (in order): {", ".join(term_list)}
 
+PLAN-LENGTH BUDGET (HARD):
+- Remaining work:       {total_units} units across {len(missing_details)} requirements.
+- Use AT MOST           {budget['max_quarters']} quarters total.
+- Target                {budget['target_quarters']} quarters at ~14 units each.
+- Senior design present? {"YES" if has_senior_design else "no"} (forces 3 consecutive quarters).
+- Picking more quarters than {budget['max_quarters']} is a critical failure —
+  you MUST pack courses into fewer quarters instead of spreading them out.
+
 REMAINING REQUIREMENTS ({len(missing_details)} courses, {total_units} total units):
 {json.dumps(missing_details, ensure_ascii=False, indent=2)}
 
@@ -343,14 +415,20 @@ RULES:
    then covers multiple open requirements.
 3. Never emit placeholder names like "Core - RTC 3", "Open Elective", or
    "Educational Enrichment" — use a real course code.
-4. Target 12–16 units per quarter; never exceed 20.
-4b. Use as FEW quarters as possible; do NOT include empty quarters.
-    Avoid quarters with only 1 course unless absolutely necessary.
+4. Target 12–16 units per quarter; never exceed 20. Quarters with only 1
+   course are NOT acceptable unless there is literally nothing else left
+   to schedule in that quarter (e.g. the last quarter has a single lab
+   pair). When in doubt, pack more courses into a quarter, not fewer.
+4b. Use the MINIMUM number of quarters possible. NEVER include empty
+    quarters. Never spread N courses across more than ⌈N/2⌉ quarters
+    unless prereqs or term-offering rules force it.
 5. Respect typical prerequisites: introductory/numbered-lower courses before advanced ones.
 6. Group lecture + lab pairs (e.g. CSEN 194 + CSEN 194L) in the SAME quarter.
 7. CSEN 194 / CSEN 195 / CSEN 196 are a 3-quarter Senior Design sequence —
    schedule them in three CONSECUTIVE quarters (one per quarter) with their
-   labs, and place them late in the plan (final year).
+   labs. Senior Design should be CONCURRENT with other remaining major /
+   Core courses (a typical senior quarter is "CSEN 19x/L + 1–2 other
+   remaining courses"), NOT in its own otherwise-empty quarters.
 8. If a course is only offered in certain quarters (Fall/Spring), note that in reason.
 9. Each course must appear in EXACTLY ONE quarter — no duplicates, no omissions.
 10. Use only the term names from the NEXT TERMS list above.
