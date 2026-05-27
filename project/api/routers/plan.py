@@ -20,6 +20,7 @@ from agents.planning_agent import (
     run_planning_agent,
     suggest_courses_for_slot,
 )
+from agents.planning_agent_v2 import run_constrained_planner
 from agents.professor_agent import run_professor_agent
 from deps.user_auth import require_matching_user
 from middleware.rate_limit import limit
@@ -37,6 +38,13 @@ def _require_plan_user(request: Request, user_id: str) -> None:
 # planning_agent. The explicit POST /api/plan/v2 always uses the multi-agent
 # engine regardless of this flag.
 _MULTI_AGENT_DEFAULT = os.environ.get("MULTI_AGENT_PLAN", "0") == "1"
+
+# Engine selector. ``constrained_v2`` is the new closed-world deterministic
+# planner that makes hallucination structurally impossible; ``legacy`` keeps
+# the single-shot Gemini engine with its post-hoc validation loop (see
+# meta.validation in the response for audit trail). Default is the new
+# engine; set PLAN_ENGINE=legacy to roll back without redeploying.
+_PLAN_ENGINE = os.environ.get("PLAN_ENGINE", "constrained_v2").strip().lower()
 
 _CONVO_START_RE = re.compile(
     r"^\s*(do you|does|is|are|have you|will you|what|where|how|why|when|who|"
@@ -193,8 +201,14 @@ def create_plan(body: PlanRequest, request: Request) -> dict[str, Any]:
         }
 
     parsed_rows, completed_codes = _planning_context(body)
+    # Engine selection: ``constrained_v2`` is the closed-world deterministic
+    # planner. Legacy is kept behind PLAN_ENGINE=legacy so a single env flip
+    # rolls back without redeploying code.
+    engine_fn = (
+        run_constrained_planner if _PLAN_ENGINE == "constrained_v2" else run_planning_agent
+    )
     try:
-        plan = run_planning_agent(
+        plan = engine_fn(
             body.missing_details,
             body.user_preference,
             memory_snippets=memory_snippets,

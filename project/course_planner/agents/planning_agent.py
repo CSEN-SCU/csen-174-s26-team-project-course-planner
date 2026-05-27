@@ -250,6 +250,12 @@ _ALLOWED_REC_ITEM_KEYS = {
     "units",
     "reason",
     "alternatives",
+    # Fields produced by the constrained_v2 engine. Safe to surface
+    # because they come from Python (xlsx + solver), never the LLM.
+    "section",
+    "meeting_days",
+    "meeting_start_min",
+    "meeting_end_min",
 }
 
 

@@ -24,6 +24,32 @@ cd project/web && npm run dev    # http://localhost:5173
 Python tests: `cd project/course_planner && python3 -m pytest tests/`
 Vitest tests: `cd project && npm test`
 
+### Engine selector
+
+`POST /api/plan` runs the **constrained_v2** planner by default — a
+closed-world deterministic engine where the LLM cannot emit course
+codes, titles, units, or section times. The full design lives at the
+top of `project/course_planner/agents/candidate_pool.py` and
+`agents/planning_agent_v2.py`. Hard rules R1-R7 below are enforced in
+Python; the LLM is only used to write the natural-language
+`assistant_reply` and `advice` strings about the plan Python already
+chose.
+
+Roll back to the legacy single-shot engine without a redeploy:
+
+```bash
+export PLAN_ENGINE=legacy
+```
+
+Every plan response carries a `meta.validation.engine` field so
+dashboards can correlate quality metrics with engine version. Eval
+comparison across all engines:
+
+```bash
+cd project/course_planner
+python -m evals.run_eval --engine all
+```
+
 ---
 
 ## Domain rules (HARD requirements)

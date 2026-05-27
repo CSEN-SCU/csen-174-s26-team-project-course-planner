@@ -317,12 +317,18 @@ def _enrich_one_course(course: dict, *, schedule_index: dict, sections_index: di
     category = course.get("category")
     scheduled_names = scheduled_instructors_for_course(course_code, schedule_index)
 
-    # Attach real meeting times when available from the schedule xlsx
-    times = meeting_times_for_course(course_code, schedule_index)
-    if times:
-        enriched["meeting_days"] = times["meeting_days"]
-        enriched["meeting_start_min"] = times["meeting_start_min"]
-        enriched["meeting_end_min"] = times["meeting_end_min"]
+    # Attach real meeting times when available from the schedule xlsx —
+    # BUT only when the upstream engine didn't already set them. The
+    # constrained_v2 planner mirrors its chosen section's times to the
+    # top-level fields (see agents/planning_agent_v2.py::_materialize),
+    # and ``meeting_times_for_course`` just picks the first section
+    # with a posted time, which can disagree with the v2 selection.
+    if "meeting_days" not in enriched:
+        times = meeting_times_for_course(course_code, schedule_index)
+        if times:
+            enriched["meeting_days"] = times["meeting_days"]
+            enriched["meeting_start_min"] = times["meeting_start_min"]
+            enriched["meeting_end_min"] = times["meeting_end_min"]
 
     # Attach all available sections so the UI can show section choices
     all_secs = all_sections_for_course(course_code, sections_index)
@@ -456,11 +462,12 @@ def run_professor_agent(recommended_courses: list[dict]) -> list[dict]:
             scheduled = scheduled_instructors_for_course(code, schedule_index)
             if scheduled:
                 enriched["scheduled_instructors"] = scheduled
-            times = meeting_times_for_course(code, schedule_index)
-            if times:
-                enriched["meeting_days"] = times["meeting_days"]
-                enriched["meeting_start_min"] = times["meeting_start_min"]
-                enriched["meeting_end_min"] = times["meeting_end_min"]
+            if "meeting_days" not in enriched:
+                times = meeting_times_for_course(code, schedule_index)
+                if times:
+                    enriched["meeting_days"] = times["meeting_days"]
+                    enriched["meeting_start_min"] = times["meeting_start_min"]
+                    enriched["meeting_end_min"] = times["meeting_end_min"]
             all_secs = all_sections_for_course(code, sections_index)
             if all_secs:
                 enriched["all_sections"] = all_secs
