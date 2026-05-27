@@ -57,14 +57,58 @@ html.planner-shell #root {
 
 .planner-app-root {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   z-index: 0;
   display: flex;
   flex-direction: column;
   width: 100%;
-  max-width: 100%;
+  height: 100svh;
+  max-height: 100svh;
   overflow: hidden;
   background: var(--scu-white);
+}
+
+@supports (height: 100dvh) {
+  .planner-app-root {
+    height: 100dvh;
+    max-height: 100dvh;
+  }
+}
+
+.planner-workspace {
+  display: grid;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  grid-template-columns: 260px minmax(0, 1fr) 380px;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.planner-sidebar {
+  display: grid;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow-anchor: none;
+}
+
+.planner-sidebar__brand {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  min-height: 4.5rem;
+  background-color: var(--scu-white);
+}
+
+.planner-sidebar__sessions {
+  overflow-y: auto;
+  overflow-anchor: none;
+  overscroll-behavior: contain;
+  min-height: 0;
 }
 
 /* Landing page */

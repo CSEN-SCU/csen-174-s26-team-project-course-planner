@@ -45,13 +45,13 @@ export function LeftPanel({
   return (
     <aside
       ref={asideRef}
-      className="grid h-full min-h-0 w-[260px] shrink-0 grid-rows-[auto_auto_minmax(0,1fr)] overflow-hidden border-l-4 border-[var(--scu-red)] bg-[var(--scu-white)] shadow-sm"
+      className="planner-sidebar w-full border-l-4 border-[var(--scu-red)] bg-[var(--scu-white)] shadow-sm"
     >
-      <header className="z-10 border-b border-neutral-200 bg-[var(--scu-white)] px-4 py-5">
+      <header className="planner-sidebar__brand border-b border-neutral-200 px-4 py-5">
         <BrandLink />
       </header>
 
-      <div className="space-y-2 bg-[var(--scu-white)] px-4 py-4">
+      <div className="space-y-2 px-4 py-4">
         {scheduleCourseCount > 0 ? (
           <>
             <button
@@ -91,7 +91,7 @@ export function LeftPanel({
         )}
       </div>
 
-      <div ref={sessionsRef} className="min-h-0 overflow-y-auto px-2 pb-4">
+      <div ref={sessionsRef} className="planner-sidebar__sessions px-2 pb-4">
         <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">
           Past sessions
         </p>

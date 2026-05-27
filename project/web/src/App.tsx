@@ -875,7 +875,7 @@ export default function App({ userId, onSignOut }: AppProps) {
   }, []);
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col overflow-hidden">
+    <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
       <DeleteUserDataConfirm
         open={deleteDataOpen}
         busy={deleteDataBusy}
@@ -942,7 +942,7 @@ export default function App({ userId, onSignOut }: AppProps) {
         }}
         onSwap={handleSwapCourseSection}
       />
-      <div className="flex h-full min-h-0 flex-1 overflow-hidden">
+      <div className="planner-workspace">
       <LeftPanel
         sessions={sessions}
         activeSessionId={activeSessionId}
@@ -955,7 +955,7 @@ export default function App({ userId, onSignOut }: AppProps) {
       />
 
       {/* Main view area with tab toggle */}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
         {/* Tab bar */}
         <div className="flex shrink-0 border-b border-neutral-200 bg-white px-3 pt-1">
           <button

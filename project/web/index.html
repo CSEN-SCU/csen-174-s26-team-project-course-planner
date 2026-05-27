@@ -17,8 +17,19 @@
   <body>
     <div id="root"></div>
     <script>
-      if ("scrollRestoration" in history) history.scrollRestoration = "manual";
-      window.scrollTo(0, 0);
+      (function () {
+        if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+        window.scrollTo(0, 0);
+        try {
+          var uid = sessionStorage.getItem("scu_planner_user_id_v2");
+          var tok = sessionStorage.getItem("scu_planner_session_token");
+          if (uid && tok) {
+            document.documentElement.classList.add("planner-shell");
+          }
+        } catch (e) {
+          /* sessionStorage blocked */
+        }
+      })();
     </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
