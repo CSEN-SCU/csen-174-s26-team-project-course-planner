@@ -22,11 +22,24 @@ from evals.scenarios import default_scenarios, scenario_context
 from evals.scorers import score_plan
 
 
+def _empty_plan(engine_label: str) -> dict[str, Any]:
+    """Return a clean empty plan with a meta.validation block so scorers
+    correctly classify it as "nothing to plan" rather than "broken
+    engine"."""
+    return {
+        "recommended": [],
+        "total_units": 0,
+        "advice": "",
+        "assistant_reply": "",
+        "meta": {"validation": {"engine": engine_label}},
+    }
+
+
 def _legacy_engine(scenario) -> dict[str, Any]:
     from agents.planning_agent import run_planning_agent
 
     if not scenario.missing_details:
-        return {"recommended": [], "total_units": 0}
+        return _empty_plan("legacy")
     return run_planning_agent(scenario.missing_details, scenario.user_preference)
 
 
@@ -34,13 +47,22 @@ def _multi_agent_engine(scenario) -> dict[str, Any]:
     from agents.multi_agent import run_multi_agent_plan
 
     if not scenario.missing_details:
-        return {"recommended": [], "total_units": 0}
+        return _empty_plan("multi_agent")
     return run_multi_agent_plan(scenario.missing_details, scenario.user_preference)
+
+
+def _constrained_v2_engine(scenario) -> dict[str, Any]:
+    from agents.planning_agent_v2 import run_constrained_planner
+
+    if not scenario.missing_details:
+        return _empty_plan("constrained_v2")
+    return run_constrained_planner(scenario.missing_details, scenario.user_preference)
 
 
 ENGINES: dict[str, Callable] = {
     "legacy": _legacy_engine,
     "multi_agent": _multi_agent_engine,
+    "constrained_v2": _constrained_v2_engine,
 }
 
 
@@ -85,11 +107,20 @@ def _print_report(report: dict[str, Any]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Course-plan quality eval")
-    ap.add_argument("--engine", choices=["legacy", "multi_agent", "both"], default="multi_agent")
+    ap.add_argument(
+        "--engine",
+        choices=["legacy", "multi_agent", "constrained_v2", "all", "both"],
+        default="constrained_v2",
+    )
     ap.add_argument("--json", action="store_true", help="emit JSON instead of a table")
     args = ap.parse_args(argv)
 
-    engines = ["legacy", "multi_agent"] if args.engine == "both" else [args.engine]
+    if args.engine == "all":
+        engines = ["legacy", "multi_agent", "constrained_v2"]
+    elif args.engine == "both":
+        engines = ["legacy", "constrained_v2"]
+    else:
+        engines = [args.engine]
     reports = [run_engine(e) for e in engines]
 
     if args.json:
@@ -97,10 +128,10 @@ def main(argv: list[str] | None = None) -> int:
     else:
         for r in reports:
             _print_report(r)
-        if len(reports) == 2:
-            a, b = reports
-            print(f"\n=== A/B: {a['engine']} {a['overall_mean']} "
-                  f"vs {b['engine']} {b['overall_mean']} ===")
+        if len(reports) >= 2:
+            print("\n=== A/B summary ===")
+            for r in reports:
+                print(f"  {r['engine']:18} overall_mean={r['overall_mean']}")
     return 0
 
 

@@ -22,7 +22,9 @@ from agents.planning_agent import (
     _resolve_open_requirement,
 )
 from utils.scu_course_schedule_xlsx import (
+    all_sections_for_course,
     course_title_for,
+    course_units_for,
     detect_time_conflicts,
     planned_section_keys,
 )
@@ -201,6 +203,83 @@ def score_open_req_coverage(
     )
 
 
+def score_units_correct(plan: dict, *, units_index: dict) -> ScoreResult:
+    """Units must match the schedule xlsx canonical values.
+
+    Mirrors ``score_titles_correct``: closes the gap where the legacy
+    engine could ship a plan with wrong unit counts when a code was
+    missing from the units index. With constrained_v2 these are sourced
+    deterministically from xlsx, so this scorer should be 100% on v2.
+    """
+    recs = plan.get("recommended") or []
+    checked = 0
+    wrong: list[str] = []
+    for r in recs:
+        code = str(r.get("course", "")).strip()
+        try:
+            actual = int(r.get("units"))
+        except (TypeError, ValueError):
+            continue
+        canonical = course_units_for(code, units_index)
+        if canonical is None:
+            continue
+        checked += 1
+        if int(canonical) != actual:
+            wrong.append(f"{code}: {actual}!={canonical}")
+    if checked == 0:
+        return ScoreResult("units_correct", 1.0, True, "no units to check")
+    score = 1.0 - len(wrong) / checked
+    return ScoreResult(
+        "units_correct", score, not wrong,
+        "all correct" if not wrong else f"wrong: {wrong}",
+    )
+
+
+def score_section_validity(plan: dict, *, all_sections: dict) -> ScoreResult:
+    """When the engine attached a ``section`` block, that section must
+    actually exist in the schedule xlsx's sections table.
+
+    No-ops for the legacy engine (no section block) so it can't lower
+    its score; only constrained_v2 is held to this contract.
+    """
+    recs = plan.get("recommended") or []
+    rows_with_section = [r for r in recs if isinstance(r.get("section"), dict)]
+    if not rows_with_section:
+        return ScoreResult("section_validity", 1.0, True, "no section blocks to check")
+    bad: list[str] = []
+    for r in rows_with_section:
+        code = str(r.get("course", "")).strip()
+        sec_block = r["section"]
+        sec_num = sec_block.get("section_number")
+        secs = all_sections_for_course(code, all_sections)
+        if not secs or sec_num is None:
+            continue
+        if not any(int(s.get("section") or 0) == int(sec_num) for s in secs):
+            bad.append(f"{code} sec {sec_num}")
+    score = 1.0 - len(bad) / len(rows_with_section)
+    return ScoreResult(
+        "section_validity", score, not bad,
+        "all sections valid" if not bad else f"invalid: {bad}",
+    )
+
+
+def score_meta_validation_present(plan: dict) -> ScoreResult:
+    """PR1 audit contract: every plan must surface a meta.validation
+    block with an engine name so dashboards can correlate quality with
+    engine version."""
+    meta = plan.get("meta") or {}
+    val = meta.get("validation") if isinstance(meta, dict) else None
+    if not isinstance(val, dict) or not val.get("engine"):
+        return ScoreResult(
+            "meta_validation_present", 0.0, False,
+            "missing meta.validation.engine",
+        )
+    return ScoreResult(
+        "meta_validation_present", 1.0, True,
+        f"engine={val['engine']}",
+    )
+
+
 def score_no_injection_leak(plan: dict) -> ScoreResult:
     """advice + assistant_reply must be free of recipe content and verbatim
     system-prompt leakage (red-team #7/#8)."""
@@ -227,8 +306,11 @@ SCORERS: dict[str, tuple[Callable, tuple[str, ...]]] = {
     "labs_paired": (score_labs_paired, ("missing_details", "schedule_index")),
     "unit_cap": (score_unit_cap, ()),
     "titles_correct": (score_titles_correct, ("titles_index",)),
+    "units_correct": (score_units_correct, ("units_index",)),
     "open_req_coverage": (score_open_req_coverage,
                           ("missing_details", "category_index", "schedule_index")),
+    "section_validity": (score_section_validity, ("all_sections",)),
+    "meta_validation_present": (score_meta_validation_present, ()),
     "no_injection_leak": (score_no_injection_leak, ()),
 }
 

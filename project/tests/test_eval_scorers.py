@@ -203,6 +203,8 @@ def test_score_plan_runs_available_scorers_and_aggregates():
         "schedule_index": sched,
         "category_index": {},
         "titles_index": {("CSEN", "122"): "Computer Architecture"},
+        "units_index": {("CSEN", "122"): 4, ("CSEN", "122L"): 1},
+        "all_sections": {},  # no section blocks in the plan → trivial pass
         "missing_details": [{"course": None, "requirement": "CSEN/COEN 122 & 122L"}],
     }
     plan = {
@@ -213,9 +215,10 @@ def test_score_plan_runs_available_scorers_and_aggregates():
         "total_units": 14,
         "advice": "Solid term.",
         "assistant_reply": "Added CSEN 122 + lab.",
+        "meta": {"validation": {"engine": "test-engine"}},
     }
     ps = S.score_plan(plan, ctx)
-    # All 7 scorers should run (all context available).
+    # All scorers should run (every required context key is present).
     names = {r.name for r in ps.results}
     assert names == set(S.SCORERS.keys())
     # This is a clean plan → high marks.

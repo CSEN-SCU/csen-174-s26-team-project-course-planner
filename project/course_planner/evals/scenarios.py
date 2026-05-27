@@ -16,8 +16,10 @@ from typing import Any
 
 from utils.academic_progress_xlsx import parse_academic_progress_xlsx
 from utils.scu_course_schedule_xlsx import (
+    load_all_course_sections,
     load_category_course_index,
     load_course_titles_index,
+    load_course_units_index,
     load_schedule_section_index,
 )
 
@@ -37,6 +39,8 @@ def load_context() -> dict[str, Any]:
         "schedule_index": load_schedule_section_index(),
         "category_index": load_category_course_index(),
         "titles_index": load_course_titles_index(),
+        "units_index": load_course_units_index(),
+        "all_sections": load_all_course_sections(),
     }
 
 
