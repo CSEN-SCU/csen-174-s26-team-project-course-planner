@@ -234,13 +234,24 @@ def create_plan(body: PlanRequest, request: Request) -> dict[str, Any]:
     elif not isinstance(assistant_reply, str):
         assistant_reply = str(assistant_reply)
 
-    return {
+    response: dict[str, Any] = {
         "type": "plan",
         "recommended": enriched,
         "total_units": total_units,
         "advice": advice,
         "assistant_reply": assistant_reply,
     }
+    # Surface the planning-agent meta block (engine, model, validation audit)
+    # so dashboards and the evals framework can correlate hallucination /
+    # rejection rates with the deployed engine. This is PR1's main externally
+    # visible change — the frontend ignores fields it doesn't recognize.
+    meta = plan.get("meta")
+    if isinstance(meta, dict):
+        response["meta"] = meta
+    warnings = plan.get("warnings")
+    if isinstance(warnings, list):
+        response["warnings"] = warnings
+    return response
 
 
 # ── Multi-agent (LangGraph) engine — STEP E ──────────────────────────────────

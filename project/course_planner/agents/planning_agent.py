@@ -1441,6 +1441,9 @@ def _partition_recommended(
     recommended: list[dict],
     schedule_index: dict,
     required_codes: set[str] | None,
+    *,
+    audit: list[dict] | None = None,
+    round_label: str = "initial",
 ) -> tuple[list[dict], list[dict]]:
     """Split recommendations into (valid, rejected).
 
@@ -1451,15 +1454,42 @@ def _partition_recommended(
          same weekday + overlapping start/end window.
 
     Rejected items carry a ``_rejection_reason`` field for the feedback prompt.
+
+    When ``audit`` is provided, every rejection appends a record
+    ``{"course", "reason", "category", "round"}`` to it AND a warning line
+    is logged. This is the production instrumentation that feeds
+    ``meta.validation`` so we can measure hallucination rates without
+    needing a debugger attached.
     """
     valid: list[dict] = []
     rejected: list[dict] = []
+
+    def _record(item: dict, reason: str) -> None:
+        code = (item.get("course") or "").strip()
+        log.warning(
+            "planning_agent: rejecting %s (%s, round=%s)",
+            code or "<blank>",
+            reason,
+            round_label,
+        )
+        if audit is not None:
+            audit.append(
+                {
+                    "course": code,
+                    "reason": reason,
+                    "category": item.get("category"),
+                    "round": round_label,
+                }
+            )
+
     for item in recommended:
         code = (item.get("course") or "").strip()
         if required_codes is not None and not _is_code_in_required(code, required_codes):
+            _record(item, "not_a_real_requirement")
             rejected.append({**item, "_rejection_reason": "not_a_real_requirement"})
             continue
         if schedule_index and not _is_code_in_schedule(code, schedule_index):
+            _record(item, "not_in_next_term_schedule")
             rejected.append({**item, "_rejection_reason": "not_in_next_term_schedule"})
             continue
         # Time-conflict check against already-accepted courses.
@@ -1472,9 +1502,11 @@ def _partition_recommended(
             )
             if conflict_with is not None:
                 other = valid[conflict_with].get("course", "?")
+                reason = f"time_conflict_with_{other}"
+                _record(item, reason)
                 rejected.append({
                     **item,
-                    "_rejection_reason": f"time_conflict_with_{other}",
+                    "_rejection_reason": reason,
                 })
                 continue
         valid.append(item)
@@ -1787,10 +1819,22 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
     # ── Validate → feedback loop (max 2 correction rounds) ──────────────────
     # Instead of silently dropping hallucinated courses, we tell the LLM exactly
     # which codes failed and why, then ask it to produce real replacements.
+    #
+    # ``rejection_audit`` and ``repair_audit`` capture every reject + repair so
+    # ``meta.validation`` ships them in the response. This is the PR1
+    # instrumentation that lets us measure hallucination rates in production
+    # without a debugger.
+    rejection_audit: list[dict[str, Any]] = []
+    repair_audit: list[dict[str, Any]] = []
     valid_courses, rejected = _partition_recommended(
-        raw_recommended, schedule_index, req_codes
+        raw_recommended,
+        schedule_index,
+        req_codes,
+        audit=rejection_audit,
+        round_label="initial",
     )
-    for _round in range(2):
+    initial_valid_codes = {(v.get("course") or "").strip() for v in valid_courses}
+    for _round_idx in range(2):
         if not rejected:
             break
         gap_prompt = _build_gap_fill_prompt(
@@ -1816,12 +1860,36 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
                 gap_parsed = _parse_json_from_response(gap_text)
                 replacements = gap_parsed.get("recommended") or []
                 new_valid, still_rejected = _partition_recommended(
-                    replacements, schedule_index, req_codes
+                    replacements,
+                    schedule_index,
+                    req_codes,
+                    audit=rejection_audit,
+                    round_label=f"repair_{_round_idx + 1}",
                 )
+                for nv in new_valid:
+                    code = (nv.get("course") or "").strip()
+                    if code:
+                        repair_audit.append({
+                            "course": code,
+                            "category": nv.get("category"),
+                            "round": _round_idx + 1,
+                        })
                 valid_courses.extend(new_valid)
                 rejected = still_rejected  # retry only what still fails
-        except Exception:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001
+            log.warning("planning_agent: repair round %d aborted: %s", _round_idx + 1, exc)
             break  # correction failed — keep what we have
+
+    # Anything still in ``rejected`` after the loop is a slot we gave up on.
+    final_giveups: list[dict[str, Any]] = [
+        {
+            "course": (r.get("course") or "").strip(),
+            "reason": r.get("_rejection_reason") or "unknown",
+            "category": r.get("category"),
+        }
+        for r in rejected
+        if isinstance(r, dict)
+    ]
 
     raw_recommended = valid_courses
     # ────────────────────────────────────────────────────────────────────────
@@ -1880,11 +1948,25 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
             parsed["total_units"] = _recompute_total_units(parsed["recommended"])
 
     eff_model = resolved_model or model
+    # ``offered_keys`` is the set of (subject, number) tuples the LLM was
+    # explicitly told it may pick from; it doubles as the candidate-pool size
+    # for the legacy engine. We expose it so eval dashboards can correlate
+    # rejection rate with pool size.
+    candidate_count = len(offered_keys) if isinstance(offered_keys, set) else 0
     parsed["meta"] = {
         "provider": "gemini",
         "model": eff_model,
         "fallback_used": eff_model != primary_requested,
         "request_id": request_id,
+        "validation": {
+            "engine": "legacy",
+            "candidate_count": candidate_count,
+            "rejected": rejection_audit,
+            "repaired": repair_audit,
+            "deferred_requirements": final_giveups,
+            "removed_completed": list(removed_completed) if removed_completed else [],
+            "dropped_for_unit_cap": list(dropped_for_cap) if dropped_for_cap else [],
+        },
     }
 
     recs_final = parsed.get("recommended") or []
