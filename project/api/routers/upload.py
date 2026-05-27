@@ -9,6 +9,7 @@ from utils.academic_progress_helpers import enrich_missing_details
 from utils.academic_progress_xlsx import parse_academic_progress_xlsx, sanitize_parsed_rows
 
 router = APIRouter()
+_MAX_TRANSCRIPT_BYTES = 5 * 1024 * 1024  # 5 MiB
 
 
 @router.post("/transcript")
@@ -24,6 +25,11 @@ async def upload_transcript(
     raw = await file.read()
     if not raw:
         raise HTTPException(status_code=400, detail="Empty file.")
+    if len(raw) > _MAX_TRANSCRIPT_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="File too large. Max upload size is 5 MB.",
+        )
     try:
         data = parse_academic_progress_xlsx(raw)
     except Exception as exc:  # noqa: BLE001

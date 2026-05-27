@@ -30,9 +30,15 @@ export type CalendarViewProps = {
   recommendedCourses: Record<string, unknown>[] | null;
   onRemoveCourse?: (idx: number) => void;
   onSlotClick?: (dayIndex: number, slotIndex: number, clientX: number, clientY: number) => void;
+  onCourseClick?: (idx: number, courseCode: string, clientX: number, clientY: number) => void;
 };
 
-export function CalendarView({ recommendedCourses, onRemoveCourse, onSlotClick }: CalendarViewProps) {
+export function CalendarView({
+  recommendedCourses,
+  onRemoveCourse,
+  onSlotClick,
+  onCourseClick,
+}: CalendarViewProps) {
 
   const { activeCourses, tbdCourses } = useMemo<{ activeCourses: CourseBlock[]; tbdCourses: TbdCourse[] }>(() => {
     if (recommendedCourses && recommendedCourses.length > 0) {
@@ -137,8 +143,9 @@ export function CalendarView({ recommendedCourses, onRemoveCourse, onSlotClick }
                   return (
                     <div
                       key={c.id}
-                      className="absolute left-1 right-1 z-10 overflow-hidden rounded-md bg-[var(--scu-red)] px-2 py-1 text-left text-white shadow-md ring-1 ring-black/10"
+                      className={`absolute left-1 right-1 z-10 overflow-hidden rounded-md bg-[var(--scu-red)] px-2 py-1 text-left text-white shadow-md ring-1 ring-black/10 ${onCourseClick ? "cursor-pointer" : ""}`}
                       style={{ top: `${topPct}%`, height: `${heightPct}%`, minHeight: 36 }}
+                      onClick={(e) => onCourseClick?.(idx, c.code, e.clientX, e.clientY)}
                     >
                       <p className="text-xs font-bold leading-tight pr-4">{c.code}</p>
                       {c.title && <p className="truncate text-[10px] leading-tight opacity-90 font-medium">{c.title}</p>}
@@ -183,7 +190,8 @@ export function CalendarView({ recommendedCourses, onRemoveCourse, onSlotClick }
               {tbdCourses.map((c) => (
                 <div
                   key={c.id}
-                  className="rounded-md border border-amber-300 bg-white px-3 py-2 shadow-sm min-w-[180px]"
+                  className={`rounded-md border border-amber-300 bg-white px-3 py-2 shadow-sm min-w-[180px] ${onCourseClick ? "cursor-pointer" : ""}`}
+                  onClick={(e) => onCourseClick?.(c.index, c.code, e.clientX, e.clientY)}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>

@@ -24,6 +24,7 @@ import type { CatalogSection, CourseBrowserLaunchContext } from "./api/client";
 import { CALENDAR_START_HOUR } from "./types";
 import { clearLocalSession } from "./auth/session";
 import { SiteFooter } from "./components/SiteFooter";
+import { CourseSwapModal } from "./components/CourseSwapModal";
 
 const WELCOME_TEXT =
   "Upload your Academic Progress file or describe your preferences to get started.";
@@ -99,6 +100,12 @@ export default function App({ userId, onSignOut }: AppProps) {
   const [courseBrowserOpen, setCourseBrowserOpen] = useState(false);
   const [courseBrowserContext, setCourseBrowserContext] =
     useState<CourseBrowserLaunchContext>({ mode: "open" });
+  const [swapModalOpen, setSwapModalOpen] = useState(false);
+  const [swapModalData, setSwapModalData] = useState<{
+    index: number;
+    courseCode: string;
+    section?: number;
+  } | null>(null);
 
   // Load academic progress + past plan snapshots for this user
   useEffect(() => {
@@ -367,6 +374,52 @@ export default function App({ userId, onSignOut }: AppProps) {
     const base = localOverride ?? calendarRecommended ?? [];
     setLocalOverride(base.filter((_, i) => i !== idx));
   }, [localOverride, calendarRecommended]);
+
+  const handleCourseClick = useCallback(
+    (idx: number, courseCode: string) => {
+      const base = localOverride ?? calendarRecommended ?? [];
+      const row = base[idx] as { _section?: unknown } | undefined;
+      const section =
+        typeof row?._section === "number"
+          ? row._section
+          : typeof row?._section === "string"
+            ? Number(row._section)
+            : undefined;
+      setSwapModalData({ index: idx, courseCode, section });
+      setSwapModalOpen(true);
+    },
+    [localOverride, calendarRecommended],
+  );
+
+  const handleSwapCourseSection = useCallback(
+    (section: CatalogSection) => {
+      if (!swapModalData) return;
+      const base = [...(localOverride ?? calendarRecommended ?? [])];
+      const i = swapModalData.index;
+      if (!base[i]) return;
+      const curr = base[i] as Record<string, unknown>;
+      base[i] = {
+        ...curr,
+        course: section.course,
+        title: section.title ?? curr.title,
+        units: section.units ?? curr.units,
+        best_professor: section.instructors?.[0] ?? curr.best_professor,
+        meeting_days: section.meeting_days,
+        meeting_start_min: section.meeting_start_min,
+        meeting_end_min: section.meeting_end_min,
+        _section: section.section,
+        _slotAnchored: false,
+        _anchoredDayIndex: undefined,
+        _anchoredStartMin: undefined,
+        _anchoredEndMin: undefined,
+        _actualTimeLabel: undefined,
+      };
+      setLocalOverride(base);
+      setSwapModalOpen(false);
+      setSwapModalData(null);
+    },
+    [swapModalData, localOverride, calendarRecommended],
+  );
 
   // Manual "+ Add course": append picked courses (+ lab co-requisite) to the
   // live edit layer so they land on the calendar immediately — no AI call.
@@ -678,6 +731,21 @@ export default function App({ userId, onSignOut }: AppProps) {
         onAdd={handleAddFromCatalog}
         onClose={() => setCourseBrowserOpen(false)}
       />
+      <CourseSwapModal
+        open={swapModalOpen && swapModalData !== null}
+        courseCode={swapModalData?.courseCode ?? ""}
+        currentSection={swapModalData?.section}
+        onClose={() => {
+          setSwapModalOpen(false);
+          setSwapModalData(null);
+        }}
+        onRemove={() => {
+          if (swapModalData) handleRemoveCourse(swapModalData.index);
+          setSwapModalOpen(false);
+          setSwapModalData(null);
+        }}
+        onSwap={handleSwapCourseSection}
+      />
       <div className="flex min-h-0 flex-1 overflow-hidden">
       <LeftPanel
         sessions={sessions}
@@ -730,6 +798,7 @@ export default function App({ userId, onSignOut }: AppProps) {
               recommendedCourses={effectiveRecommended ?? []}
               onRemoveCourse={handleRemoveCourse}
               onSlotClick={handleSlotClick}
+              onCourseClick={handleCourseClick}
             />
             {slotActionOpen && slotActionData && (
               <SlotActionModal
