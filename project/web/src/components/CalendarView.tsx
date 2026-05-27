@@ -66,11 +66,7 @@ export function CalendarView({
   const isEmpty = activeCourses.length === 0 && tbdCourses.length === 0;
 
   return (
-    <main className="flex min-w-0 flex-1 flex-col bg-[#F5F5F5]">
-      <header className="flex shrink-0 items-center border-b border-neutral-200 bg-white px-4 py-3 shadow-sm">
-        <h1 className="text-sm font-semibold text-[var(--scu-text)]">Recommended Course Schedule</h1>
-      </header>
-
+    <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#F5F5F5]">
       <div className="min-h-0 flex-1 overflow-auto p-3 space-y-3">
         <div className="relative min-w-[720px] rounded-lg border border-neutral-200 bg-white shadow-sm">
           {/* Empty state hint — pointer-events-none so time slots stay clickable */}

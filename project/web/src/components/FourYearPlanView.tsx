@@ -457,26 +457,6 @@ export function FourYearPlanView({
 
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#F5F5F5]">
-      <header className="flex shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-4 py-3 shadow-sm">
-        <h1 className="text-sm font-semibold text-[var(--scu-text)]">Four-Year Plan</h1>
-        <button
-          onClick={() => onGenerate("")}
-          disabled={isGenerating || !hasTranscript}
-          className="flex items-center gap-1.5 rounded-md bg-[var(--scu-red)] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isGenerating ? (
-            <>
-              <SpinnerIcon />
-              Generating…
-            </>
-          ) : plan ? (
-            "Regenerate"
-          ) : (
-            "Generate Plan"
-          )}
-        </button>
-      </header>
-
       <div className="min-h-0 flex-1 overflow-auto p-4 space-y-4">
         {/* No transcript uploaded yet */}
         {!hasTranscript && !showTimeline && (
@@ -526,18 +506,5 @@ export function FourYearPlanView({
         )}
       </div>
     </main>
-  );
-}
-
-function SpinnerIcon() {
-  return (
-    <svg className="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"
-      />
-    </svg>
   );
 }

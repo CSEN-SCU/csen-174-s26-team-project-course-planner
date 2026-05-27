@@ -28,6 +28,7 @@ import { CourseSwapModal } from "./components/CourseSwapModal";
 import { SaveScheduleModal } from "./components/SaveScheduleModal";
 import { NewPlanWarningModal } from "./components/NewPlanWarningModal";
 import { DeleteScheduleConfirmModal } from "./components/DeleteScheduleConfirmModal";
+import { PlannerColumnHeader } from "./components/PlannerColumnHeader";
 
 const WELCOME_TEXT =
   "Upload your Academic Progress file or describe your preferences to get started.";
@@ -970,40 +971,58 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
 
       {/* Main view area with tab toggle */}
       <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-        {/* Tab bar */}
-        <div className="flex shrink-0 border-b border-neutral-200 bg-white px-3 pt-1">
-          <button
-            className={`px-4 py-2 text-xs font-semibold border-b-2 transition ${
-              viewMode === "calendar"
-                ? "border-[var(--scu-red)] text-[var(--scu-red)]"
-                : "border-transparent text-neutral-400 hover:text-neutral-600"
-            }`}
-            onClick={() => setViewMode("calendar")}
-          >
-            This Quarter
-          </button>
-          <button
-            className={`px-4 py-2 text-xs font-semibold border-b-2 transition ${
-              viewMode === "four-year"
-                ? "border-[var(--scu-red)] text-[var(--scu-red)]"
-                : "border-transparent text-neutral-400 hover:text-neutral-600"
-            }`}
-            onClick={() => setViewMode("four-year")}
-          >
-            Four-Year Plan
-          </button>
-          {viewMode === "calendar" && (
-            <div className="ml-auto flex items-center pb-1 pr-1">
-              <button
-                type="button"
-                onClick={() => openCourseBrowser({ mode: "open" })}
-                className="flex items-center gap-1 rounded-md border border-[var(--scu-red)] px-2.5 py-1 text-xs font-semibold text-[var(--scu-red)] transition hover:bg-red-50"
-              >
-                Browse courses
-              </button>
-            </div>
-          )}
-        </div>
+        <PlannerColumnHeader variant="toolbar" align="between">
+          <div className="flex w-full min-w-0 items-end">
+            <button
+              type="button"
+              className={`px-4 py-2 text-xs font-semibold border-b-2 transition ${
+                viewMode === "calendar"
+                  ? "border-[var(--scu-red)] text-[var(--scu-red)]"
+                  : "border-transparent text-neutral-400 hover:text-neutral-600"
+              }`}
+              onClick={() => setViewMode("calendar")}
+            >
+              This Quarter
+            </button>
+            <button
+              type="button"
+              className={`px-4 py-2 text-xs font-semibold border-b-2 transition ${
+                viewMode === "four-year"
+                  ? "border-[var(--scu-red)] text-[var(--scu-red)]"
+                  : "border-transparent text-neutral-400 hover:text-neutral-600"
+              }`}
+              onClick={() => setViewMode("four-year")}
+            >
+              Four-Year Plan
+            </button>
+            {viewMode === "calendar" ? (
+              <div className="ml-auto flex items-center pb-1 pr-1">
+                <button
+                  type="button"
+                  onClick={() => openCourseBrowser({ mode: "open" })}
+                  className="flex items-center gap-1 rounded-md border border-[var(--scu-red)] px-2.5 py-1 text-xs font-semibold text-[var(--scu-red)] transition hover:bg-red-50"
+                >
+                  Browse courses
+                </button>
+              </div>
+            ) : (
+              <div className="ml-auto flex items-center pb-1 pr-1">
+                <button
+                  type="button"
+                  onClick={() => handleGenerateFourYearPlan("")}
+                  disabled={fourYearGenerating || !fileUploaded}
+                  className="flex items-center gap-1.5 rounded-md bg-[var(--scu-red)] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {fourYearGenerating
+                    ? "Generating…"
+                    : fourYearPlan
+                      ? "Regenerate"
+                      : "Generate Plan"}
+                </button>
+              </div>
+            )}
+          </div>
+        </PlannerColumnHeader>
 
         {viewMode === "calendar" ? (
           <div className="relative min-h-0 flex-1">
