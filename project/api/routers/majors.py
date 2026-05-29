@@ -71,10 +71,10 @@ def detect_major(body: MajorDetectRequest) -> dict[str, Any]:
 def confirm_major(body: MajorConfirmRequest, request: Request) -> dict[str, Any]:
     """Persist the student's confirmed major for future plan requests."""
     uid = body.user_id.strip()
-    mid = body.major_id.strip().lower()
+    mid = sanitize_major_id(body.major_id)
     if uid:
         require_matching_user(request, uid)
-    if not sanitize_major_id(mid):
+    if not mid:
         return {"ok": False, "error": "major_id required"}
 
     name = major_display_name(mid) or mid
