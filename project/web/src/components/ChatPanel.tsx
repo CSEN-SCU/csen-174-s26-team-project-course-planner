@@ -288,6 +288,8 @@ export function ChatPanel({
     planResult,
     parsedRows,
     fileUploaded,
+    majorConfirmed,
+    studentMajorId,
     setPlanResult,
     onPlanGenerated,
     setMessages,

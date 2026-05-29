@@ -858,7 +858,7 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
     } finally {
       setFourYearGenerating(false);
     }
-  }, [missingDetails, userId, fourYearGenerating, activeSessionId, planSnapshots]);
+  }, [missingDetails, userId, fourYearGenerating, activeSessionId, planSnapshots, majorConfirmed, studentMajorId, parsedRows]);
 
   const handleFinishFirstLoginCarousel = useCallback(() => {
     markFirstLoginCarouselSeen(userId);
