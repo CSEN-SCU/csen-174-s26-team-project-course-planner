@@ -12,6 +12,7 @@ from utils.major_requirements import (
     detect_major_detailed,
     load_major_index,
     major_display_name,
+    sanitize_major_id,
 )
 
 router = APIRouter()
@@ -51,10 +52,10 @@ def list_majors() -> dict[str, Any]:
 @router.post("/detect")
 def detect_major(body: MajorDetectRequest) -> dict[str, Any]:
     """Infer major from Workday export; user-confirmed id overrides inference."""
-    confirmed = body.confirmed_major_id.strip() or None
+    confirmed = sanitize_major_id(body.confirmed_major_id.strip() or None)
     if confirmed:
         return {
-            "major_id": confirmed.lower(),
+            "major_id": confirmed,
             "name": major_display_name(confirmed),
             "confidence": "high",
             "needs_confirmation": False,
@@ -70,7 +71,7 @@ def detect_major(body: MajorDetectRequest) -> dict[str, Any]:
 def confirm_major(body: MajorConfirmRequest, request: Request) -> dict[str, Any]:
     """Persist the student's confirmed major for future plan requests."""
     uid = body.user_id.strip()
-    mid = body.major_id.strip().lower()
+    mid = sanitize_major_id(body.major_id)
     if uid:
         require_matching_user(request, uid)
     if not mid:

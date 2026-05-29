@@ -23,6 +23,16 @@ _DATA_PATH = _DATA_ROOT / "major_requirements.json"
 
 _MARKDOWN_MAX_CHARS = 10_000
 
+_MAJOR_ID_RE = re.compile(r"^[a-z0-9_-]+$")
+
+
+def sanitize_major_id(major_id: str | None) -> str | None:
+    """Return a safe major slug or None (blocks path traversal in file lookups)."""
+    mid = (major_id or "").strip().lower()
+    if not mid or not _MAJOR_ID_RE.fullmatch(mid):
+        return None
+    return mid
+
 _COURSE_CODE_RE = re.compile(r"\b([A-Z]{2,6})\s+(\d{1,3}[A-Z]?)\b", re.IGNORECASE)
 
 _SENIOR_DESIGN_RE = re.compile(
@@ -87,7 +97,14 @@ def _major_index_by_id() -> dict[str, dict[str, Any]]:
 @lru_cache(maxsize=32)
 def load_major_markdown(major_id: str) -> str | None:
     """Full bulletin markdown for one major (``data/majors/<id>.md``)."""
-    path = _MAJORS_DIR / f"{major_id}.md"
+    mid = sanitize_major_id(major_id)
+    if mid is None:
+        return None
+    path = (_MAJORS_DIR / f"{mid}.md").resolve()
+    try:
+        path.relative_to(_MAJORS_DIR.resolve())
+    except ValueError:
+        return None
     if not path.is_file():
         return None
     return path.read_text(encoding="utf-8")
@@ -320,7 +337,9 @@ def resolve_major_id(
 ) -> str | None:
     """User-confirmed major wins; otherwise infer from progress."""
     if confirmed_major_id and str(confirmed_major_id).strip():
-        return str(confirmed_major_id).strip().lower()
+        safe = sanitize_major_id(confirmed_major_id)
+        if safe:
+            return safe
     return detect_major(missing_details, parsed_rows)
 
 
