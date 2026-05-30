@@ -1,0 +1,45 @@
+# Render blueprint for the SCU Course Planner backend (FastAPI).
+#
+# Plan A deployment: the frontend ships to Vercel (see project/web/vercel.json)
+# and this FastAPI service runs here on Render, where long-running LLM planning
+# requests are not bound by serverless function timeouts.
+#
+# To use: Render dashboard → New → Blueprint → connect this repo. Render reads
+# this file, provisions the service, and prompts for the secret env values
+# marked ``sync: false`` below. Set the same GEMINI_API_KEY / GOOGLE_* values
+# you use locally, and point FRONTEND_BASE_URL at your Vercel URL.
+services:
+  - type: web
+    name: course-planner-api
+    runtime: python
+    plan: free
+    # Install from the unified lockfile at the repo root.
+    buildCommand: pip install -r requirements.txt
+    # main.py adds the sibling course_planner package to sys.path itself, so we
+    # only need to start uvicorn from project/api. Render injects $PORT.
+    startCommand: cd project/api && uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      # Closed-world deterministic planner (see AGENTS.md). Flip to "legacy"
+      # to roll back the engine without a code change.
+      - key: PLAN_ENGINE
+        value: constrained_v2
+      # Public origin of the Vercel frontend — used for CORS + OAuth redirects.
+      # Set this to your real Vercel URL after the first frontend deploy.
+      - key: FRONTEND_BASE_URL
+        sync: false
+      # Random 32-byte secret that signs OAuth state + the SPA handoff token.
+      - key: SCU_PLANNER_COOKIE_KEY
+        generateValue: true
+      # Gemini / Google AI key for the planning + prose agents.
+      - key: GEMINI_API_KEY
+        sync: false
+      # Google Sign-In OAuth web-client credentials.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      # Production OAuth redirect URI — must match the Google Console entry
+      # byte-for-byte, e.g. https://course-planner-api.onrender.com/api/auth/google/callback
+      - key: GOOGLE_OAUTH_REDIRECT_URI
+        sync: false
