@@ -68,3 +68,39 @@ def test_enrich_missing_details_adds_units():
     ]
     out = enrich_missing_details(md, rows)
     assert out[0].get("units") == 5
+
+
+def test_enrich_csen_junior_requirements_not_and_codes():
+    """Regression: 'Computer Science and Engineering' must not yield AND 122."""
+    md = [
+        {
+            "requirement": (
+                "Computer Science and Engineering Major: CSEN/COEN 122 & 122L"
+            ),
+            "status": "Not Satisfied",
+        },
+        {
+            "requirement": "Computer Science and Engineering Major: CSEN/COEN 174",
+            "status": "Not Satisfied",
+        },
+        {"requirement": "University Core: RTC 3", "status": "Not Satisfied"},
+        {"requirement": "University Core: Advanced Writing", "status": "Not Satisfied"},
+    ]
+    out = enrich_missing_details(md, [])
+    assert out[0]["course"] == "CSEN 122"
+    assert out[1]["course"] == "CSEN 174"
+    assert not out[2].get("course")  # RTC 3 is a Core tag, not a catalog code
+    assert not out[3].get("course")
+
+
+def test_resolve_item_codes_prefers_extraction_over_stale_course_field():
+    from agents.planning_agent import _resolve_item_codes
+
+    item = {
+        "course": "AND 122",
+        "requirement": "Computer Science and Engineering Major: CSEN/COEN 122 & 122L",
+    }
+    codes = _resolve_item_codes(item)
+    assert "CSEN 122" in codes
+    assert "COEN 122" in codes
+    assert "AND 122" not in codes

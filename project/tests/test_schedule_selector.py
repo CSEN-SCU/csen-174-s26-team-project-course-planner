@@ -40,6 +40,45 @@ def _cand(idx, code, units, cats, sections, *, is_lab=False, lab_partner_id=None
 # ── coverage + double-tagging ────────────────────────────────────────────────
 
 
+def test_selector_prioritizes_major_courses_over_extra_ge_fillers():
+    """When unit budget is tight, pick offered major courses before packing
+    additional unrelated GE electives."""
+    csen = _cand(
+        0, "CSEN 174", 4, ["Major: CSEN 174"],
+        [_sec(1, [0, 2, 4], 75, 140, rating=4.0)],
+    )
+    math = _cand(
+        1, "MATH 53", 4, ["Major: MATH 53"],
+        [_sec(1, [1, 3], 200, 265, rating=4.0)],
+    )
+    sctr = _cand(
+        2, "SCTR 128", 4,
+        ["rtc 3", "elsj", "applied ethics"],
+        [_sec(1, [0, 2], 200, 265, rating=4.5)],
+    )
+    engl = _cand(3, "ENGL 1A", 4, ["arts"], [_sec(1, [4], 300, 365, rating=3.5)])
+    phil = _cand(4, "PHIL 9", 4, ["advanced writing"], [_sec(1, [4], 200, 265, rating=3.5)])
+
+    result = select_schedule(
+        [sctr, engl, phil, csen, math],
+        must_cover=[
+            "Major: CSEN 174",
+            "Major: MATH 53",
+            "rtc 3",
+            "elsj",
+            "applied ethics",
+            "arts",
+            "advanced writing",
+        ],
+        unit_min=12,
+        unit_max=16,
+        hard_max=16,
+    )
+    codes = {c.course_code for c in result.selected}
+    assert {"CSEN 174", "MATH 53"} <= codes
+    assert sum(c.units for c in result.selected) <= 16
+
+
 def test_selector_prefers_double_tagged_candidate():
     """SCTR 128 covers 3 Core slots in one course; should win over
     picking 3 single-coverage courses."""

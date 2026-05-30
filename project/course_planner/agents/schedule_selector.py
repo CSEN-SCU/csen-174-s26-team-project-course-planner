@@ -42,6 +42,19 @@ from agents.candidate_pool import CandidateCourse, SectionOption
 # pools resolve in <100 branches; 50k is a comfortable cushion.
 _MAX_BRANCHES = 50_000
 
+# Coverage weights: major/catalog requirements outrank open Core/GE slots so
+# one quarter fills CSEN/COEN/MATH rows before packing unrelated GE electives.
+_MAJOR_COVERAGE_WEIGHT = 12.0
+_OPEN_COVERAGE_WEIGHT = 5.0
+
+
+def _coverage_weight(label: str) -> float:
+    return _MAJOR_COVERAGE_WEIGHT if label.startswith("Major: ") else _OPEN_COVERAGE_WEIGHT
+
+
+def _major_label_count(categories: Iterable[str]) -> int:
+    return sum(1 for cat in categories if cat.startswith("Major: "))
+
 _NO_MORNING_RE = re.compile(
     r"no\s+(?:early|morning)|after\s+10|after\s+9|nothing\s+(?:early|before)",
     re.IGNORECASE,
@@ -155,7 +168,7 @@ def _score(
         new_cats = (set(c.categories_satisfied) & must_cover_set) - cats_covered
         if new_cats:
             cats_covered |= new_cats
-            coverage += len(new_cats) * 5.0
+            coverage += sum(_coverage_weight(cat) for cat in new_cats)
             double_bonus += max(0, len(c.categories_satisfied) - 1) * 2.0
             if sec is not None and sec.instructor_rating is not None:
                 rating_sum += sec.instructor_rating
@@ -217,6 +230,7 @@ def select_schedule(
     # then tries to beat.
     pool.sort(
         key=lambda c: (
+            -_major_label_count(c.categories_satisfied),
             -len(c.categories_satisfied),
             -(c.best_section.instructor_rating if c.best_section and c.best_section.instructor_rating is not None else -1.0),
             c.units,

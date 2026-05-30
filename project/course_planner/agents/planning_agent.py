@@ -15,6 +15,7 @@ from utils.academic_progress_helpers import (
     build_units_lookup,
     default_units_for_code,
     enrich_missing_details,
+    extract_codes_from_requirement,
     extract_completed_course_codes,
 )
 from utils.enrichment_resolver import (
@@ -609,58 +610,8 @@ def _pair_lab_corequirements(
 
 
 def _extract_codes_from_requirement(text: str) -> list[str]:
-    """Extract every course code embedded in a requirement description.
-
-    Handles SCU Workday patterns like:
-      "CSEN/COEN 122 & 122L"    → CSEN 122, COEN 122, CSEN 122L, COEN 122L
-      "CSEN/COEN 194/L"         → CSEN 194, COEN 194, CSEN 194L, COEN 194L
-      "ECEN/ELEN 153 & 153L"    → ECEN 153, ELEN 153, ECEN 153L, ELEN 153L
-      "Core: ENGR: RTC 3"       → []  (no usable course code)
-    """
-    t = text.upper()
-    # "194/L" → "194 & 194L"
-    t = re.sub(r"(\d+[A-Z]?)/L\b", r"\1 & \1L", t)
-
-    # Find all slash-paired subject groups: "CSEN/COEN" → ["CSEN", "COEN"]
-    slash_subj_re = re.compile(r"\b([A-Z]{2,6}(?:/[A-Z]{2,6})+)\b")
-    subj_groups: list[list[str]] = []
-    subj_group_positions: list[tuple[int, int, list[str]]] = []
-    for m in slash_subj_re.finditer(t):
-        variants = m.group(0).split("/")
-        subj_group_positions.append((m.start(), m.end(), variants))
-
-    # Find all standalone subjects (not part of a slash group)
-    solo_subj_re = re.compile(r"\b([A-Z]{2,6})\b")
-
-    # Find all number tokens (course numbers) that follow a subject group
-    num_re = re.compile(r"\b(\d{1,3}[A-Z]?)\b")
-
-    codes: list[str] = []
-    seen: set[str] = set()
-
-    # Walk through slash-groups and collect the numbers that follow each group
-    for start, end, variants in subj_group_positions:
-        # Look for numbers in the text after this group (up to the next subject or 60 chars)
-        tail = t[end:end + 80]
-        nums = num_re.findall(tail)
-        # Stop at the first non-number/non-separator token (rough heuristic: take up to 4 nums)
-        for num in nums[:4]:
-            for subj in variants:
-                c = f"{subj} {num}"
-                if c not in seen:
-                    codes.append(c)
-                    seen.add(c)
-
-    # If nothing found via slash-groups, fall back to simple SUBJ NUM pairs
-    if not codes:
-        simple_re = re.compile(r"\b([A-Z]{2,6})\s+(\d{1,3}[A-Z]?)\b")
-        for subj, num in simple_re.findall(t):
-            c = f"{subj} {num}"
-            if c not in seen:
-                codes.append(c)
-                seen.add(c)
-
-    return codes
+    """Backward-compatible alias; implementation lives in academic_progress_helpers."""
+    return extract_codes_from_requirement(text)
 
 
 def _recompute_total_units(recommended: list[dict]) -> int:
@@ -1165,19 +1116,25 @@ def _resolve_item_codes(item: dict) -> list[str]:
     """Return the list of course codes to try for one missing_details item.
 
     Workday transcripts often have course_code=None with the code embedded
-    in the requirement text, e.g. "CSEN/COEN 122 & 122L".  Fall back to
-    extracting from the category/requirement field when the course field is empty.
+    in the requirement text, e.g. "CSEN/COEN 122 & 122L".  Prefer
+    ``extract_codes_from_requirement`` over a stale ``course`` hint — uploads
+    used to set ``AND 122`` from the word "and" in requirement prose.
     """
-    explicit = (item.get("course") or "").strip()
-    if explicit:
-        return [explicit]
-    for key in ("category", "requirement"):
+    extracted: list[str] = []
+    seen: set[str] = set()
+    for key in ("requirement", "category"):
         text = (item.get(key) or "").strip()
-        if text:
-            extracted = _extract_codes_from_requirement(text)
-            if extracted:
-                return extracted
-    return []
+        if not text:
+            continue
+        for c in extract_codes_from_requirement(text):
+            norm = _normalize_code(c)
+            if norm and norm not in seen:
+                seen.add(norm)
+                extracted.append(c)
+    if extracted:
+        return extracted
+    explicit = (item.get("course") or "").strip()
+    return [explicit] if explicit else []
 
 
 _OPEN_REQ_STRIP_PREFIXES = (

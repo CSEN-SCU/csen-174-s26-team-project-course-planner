@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import pytest
 
-from agents.planning_agent import _extract_codes_from_requirement
+from utils.academic_progress_helpers import extract_codes_from_requirement as _extract_codes_from_requirement
 
 
 def _extracted(text: str) -> set[str]:
@@ -83,6 +83,13 @@ def test_does_not_invent_zeros_or_letters():
     out = _extracted("CSEN 100")
     assert "CSEN 100A" not in out
     assert "CSEN 100B" not in out
+
+
+def test_university_core_rtc_not_core_3():
+    """'University Core: RTC 3' must not become CORE 3 from prose tokens."""
+    out = _extracted("University Core: RTC 3")
+    assert "RTC 3" in out
+    assert "CORE 3" not in out
 
 
 def test_three_letter_pseudo_subject_passes_regex():

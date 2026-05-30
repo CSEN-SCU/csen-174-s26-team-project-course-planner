@@ -280,6 +280,10 @@ def build_candidate_pool(
         all_sections if all_sections is not None else load_all_course_sections()
     )
     ratings = ratings if ratings is not None else load_instructor_ratings()
+    # Subject prefixes that appear in the next-term schedule (CSEN, MATH, …).
+    # Used to tell real major/catalog courses apart from tag-shaped strings
+    # like "RTC 3" that ``_resolve_item_codes`` can extract from Core text.
+    real_subjects = {subj for (subj, _) in schedule_index.keys()}
 
     # Step 1: gather (code -> [requirement labels]) and the set of must-cover
     # labels. Concrete-code requirements become "Major: CSEN 174". Open Core
@@ -301,11 +305,6 @@ def build_candidate_pool(
         if _is_educational_enrichment_requirement(item):
             continue
         codes = _resolve_item_codes(item)
-        # ``_resolve_item_codes`` is permissive: for "Core: ENGR: RTC 3" it
-        # returns ["RTC 3"], which looks like a course code but is really
-        # an open-requirement *label*. We treat any extracted "code" that
-        # isn't actually in the schedule as a signal to fall through to
-        # the open-Core resolver instead of declaring it not-offered.
         offered_codes = [c for c in codes if _is_offered(_normalize_code(c), schedule_index)]
         if offered_codes:
             # Concrete requirement: e.g. {"course": "CSEN 174", "category": "Major"}.
@@ -325,6 +324,24 @@ def build_candidate_pool(
             code_to_categories.setdefault(primary, [])
             if label not in code_to_categories[primary]:
                 code_to_categories[primary].append(label)
+            _push_must_cover(label)
+        elif codes and (
+            _normalize_code(str(item.get("course") or ""))
+            or any(
+                _normalize_code(c).split(" ", 1)[0] in real_subjects for c in codes
+            )
+        ):
+            # Concrete catalog course (e.g. CSEN 174) not offered this quarter.
+            # Defer as Major — do NOT substring-match open Core/GE pools.
+            primary = (
+                _normalize_code(str(item.get("course") or ""))
+                or _normalize_code(codes[0])
+            )
+            if primary in completed_codes:
+                continue
+            if _senior_design_gated(primary, completed_codes):
+                continue
+            label = f"Major: {primary}"
             _push_must_cover(label)
         else:
             req_text = (item.get("category") or item.get("requirement") or "").strip()

@@ -114,6 +114,50 @@ def test_pool_excludes_courses_not_offered_next_term():
         ratings={},
     )
     assert candidates == []
+    assert must_cover == ["Major: CSEN 174"]
+
+
+def test_not_offered_major_does_not_open_resolve_to_random_ge():
+    """A concrete CSEN row that is not offered next term must defer as Major,
+    not pull unrelated Core/GE courses via substring category matching."""
+    sched = {("ENGL", "1A"): _sched_entry([1, 3], 200, 290)}
+    category_index = {
+        "rtc 3": ["ENGL 1A"],
+        "major": ["ENGL 1A"],
+    }
+    candidates, must_cover = build_candidate_pool(
+        missing_details=[{"course": "CSEN 174", "category": "Major"}],
+        completed_codes=set(),
+        schedule_index=sched,
+        category_index=category_index,
+        titles_index={},
+        units_index={},
+        all_sections={},
+        ratings={},
+    )
+    assert candidates == []
+    assert must_cover == ["Major: CSEN 174"]
+    assert "ENGL 1A" not in {c.course_code for c in candidates}
+
+
+def test_rtc3_false_code_still_uses_open_resolver():
+    """RTC 3 extracted from Core text is not a schedule subject → open path."""
+    sched = {("SCTR", "128"): _sched_entry([0, 2], 200, 265)}
+    category_index = {"rtc 3": ["SCTR 128"]}
+    candidates, must_cover = build_candidate_pool(
+        missing_details=[
+            {"category": "Core: ENGR: RTC 3", "requirement": "Core: ENGR: RTC 3"},
+        ],
+        completed_codes=set(),
+        schedule_index=sched,
+        category_index=category_index,
+        titles_index={("SCTR", "128"): "Religion, Violence, Nonviolence"},
+        units_index={("SCTR", "128"): 4},
+        all_sections={("SCTR", "128"): [_section(1, [0, 2], 200, 265)]},
+        ratings={},
+    )
+    assert [c.course_code for c in candidates] == ["SCTR 128"]
+    assert must_cover == ["rtc 3"]
 
 
 def test_pool_skips_educational_enrichment_requirement():
