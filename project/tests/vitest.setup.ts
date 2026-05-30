@@ -38,3 +38,11 @@ if (
   // @ts-expect-error - define minimal Storage for tests
   (globalThis as any).localStorage = _memoryStorage();
 }
+
+// jsdom does not implement window.scrollTo; resetPageScroll() calls it on
+// every full-screen view mount, so any test that renders <Root> logs a noisy
+// "Not implemented: window.scrollTo" React layout-effect stack. Stub it to a
+// no-op so the test output stays clean (production uses the real browser API).
+if (typeof (globalThis as any).window !== "undefined") {
+  (globalThis as any).window.scrollTo = () => {};
+}
