@@ -348,6 +348,7 @@ def run_constrained_planner(
     previous_plan: dict | None = None,
     parsed_rows: list[dict[str, Any]] | None = None,
     completed_course_codes: list[str] | None = None,
+    confirmed_major_id: str | None = None,
 ) -> dict[str, Any]:
     """Run the constrained planner v2.
 
@@ -355,7 +356,14 @@ def run_constrained_planner(
     same output contract (with ``recommended[i].section`` added and
     top-level ``meeting_days/start/end`` mirrored), plus a richer
     ``meta.validation`` block with ``engine: "constrained_v2"``.
+
+    ``confirmed_major_id`` is accepted for signature parity with the legacy
+    ``run_planning_agent`` engine (the router dispatches both through the same
+    call site). The closed-world v2 solver is major-agnostic — it works purely
+    from ``missing_details`` / ``parsed_rows`` — so the value is intentionally
+    unused here.
     """
+    _ = confirmed_major_id  # accepted for engine-dispatch parity; unused in v2
     request_id = str(uuid.uuid4())
 
     if not missing_details and not previous_plan:
