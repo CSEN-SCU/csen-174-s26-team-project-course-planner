@@ -14,6 +14,7 @@ import {
   type MajorDetection,
 } from "../api/client";
 import type { ParsedRow } from "../types";
+import { MajorConfirmPanel } from "./MajorConfirmPanel";
 import { PlannerColumnHeader } from "./PlannerColumnHeader";
 import { SignOutButton } from "./SignOutButton";
 
@@ -54,6 +55,10 @@ export type ChatPanelProps = {
   onSignOut?: () => void;
   studentMajorId?: string | null;
   majorConfirmed?: boolean;
+  majorDetection?: MajorDetection | null;
+  onSelectMajor?: (majorId: string, name: string) => void;
+  onMajorConfirmed?: () => void;
+  onRequestMajorChange?: () => void;
   onTranscriptUploaded?: (detection: MajorDetection | null) => void;
 };
 
@@ -121,6 +126,10 @@ export function ChatPanel({
   onSignOut,
   studentMajorId = null,
   majorConfirmed = false,
+  majorDetection = null,
+  onSelectMajor,
+  onMajorConfirmed,
+  onRequestMajorChange,
   onTranscriptUploaded,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
@@ -140,7 +149,7 @@ export function ChatPanel({
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isGenerating]);
+  }, [messages, isGenerating, fileUploaded, majorConfirmed, majorDetection]);
 
   useEffect(() => {
     if (prefillInput) {
@@ -167,16 +176,21 @@ export function ChatPanel({
       setFileUploaded(true);
       const det = (data.major_detection as MajorDetection | undefined) ?? null;
       onTranscriptUploaded?.(det);
-      const majorHint = det?.message
-        ? `\n\n${det.message}`
-        : "";
-      const reply = `Got it! Found ${md.length} missing requirements${userId ? " and saved your progress" : ""}.${majorHint} Confirm your major above, then tell me your preferences for next quarter.`;
+      const reply = `Got it! Found ${md.length} missing requirements${userId ? " and saved your progress" : ""}. Confirm your major below, then tell me your preferences for next quarter.`;
       setMessages((m) => [...m, { id: `a-${Date.now()}`, role: "assistant", content: reply }]);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setMessages((m) => [...m, { id: `a-${Date.now()}`, role: "assistant", content: `Upload failed: ${msg}` }]);
     }
   }, [userId, setMissingDetails, setParsedRows, setFileUploaded, setMessages, onTranscriptUploaded]);
+
+  const resetUploadedTranscript = useCallback(() => {
+    setMissingDetails([]);
+    setParsedRows?.([]);
+    setFileUploaded(false);
+    setPlanResult(null);
+    onTranscriptUploaded?.(null);
+  }, [setMissingDetails, setParsedRows, setFileUploaded, setPlanResult, onTranscriptUploaded]);
 
   const sendText = useCallback(async (text: string) => {
     const trimmed = text.trim();
@@ -188,6 +202,45 @@ export function ChatPanel({
     setMessages((m) => [...m, userMsg]);
 
     const lower = trimmed.toLowerCase();
+
+    // Handle pending Academic Progress update confirmation before other gates
+    // so "no" works even when the currently loaded transcript is unconfirmed.
+    if (pendingFile) {
+      const wantsUpdate = lower === "yes" || lower.startsWith("yes") || lower.includes("update");
+      const wantsDiscard = lower === "no" || lower.startsWith("no");
+
+      if (wantsUpdate) {
+        const f = pendingFile;
+        setPendingFile(null);
+        await processFile(f);
+        return;
+      }
+
+      if (wantsDiscard) {
+        setPendingFile(null);
+        resetUploadedTranscript();
+        setMessages((m) => [
+          ...m,
+          {
+            id: `a-${Date.now()}`,
+            role: "assistant",
+            content:
+              "No problem. I discarded the uploaded transcript and cleared your academic progress. Please upload your Academic Progress again to start over.",
+          },
+        ]);
+        return;
+      }
+
+      setMessages((m) => [
+        ...m,
+        {
+          id: `a-${Date.now()}`,
+          role: "assistant",
+          content: "Please reply **yes** to use the new file or **no** to discard it and start again.",
+        },
+      ]);
+      return;
+    }
 
     // Gate: must have Academic Progress export before planning
     if (!fileUploaded) {
@@ -210,24 +263,10 @@ export function ChatPanel({
           id: `a-${Date.now()}`,
           role: "assistant",
           content:
-            "请先在上方的专业确认栏选择并确认你的专业（系统会根据 Academic Progress 推断，也可手动修改），然后再描述你想要的课表。",
+            "Please confirm your major in the chat above (we inferred it from your Academic Progress, but you can change it), then describe the schedule you want.",
         },
       ]);
       return;
-    }
-
-    // Handle pending Academic Progress update confirmation
-    if (pendingFile) {
-      if (lower === "yes" || lower.startsWith("yes") || lower.includes("update")) {
-        const f = pendingFile;
-        setPendingFile(null);
-        await processFile(f);
-        return;
-      } else {
-        setPendingFile(null);
-        setMessages((m) => [...m, { id: `a-${Date.now()}`, role: "assistant", content: "Got it — keeping your existing academic progress." }]);
-        return;
-      }
     }
 
     setIsGenerating(true);
@@ -293,6 +332,9 @@ export function ChatPanel({
     setMessages,
     pendingFile,
     processFile,
+    resetUploadedTranscript,
+    majorConfirmed,
+    studentMajorId,
   ]);
 
   const send = useCallback(async () => {
@@ -392,7 +434,7 @@ export function ChatPanel({
             id: `a-${Date.now()}`,
             role: "assistant",
             content:
-              "You already have academic progress saved. Would you like to update it with the new file? Reply **yes** to update or **no** to keep the current one.",
+              "You already have academic progress saved. Would you like to update it with the new file? Reply **yes** to use the new file or **no** to discard it and start again.",
           },
         ]);
       } else {
@@ -506,6 +548,28 @@ export function ChatPanel({
             </div>
           </div>
         ))}
+
+        {fileUploaded && userId && (majorDetection || studentMajorId) && (
+          <div className="flex justify-start">
+            <div
+              className={`max-w-[90%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
+                majorConfirmed
+                  ? "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200"
+                  : "bg-[var(--scu-gray)] text-[var(--scu-text)] ring-1 ring-neutral-200"
+              }`}
+            >
+              <MajorConfirmPanel
+                userId={userId}
+                detection={majorDetection}
+                selectedMajorId={studentMajorId}
+                majorConfirmed={majorConfirmed}
+                onSelectMajor={(id, name) => onSelectMajor?.(id, name)}
+                onConfirmed={() => onMajorConfirmed?.()}
+                onRequestChange={() => onRequestMajorChange?.()}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Animated typing indicator while AI is generating */}
         {isGenerating && (

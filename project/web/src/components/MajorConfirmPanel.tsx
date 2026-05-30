@@ -55,7 +55,7 @@ export function MajorConfirmPanel({
   const handleConfirm = async () => {
     const mid = pendingId.trim();
     if (!mid) {
-      setError("请先选择专业。");
+      setError("Please select a major.");
       return;
     }
     setBusy(true);
@@ -74,46 +74,39 @@ export function MajorConfirmPanel({
 
   if (majorConfirmed && selectedMajorId) {
     return (
-      <div
-        className="mx-3 mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900"
-        data-testid="major-confirmed-banner"
-      >
-        <span className="font-medium">当前专业：</span>
-        {displayName} ({selectedMajorId})
+      <div data-testid="major-confirmed-banner">
+        <span className="font-medium">Current major:</span> {displayName} ({selectedMajorId})
         <button
           type="button"
           className="ml-2 text-emerald-700 underline hover:text-emerald-900"
           onClick={() => onRequestChange?.()}
         >
-          更改
+          Change
         </button>
       </div>
     );
   }
 
   return (
-    <div
-      className="mx-3 mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-950"
-      data-testid="major-confirm-panel"
-    >
+    <div data-testid="major-confirm-panel">
       <p className="mb-2 font-medium">
         {detection?.message ??
-          "请确认你的专业，以便我们按学位要求与先修课推荐课程。"}
+          "Please confirm your major so we can apply the right degree requirements and prerequisites."}
       </p>
       {detection?.confidence && detection.major_id && (
-        <p className="mb-2 text-amber-800">
-          系统判断：{detection.name}（{detection.major_id}）
-          {detection.confidence === "low" ? " — 置信度较低" : ""}
+        <p className="mb-2 text-neutral-600">
+          Detected: {detection.name} ({detection.major_id})
+          {detection.confidence === "low" ? " — low confidence" : ""}
         </p>
       )}
-      <label className="mb-1 block text-xs font-medium text-amber-900">专业</label>
+      <label className="mb-1 block text-xs font-medium text-neutral-700">Major</label>
       <select
-        className="mb-2 w-full rounded border border-amber-300 bg-white px-2 py-1.5 text-sm"
+        className="mb-2 w-full rounded border border-neutral-300 bg-white px-2 py-1.5 text-sm"
         value={pendingId}
         onChange={(e) => setPendingId(e.target.value)}
         data-testid="major-select"
       >
-        <option value="">— 选择专业 —</option>
+        <option value="">— Select major —</option>
         {majors.map((m) => (
           <option key={m.major_id} value={m.major_id}>
             {m.name} ({m.major_id})
@@ -124,14 +117,16 @@ export function MajorConfirmPanel({
       <button
         type="button"
         disabled={busy || !pendingId}
-        className="rounded bg-amber-800 px-3 py-1.5 text-white disabled:opacity-50"
+        className="rounded bg-[var(--scu-red)] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
         onClick={() => void handleConfirm()}
         data-testid="major-confirm-btn"
       >
-        {busy ? "保存中…" : "确认专业"}
+        {busy ? "Saving…" : "Confirm major"}
       </button>
-      <p className="mt-2 text-xs text-amber-800">
-        确认后才能生成课表；规划会使用 <code className="text-xs">data/majors/{pendingId || "…"}.md</code> 中的必修课与先修课。
+      <p className="mt-2 text-xs text-neutral-500">
+        Confirm your major before generating a schedule. Planning uses required courses and
+        prerequisites from{" "}
+        <code className="text-xs">data/majors/{pendingId || "…"}.md</code>.
       </p>
     </div>
   );

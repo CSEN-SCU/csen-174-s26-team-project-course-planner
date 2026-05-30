@@ -7,7 +7,6 @@ import {
   saveMemory,
   type MajorDetection,
 } from "./api/client";
-import { MajorConfirmPanel } from "./components/MajorConfirmPanel";
 import { CalendarView } from "./components/CalendarView";
 import { ChatPanel, type ChatUiMessage } from "./components/ChatPanel";
 import {
@@ -795,7 +794,7 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
           {
             id: `a-${Date.now()}`,
             role: "assistant",
-            content: "请先在上方的专业确认栏选择并确认你的专业，再生成四年规划。",
+            content: "Please confirm your major in the chat panel before generating a four-year plan.",
           },
         ]);
         setFourYearGenerating(false);
@@ -1086,32 +1085,24 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
         )}
       </div>
 
-      {fileUploaded && (
-        <MajorConfirmPanel
-          userId={userId}
-          detection={majorDetection}
-          selectedMajorId={studentMajorId}
-          majorConfirmed={majorConfirmed && !majorEditMode}
-          onSelectMajor={(id) => {
-            setStudentMajorId(id);
-          }}
-          onConfirmed={() => {
-            setMajorConfirmed(true);
-            setMajorEditMode(false);
-          }}
-          onRequestChange={() => {
-            setMajorEditMode(true);
-            setMajorConfirmed(false);
-          }}
-        />
-      )}
-
       <ChatPanel
         userId={userId}
         parsedRows={parsedRows}
         missingDetails={missingDetails}
         studentMajorId={studentMajorId}
         majorConfirmed={majorConfirmed && !majorEditMode}
+        majorDetection={majorDetection}
+        onSelectMajor={(id) => {
+          setStudentMajorId(id);
+        }}
+        onMajorConfirmed={() => {
+          setMajorConfirmed(true);
+          setMajorEditMode(false);
+        }}
+        onRequestMajorChange={() => {
+          setMajorEditMode(true);
+          setMajorConfirmed(false);
+        }}
         planResult={planResult}
         messages={messages}
         setMessages={setMessages}
