@@ -64,6 +64,39 @@ def test_no_conflict_disjoint_days():
     assert r.passed and r.score == 1.0
 
 
+def test_section_level_overrides_default_block_no_false_positive():
+    """v2 attaches the section it actually chose. Two courses sharing a
+    default block but scheduled into back-to-back, non-overlapping sections
+    must NOT be flagged (regression for the fuzz-sweep false positive)."""
+    # Default block says both M/W 9:15-10:20 → would conflict on defaults.
+    sched = _sched("OMIS 30", "ACTG 130", days=(0, 2), start=140, end=240)
+    plan = {
+        "recommended": [
+            {"course": "OMIS 30", "section": {
+                "meeting_days": [0, 2], "meeting_start_min": 140, "meeting_end_min": 240}},
+            {"course": "ACTG 130", "section": {
+                "meeting_days": [0, 2], "meeting_start_min": 250, "meeting_end_min": 350}},
+        ]
+    }
+    r = S.score_no_time_conflicts(plan, schedule_index=sched)
+    assert r.passed and r.score == 1.0
+
+
+def test_section_level_real_overlap_still_flagged():
+    """When the engine-chosen sections genuinely overlap, still a conflict."""
+    sched = _sched("OMIS 30", "ACTG 130")
+    plan = {
+        "recommended": [
+            {"course": "OMIS 30", "section": {
+                "meeting_days": [0, 2], "meeting_start_min": 140, "meeting_end_min": 240}},
+            {"course": "ACTG 130", "section": {
+                "meeting_days": [0, 2], "meeting_start_min": 200, "meeting_end_min": 300}},
+        ]
+    }
+    r = S.score_no_time_conflicts(plan, schedule_index=sched)
+    assert not r.passed
+
+
 # ── labs_paired (R1) ─────────────────────────────────────────────────────────
 
 

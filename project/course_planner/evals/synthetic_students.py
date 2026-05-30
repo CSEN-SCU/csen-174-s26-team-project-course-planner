@@ -29,6 +29,7 @@ exact transcript.
 from __future__ import annotations
 
 import json
+import random
 import re
 from dataclasses import dataclass
 from functools import lru_cache
@@ -118,3 +119,55 @@ def make_student(major_id: str, grade: str) -> SyntheticStudent:
 
 def all_grades() -> list[str]:
     return list(_GRADE_PROGRESS.keys())
+
+
+def make_fuzz_student(major_id: str, seed: int) -> SyntheticStudent:
+    """A randomized, possibly out-of-order transcript for stress testing.
+
+    Unlike ``make_student`` (a clean linear prefix), this completes a RANDOM
+    subset of the major's required courses — modeling a real student who
+    took courses out of the ideal order, transferred credit, or has gaps.
+    The fraction completed is itself randomized (10%–90%) so a single seed
+    sweep covers early, mid, and late students. ``grade`` is labeled by the
+    completed fraction so downstream checks (e.g. freshman_no_senior_design)
+    still apply.
+
+    Deterministic per ``seed`` so a failing fuzz case is reproducible.
+    """
+    rng = random.Random(seed)
+    seq = ordered_required(major_id)
+    if not seq:
+        return SyntheticStudent(major_id, "fuzz", [], [])
+
+    frac = rng.uniform(0.1, 0.9)
+    k = int(round(len(seq) * frac))
+    completed = rng.sample(seq, k)  # random subset, NOT a clean prefix
+    completed_set = set(completed)
+    remaining = [c for c in seq if c not in completed_set]
+
+    # Label a grade band from the completed fraction so grade-appropriate
+    # checks (Senior Design gating) still have a meaningful target.
+    if frac < 0.15:
+        grade = "freshman"
+    elif frac < 0.4:
+        grade = "sophomore"
+    elif frac < 0.7:
+        grade = "junior"
+    else:
+        grade = "senior"
+
+    name = (_major_index().get(major_id) or {}).get("name", major_id.upper())
+    missing_details = [
+        {
+            "requirement": f"{name} Major: {code}",
+            "course": code,
+            "status": "Not Satisfied",
+        }
+        for code in remaining
+    ]
+    return SyntheticStudent(
+        major_id=major_id,
+        grade=grade,
+        completed_course_codes=completed,
+        missing_details=missing_details,
+    )

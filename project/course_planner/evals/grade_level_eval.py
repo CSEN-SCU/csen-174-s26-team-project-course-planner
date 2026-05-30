@@ -31,7 +31,12 @@ from typing import Any
 from agents.planning_agent_v2 import run_constrained_planner
 from evals.scenarios import load_context
 from evals.scorers import score_plan
-from evals.synthetic_students import SyntheticStudent, all_grades, make_student
+from evals.synthetic_students import (
+    SyntheticStudent,
+    all_grades,
+    make_fuzz_student,
+    make_student,
+)
 
 _SENIOR_DESIGN_RE = re.compile(r"\b(?:CSEN|COEN|ECEN|ELEN|MECH|ENGR)\s*19[2-9]", re.IGNORECASE)
 _HARD_UNIT_CAP = 20
@@ -119,17 +124,22 @@ def _grade_findings(student: SyntheticStudent, plan: dict[str, Any]) -> list[Gra
     return findings
 
 
-def evaluate_student(major_id: str, grade: str) -> GradeReport:
-    """Build a synthetic student, run the engine offline, score + analyze."""
-    student = make_student(major_id, grade)
+def _evaluate(student: SyntheticStudent, *, grade_label: str | None = None) -> GradeReport:
+    """Run the engine offline on a prepared student, score + analyze.
+
+    Shared core for both the linear grade scenarios and the randomized fuzz
+    sweep. ``grade_label`` overrides the report's grade column (fuzz uses a
+    ``seed=<n>`` tag so a failing case is reproducible).
+    """
+    grade = grade_label or student.grade
     # Some majors define requirements by upper-division unit counts rather
-    # than specific course codes (e.g. the language majors), so a
-    # higher-grade student can have an empty remaining-requirement list.
-    # That is a valid "nothing left to plan" state, not an engine error —
-    # report it as an empty, all-pass plan instead of crashing the sweep.
+    # than specific course codes (e.g. the language majors), so a student can
+    # have an empty remaining-requirement list. That is a valid "nothing left
+    # to plan" state, not an engine error — report it as an empty, all-pass
+    # plan instead of crashing the sweep.
     if not student.missing_details:
         return GradeReport(
-            major_id=major_id,
+            major_id=student.major_id,
             grade=grade,
             n_recommended=0,
             total_units=0,
@@ -145,7 +155,7 @@ def evaluate_student(major_id: str, grade: str) -> GradeReport:
     ctx["missing_details"] = student.missing_details
     ps = score_plan(plan, ctx)
     return GradeReport(
-        major_id=major_id,
+        major_id=student.major_id,
         grade=grade,
         n_recommended=len(plan.get("recommended") or []),
         total_units=int(plan.get("total_units") or 0),
@@ -154,8 +164,22 @@ def evaluate_student(major_id: str, grade: str) -> GradeReport:
     )
 
 
+def evaluate_student(major_id: str, grade: str) -> GradeReport:
+    """Build a linear-progress synthetic student and evaluate it."""
+    return _evaluate(make_student(major_id, grade))
+
+
 def evaluate_major(major_id: str) -> list[GradeReport]:
     return [evaluate_student(major_id, g) for g in all_grades()]
+
+
+def evaluate_fuzz(major_id: str, seeds: int) -> list[GradeReport]:
+    """Randomized stress sweep: ``seeds`` out-of-order transcripts per major."""
+    reports: list[GradeReport] = []
+    for seed in range(seeds):
+        student = make_fuzz_student(major_id, seed)
+        reports.append(_evaluate(student, grade_label=f"{student.grade}/seed{seed}"))
+    return reports
 
 
 def _print_report(reports: list[GradeReport]) -> None:
@@ -173,11 +197,21 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Grade-level recommendation eval")
     ap.add_argument("--major", nargs="+", default=["csen"], help="major id(s)")
     ap.add_argument("--json", action="store_true", help="emit JSON")
+    ap.add_argument(
+        "--fuzz",
+        type=int,
+        default=0,
+        metavar="N",
+        help="randomized stress sweep: N out-of-order transcripts per major",
+    )
     args = ap.parse_args(argv)
 
     all_reports: list[GradeReport] = []
     for mid in args.major:
-        all_reports.extend(evaluate_major(mid))
+        if args.fuzz:
+            all_reports.extend(evaluate_fuzz(mid, args.fuzz))
+        else:
+            all_reports.extend(evaluate_major(mid))
 
     if args.json:
         print(json.dumps([r.as_dict() for r in all_reports], indent=2, ensure_ascii=False))

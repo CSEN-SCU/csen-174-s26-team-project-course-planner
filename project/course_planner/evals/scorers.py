@@ -78,11 +78,50 @@ def score_no_hallucination(plan: dict, *, schedule_index: dict) -> ScoreResult:
     )
 
 
+def _section_slot(rec: dict) -> tuple[set[int], int, int] | None:
+    """Meeting window from the section the ENGINE actually chose, if present."""
+    sec = rec.get("section")
+    if not isinstance(sec, dict):
+        return None
+    days = sec.get("meeting_days") or []
+    s = sec.get("meeting_start_min")
+    e = sec.get("meeting_end_min")
+    if days and s is not None and e is not None and int(s) < int(e):
+        return (set(int(d) for d in days), int(s), int(e))
+    return None
+
+
 def score_no_time_conflicts(plan: dict, *, schedule_index: dict) -> ScoreResult:
-    """No two recommended courses may overlap on a shared weekday."""
+    """No two recommended courses may overlap on a shared weekday.
+
+    constrained_v2 does section-level selection, so two courses can be in
+    the same default time block yet be scheduled into different,
+    non-overlapping sections. We therefore prefer the meeting window of the
+    section the engine ACTUALLY chose (``recommended[i].section``) and only
+    fall back to the schedule_index default block for engines (legacy) that
+    don't attach a section. Using the default block for v2 caused false-
+    positive conflicts in the fuzz sweep.
+    """
+    recs = plan.get("recommended") or []
     codes = _codes(plan)
-    conflicts = detect_time_conflicts(codes, schedule_index)
-    pairs = [(codes[a], codes[b]) for (a, b) in conflicts]
+    # If every rec carries an engine-chosen section, score on those.
+    if recs and all(isinstance(r.get("section"), dict) for r in recs):
+        slots = [_section_slot(r) for r in recs]
+        pairs: list[tuple[str, str]] = []
+        for i, a in enumerate(slots):
+            if a is None:
+                continue
+            for j in range(i + 1, len(slots)):
+                b = slots[j]
+                if b is None:
+                    continue
+                if (a[0] & b[0]) and a[1] < b[2] and b[1] < a[2]:
+                    code_i = str(recs[i].get("course", "")).strip()
+                    code_j = str(recs[j].get("course", "")).strip()
+                    pairs.append((code_i, code_j))
+    else:
+        conflicts = detect_time_conflicts(codes, schedule_index)
+        pairs = [(codes[a], codes[b]) for (a, b) in conflicts]
     # score degrades with each conflicting pair
     score = 1.0 if not pairs else max(0.0, 1.0 - len(pairs) / max(1, len(codes)))
     return ScoreResult(
