@@ -78,7 +78,7 @@ export function MajorConfirmPanel({
         <span className="font-medium">Current major:</span> {displayName} ({selectedMajorId})
         <button
           type="button"
-          className="ml-2 text-emerald-700 underline hover:text-emerald-900"
+          className="ml-2 text-neutral-600 underline hover:text-[var(--scu-text)]"
           onClick={() => onRequestChange?.()}
         >
           Change

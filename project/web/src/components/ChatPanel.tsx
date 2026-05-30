@@ -510,7 +510,7 @@ export function ChatPanel({
 
   return (
     <aside
-      className="relative grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden border-l border-neutral-200 bg-[var(--scu-white)] shadow-sm"
+      className="relative grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto_auto] overflow-hidden border-l border-neutral-200 bg-[var(--scu-white)] shadow-sm"
       onDragEnter={onDragEnter}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
@@ -549,28 +549,6 @@ export function ChatPanel({
           </div>
         ))}
 
-        {fileUploaded && userId && (majorDetection || studentMajorId) && (
-          <div className="flex justify-start">
-            <div
-              className={`max-w-[90%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
-                majorConfirmed
-                  ? "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200"
-                  : "bg-[var(--scu-gray)] text-[var(--scu-text)] ring-1 ring-neutral-200"
-              }`}
-            >
-              <MajorConfirmPanel
-                userId={userId}
-                detection={majorDetection}
-                selectedMajorId={studentMajorId}
-                majorConfirmed={majorConfirmed}
-                onSelectMajor={(id, name) => onSelectMajor?.(id, name)}
-                onConfirmed={() => onMajorConfirmed?.()}
-                onRequestChange={() => onRequestMajorChange?.()}
-              />
-            </div>
-          </div>
-        )}
-
         {/* Animated typing indicator while AI is generating */}
         {isGenerating && (
           <div className="flex justify-start">
@@ -584,6 +562,24 @@ export function ChatPanel({
 
         <div ref={messagesEndRef} />
       </div>
+
+      {fileUploaded && userId && (majorDetection || studentMajorId) && (
+        <div className="shrink-0 px-4 pb-3">
+          <div className="flex justify-start">
+            <div className="max-w-[90%] rounded-lg bg-[var(--scu-gray)] px-3 py-2 text-sm leading-relaxed text-[var(--scu-text)] ring-1 ring-neutral-200">
+              <MajorConfirmPanel
+                userId={userId}
+                detection={majorDetection}
+                selectedMajorId={studentMajorId}
+                majorConfirmed={majorConfirmed}
+                onSelectMajor={(id, name) => onSelectMajor?.(id, name)}
+                onConfirmed={() => onMajorConfirmed?.()}
+                onRequestChange={() => onRequestMajorChange?.()}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="shrink-0 border-t border-neutral-200 p-3">
         <input
