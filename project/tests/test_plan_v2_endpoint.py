@@ -131,6 +131,36 @@ def test_legacy_plan_delegates_when_flag_enabled(client, monkeypatch):
     assert r.json()["engine"] == "multi_agent"  # came through the multi-agent path
 
 
+def test_default_plan_ignores_major_kwarg_for_engine_without_support(client, monkeypatch):
+    """Confirmed major should not crash older constrained planner signatures."""
+    monkeypatch.setattr(plan_router, "_MULTI_AGENT_DEFAULT", False)
+    monkeypatch.setattr(plan_router, "_PLAN_ENGINE", "constrained_v2")
+    monkeypatch.setattr(plan_router, "run_professor_agent", lambda recs: recs)
+
+    def _old_constrained_planner(
+        missing_details,
+        user_preference,
+        *,
+        memory_snippets=None,
+        previous_plan=None,
+        parsed_rows=None,
+        completed_course_codes=None,
+    ):
+        return dict(_FAKE_PLAN)
+
+    monkeypatch.setattr(plan_router, "run_constrained_planner", _old_constrained_planner)
+
+    r = client.post("/api/plan", json={
+        "missing_details": [{"course": "CSEN 122"}],
+        "user_preference": "generate a schedule",
+        "student_major_id": "csen",
+    })
+
+    assert r.status_code == 200
+    assert r.json()["type"] == "plan"
+    assert [c["course"] for c in r.json()["recommended"]] == ["CSEN 122", "ENGL 181"]
+
+
 # ── HITL review + resume ─────────────────────────────────────────────────────
 
 

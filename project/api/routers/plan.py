@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from inspect import signature
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -165,6 +166,24 @@ def _planning_context(body: PlanRequest) -> tuple[list[dict[str, Any]], list[str
     return parsed, completed
 
 
+def _call_planning_engine(
+    engine_fn,
+    missing_details: list[dict[str, Any]],
+    user_preference: str,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    """Call a planner while tolerating older engine signatures.
+
+    Dev servers can keep an older constrained planner module loaded while the
+    router has newer request fields. Filter keyword arguments at dispatch time
+    so optional context like ``confirmed_major_id`` never turns into a 500.
+    """
+    params = signature(engine_fn).parameters
+    if not any(p.kind == p.VAR_KEYWORD for p in params.values()):
+        kwargs = {k: v for k, v in kwargs.items() if k in params}
+    return engine_fn(missing_details, user_preference, **kwargs)
+
+
 @router.post("", include_in_schema=True, dependencies=[Depends(limit("plan"))])
 def create_plan(body: PlanRequest, request: Request) -> dict[str, Any]:
     _require_plan_user(request, body.user_id)
@@ -209,7 +228,8 @@ def create_plan(body: PlanRequest, request: Request) -> dict[str, Any]:
         run_constrained_planner if _PLAN_ENGINE == "constrained_v2" else run_planning_agent
     )
     try:
-        plan = engine_fn(
+        plan = _call_planning_engine(
+            engine_fn,
             body.missing_details,
             body.user_preference,
             memory_snippets=memory_snippets,
