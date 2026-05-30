@@ -116,6 +116,45 @@ def test_pool_excludes_courses_not_offered_next_term():
     assert candidates == []
 
 
+def test_pool_skips_educational_enrichment_requirement():
+    """v2 candidate pool ignores Educational Enrichment — students choose it."""
+    sched = {
+        ("THTR", "189"): _sched_entry([1, 3], 200, 290),
+        ("CSEN", "174"): _sched_entry([0, 2, 4], 75, 140),
+    }
+    category_index = {
+        "educational enrichment": ["THTR 189", "GNSX 115"],
+    }
+    candidates, must_cover = build_candidate_pool(
+        missing_details=[
+            {"course": "CSEN 174", "category": "Major"},
+            {
+                "requirement": (
+                    "Computer Science and Engineering Major: "
+                    "Educational Enrichment – Courses"
+                ),
+            },
+        ],
+        completed_codes=set(),
+        schedule_index=sched,
+        category_index=category_index,
+        titles_index={
+            ("CSEN", "174"): "Software Engineering",
+            ("THTR", "189"): "Theatre and Society",
+        },
+        units_index={("CSEN", "174"): 4, ("THTR", "189"): 5},
+        all_sections={
+            ("CSEN", "174"): [_section(1, [0, 2, 4], 75, 140, "Smith")],
+            ("THTR", "189"): [_section(1, [1, 3], 200, 290, "Jones")],
+        },
+        ratings={},
+    )
+    codes = {c.course_code for c in candidates}
+    assert codes == {"CSEN 174"}
+    assert must_cover == ["Major: CSEN 174"]
+    assert "educational enrichment" not in must_cover
+
+
 # ── open Core requirements + double tagging ─────────────────────────────────
 
 

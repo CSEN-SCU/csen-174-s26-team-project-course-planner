@@ -108,6 +108,44 @@ def test_v2_engine_returns_only_pool_codes(monkeypatch):
     assert out["meta"]["validation"]["candidate_count"] == 2
 
 
+def test_v2_ignores_educational_enrichment(monkeypatch):
+    """Educational Enrichment must not add THTR/GNSX/etc. to a v2 plan."""
+    _patch_xlsx(
+        monkeypatch,
+        schedule_index={
+            ("CSEN", "174"): _sched_entry([0, 2, 4], 75, 140, ("Smith",)),
+            ("THTR", "189"): _sched_entry([1, 3], 200, 290, ("Jones",)),
+        },
+        titles={
+            ("CSEN", "174"): "Software Engineering",
+            ("THTR", "189"): "Theatre and Society",
+        },
+        units={("CSEN", "174"): 4, ("THTR", "189"): 5},
+        all_sections={
+            ("CSEN", "174"): [_sec(1, [0, 2, 4], 75, 140, "Smith")],
+            ("THTR", "189"): [_sec(1, [1, 3], 200, 290, "Jones")],
+        },
+        category_index={"educational enrichment": ["THTR 189", "GNSX 115"]},
+    )
+    _patch_llm(monkeypatch)
+
+    out = v2.run_constrained_planner(
+        missing_details=[
+            {"course": "CSEN 174", "category": "Major"},
+            {
+                "requirement": (
+                    "Computer Science and Engineering Major: "
+                    "Educational Enrichment – Courses"
+                ),
+            },
+        ],
+        user_preference="plan my next term",
+    )
+    codes = {r["course"] for r in out["recommended"]}
+    assert codes == {"CSEN 174"}
+    assert "educational enrichment" not in out["meta"]["validation"]["must_cover"]
+
+
 def test_v2_titles_and_units_are_canonical(monkeypatch):
     """The engine must use xlsx titles + units, never the input's."""
     _patch_xlsx(

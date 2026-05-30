@@ -58,7 +58,6 @@ from utils.academic_progress_helpers import (
     enrich_missing_details,
     extract_completed_course_codes,
 )
-from utils.enrichment_resolver import try_enrichment_followup_plan
 from utils.scu_course_schedule_xlsx import planned_section_keys
 
 log = logging.getLogger(__name__)
@@ -380,45 +379,6 @@ def run_constrained_planner(
             completed.add(norm)
             for subj, num in planned_section_keys(norm):
                 completed.add(f"{subj} {num}".upper())
-
-    # Deterministic enrichment short-circuit (unchanged from legacy).
-    # When the user's follow-up is "I want a CHIN class" and we've
-    # already computed an enrichment swap deterministically, skip the
-    # full solver and just return that result.
-    if isinstance(previous_plan, dict) and previous_plan.get("recommended"):
-        try:
-            enrich_plan = try_enrichment_followup_plan(
-                user_preference=user_preference or "",
-                missing_details=missing_details,
-                previous_plan=previous_plan,
-            )
-        except Exception:  # noqa: BLE001
-            enrich_plan = None
-        if enrich_plan is not None:
-            recs = enrich_plan.get("recommended") or []
-            return _sanitize_model_output(
-                {
-                    "recommended": recs,
-                    "total_units": _recompute_total_units(recs),
-                    "advice": enrich_plan.get("advice", ""),
-                    "assistant_reply": enrich_plan.get("assistant_reply", ""),
-                    "warnings": [],
-                    "meta": {
-                        "provider": "deterministic",
-                        "model": "enrichment_resolver",
-                        "request_id": request_id,
-                        "validation": {
-                            "engine": "constrained_v2_enrichment_followup",
-                            "candidate_count": len(recs),
-                            "rejected": [],
-                            "repaired": [],
-                            "deferred_requirements": [],
-                            "removed_completed": [],
-                            "dropped_for_unit_cap": [],
-                        },
-                    },
-                }
-            )
 
     # Step 1: parse the follow-up signal (if any). Codes the student
     # explicitly named for removal are TEMPORARILY excluded from the

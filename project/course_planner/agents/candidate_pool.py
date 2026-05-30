@@ -39,6 +39,7 @@ from agents.planning_agent import (
     _resolve_open_requirement,
 )
 from utils.academic_progress_helpers import default_units_for_code
+from utils.enrichment_resolver import EDUCATIONAL_ENRICHMENT_MARKER
 from utils.scu_course_schedule_xlsx import (
     course_title_for,
     course_units_for,
@@ -56,6 +57,15 @@ from utils.scu_course_schedule_xlsx import (
 _LAB_SUBJECTS = frozenset(
     {"CSEN", "COEN", "CSCI", "ELEN", "ECEN", "PHYS", "CHEM", "BIOL", "MECH"}
 )
+
+
+def _is_educational_enrichment_requirement(item: dict[str, Any]) -> bool:
+    """Educational Enrichment is self-managed; v2 does not auto-fill it."""
+    text = " ".join(
+        str(item.get(k) or "")
+        for k in ("requirement", "category", "course")
+    ).lower()
+    return EDUCATIONAL_ENRICHMENT_MARKER in text
 
 
 @dataclass(frozen=True)
@@ -286,6 +296,10 @@ def build_candidate_pool(
             must_cover_seen.add(label)
 
     for item in missing_details or []:
+        if not isinstance(item, dict):
+            continue
+        if _is_educational_enrichment_requirement(item):
+            continue
         codes = _resolve_item_codes(item)
         # ``_resolve_item_codes`` is permissive: for "Core: ENGR: RTC 3" it
         # returns ["RTC 3"], which looks like a course code but is really
