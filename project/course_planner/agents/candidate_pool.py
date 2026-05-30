@@ -198,6 +198,40 @@ def _is_offered(code: str, schedule_index: dict) -> bool:
     return any(k in schedule_index for k in planned_section_keys(code))
 
 
+# Senior Design capstone sequence (192 → 194 → 195 → 196 and the co-listed
+# ENGR variants). These are final-year courses with deep, often-implicit
+# prerequisites the closed-world pool cannot see. A student who has barely
+# started their degree must never be handed a capstone even when Workday
+# still lists it as unsatisfied — so we gate these behind a minimum count of
+# completed courses (roughly "past the sophomore year"). This is a
+# deliberately coarse floor; precise final-year placement is handled
+# separately by ``enforce_senior_design_in_final_quarters`` in the 4-year
+# planner. The threshold compares against the alias-expanded completed set
+# the engine passes in.
+_SENIOR_DESIGN_SUBJECTS = frozenset(
+    {"CSEN", "COEN", "ECEN", "ELEN", "MECH", "ENGR", "CENG", "BIOE"}
+)
+_SENIOR_DESIGN_NUMS = frozenset({"192", "194", "195", "196"})
+_SENIOR_DESIGN_MIN_COMPLETED = 15
+
+
+def _is_senior_design_code(code: str) -> bool:
+    parts = _normalize_code(code).split()
+    if len(parts) != 2:
+        return False
+    subj, num = parts
+    base = num[:-1] if num.endswith("L") and len(num) > 1 else num
+    return subj in _SENIOR_DESIGN_SUBJECTS and base in _SENIOR_DESIGN_NUMS
+
+
+def _senior_design_gated(code: str, completed_codes: set[str]) -> bool:
+    """True when ``code`` is a Senior Design capstone and the student has not
+    completed enough courses to plausibly be in their final year."""
+    if not _is_senior_design_code(code):
+        return False
+    return len(completed_codes) < _SENIOR_DESIGN_MIN_COMPLETED
+
+
 def build_candidate_pool(
     missing_details: list[dict[str, Any]],
     completed_codes: set[str],
@@ -265,6 +299,13 @@ def build_candidate_pool(
             # (CSEN/COEN) is already cross-listed in schedule_index.
             primary = _normalize_code(offered_codes[0])
             if primary in completed_codes:
+                continue
+            # Grade-gate Senior Design: a student who has barely started
+            # must not be handed a final-year capstone even when Workday
+            # still lists it unsatisfied. Skipping here keeps it out of the
+            # pool entirely (same effect as a completed/not-offered course),
+            # so it is never recommended this quarter. AGENTS.md plan A.
+            if _senior_design_gated(primary, completed_codes):
                 continue
             label = f"Major: {primary}"
             code_to_categories.setdefault(primary, [])
