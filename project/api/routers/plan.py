@@ -21,6 +21,7 @@ from agents.planning_agent import (
     run_planning_agent,
     suggest_courses_for_slot,
 )
+from agents.planning_agent_llm import run_llm_planner
 from agents.planning_agent_v2 import run_constrained_planner
 from agents.professor_agent import run_professor_agent
 from deps.user_auth import require_matching_user
@@ -40,12 +41,29 @@ def _require_plan_user(request: Request, user_id: str) -> None:
 # engine regardless of this flag.
 _MULTI_AGENT_DEFAULT = os.environ.get("MULTI_AGENT_PLAN", "0") == "1"
 
-# Engine selector. ``constrained_v2`` is the new closed-world deterministic
+# Engine selector. ``constrained_v2`` is the closed-world deterministic
 # planner that makes hallucination structurally impossible; ``legacy`` keeps
 # the single-shot Gemini engine with its post-hoc validation loop (see
-# meta.validation in the response for audit trail). Default is the new
-# engine; set PLAN_ENGINE=legacy to roll back without redeploying.
+# meta.validation in the response for audit trail); ``llm`` hands Gemini the
+# full offered catalog + major bulletin and lets the model make the actual
+# course selection (Python still enforces the hard SCU rules afterward).
+# Default is the constrained engine; set PLAN_ENGINE to roll over to another
+# engine without redeploying.
 _PLAN_ENGINE = os.environ.get("PLAN_ENGINE", "constrained_v2").strip().lower()
+
+
+def _select_engine_fn():
+    """Resolve the planner entry point for the configured PLAN_ENGINE.
+
+    Looked up by attribute name (not captured in a dict) so tests can
+    monkeypatch the module-level engine functions and have the override take
+    effect at request time.
+    """
+    if _PLAN_ENGINE in ("llm", "llm_select"):
+        return run_llm_planner
+    if _PLAN_ENGINE == "legacy":
+        return run_planning_agent
+    return run_constrained_planner
 
 _CONVO_START_RE = re.compile(
     r"^\s*(do you|does|is|are|have you|will you|what|where|how|why|when|who|"
@@ -221,12 +239,12 @@ def create_plan(body: PlanRequest, request: Request) -> dict[str, Any]:
         }
 
     parsed_rows, completed_codes = _planning_context(body)
-    # Engine selection: ``constrained_v2`` is the closed-world deterministic
-    # planner. Legacy is kept behind PLAN_ENGINE=legacy so a single env flip
-    # rolls back without redeploying code.
-    engine_fn = (
-        run_constrained_planner if _PLAN_ENGINE == "constrained_v2" else run_planning_agent
-    )
+    # Engine selection (PLAN_ENGINE):
+    #   constrained_v2 — closed-world deterministic planner (default)
+    #   llm            — Gemini selects courses from the offered catalog
+    #   legacy         — original single-shot Gemini agent
+    # Every env value rolls over without a code change.
+    engine_fn = _select_engine_fn()
     try:
         plan = _call_planning_engine(
             engine_fn,

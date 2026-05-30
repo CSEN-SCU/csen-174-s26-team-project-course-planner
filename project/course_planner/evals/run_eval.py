@@ -59,10 +59,19 @@ def _constrained_v2_engine(scenario) -> dict[str, Any]:
     return run_constrained_planner(scenario.missing_details, scenario.user_preference)
 
 
+def _llm_engine(scenario) -> dict[str, Any]:
+    from agents.planning_agent_llm import run_llm_planner
+
+    if not scenario.missing_details:
+        return _empty_plan("llm_select")
+    return run_llm_planner(scenario.missing_details, scenario.user_preference)
+
+
 ENGINES: dict[str, Callable] = {
     "legacy": _legacy_engine,
     "multi_agent": _multi_agent_engine,
     "constrained_v2": _constrained_v2_engine,
+    "llm": _llm_engine,
 }
 
 
@@ -109,14 +118,14 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Course-plan quality eval")
     ap.add_argument(
         "--engine",
-        choices=["legacy", "multi_agent", "constrained_v2", "all", "both"],
+        choices=["legacy", "multi_agent", "constrained_v2", "llm", "all", "both"],
         default="constrained_v2",
     )
     ap.add_argument("--json", action="store_true", help="emit JSON instead of a table")
     args = ap.parse_args(argv)
 
     if args.engine == "all":
-        engines = ["legacy", "multi_agent", "constrained_v2"]
+        engines = ["legacy", "multi_agent", "constrained_v2", "llm"]
     elif args.engine == "both":
         engines = ["legacy", "constrained_v2"]
     else:
