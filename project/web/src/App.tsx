@@ -29,6 +29,7 @@ import { SaveScheduleModal } from "./components/SaveScheduleModal";
 import { NewPlanWarningModal } from "./components/NewPlanWarningModal";
 import { DeleteScheduleConfirmModal } from "./components/DeleteScheduleConfirmModal";
 import { PlannerColumnHeader } from "./components/PlannerColumnHeader";
+import { previousPlanFromCalendar } from "./utils/previousPlan";
 
 const WELCOME_TEXT =
   "Upload your Academic Progress file or describe your preferences to get started.";
@@ -254,6 +255,11 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
   const effectiveRecommended = useMemo(
     () => localOverride ?? calendarRecommended,
     [localOverride, calendarRecommended],
+  );
+
+  const previousPlanForApi = useMemo(
+    () => previousPlanFromCalendar(effectiveRecommended ?? [], planResult),
+    [effectiveRecommended, planResult],
   );
 
   const scheduleCourseCount = (effectiveRecommended ?? []).length;
@@ -1113,6 +1119,7 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
         studentMajorId={studentMajorId}
         majorConfirmed={majorConfirmed && !majorEditMode}
         planResult={planResult}
+        previousPlanForApi={previousPlanForApi}
         messages={messages}
         setMessages={setMessages}
         setMissingDetails={setMissingDetails}

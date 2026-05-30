@@ -39,6 +39,8 @@ export type ChatPanelProps = {
   parsedRows?: ParsedRow[];
   missingDetails: unknown[];
   planResult: Record<string, unknown> | null;
+  /** Calendar-visible courses (includes manual edits); used as ``previous_plan``. */
+  previousPlanForApi?: Record<string, unknown> | null;
   messages: ChatUiMessage[];
   setMessages: Dispatch<SetStateAction<ChatUiMessage[]>>;
   setMissingDetails: (v: unknown[]) => void;
@@ -107,6 +109,7 @@ export function ChatPanel({
   parsedRows = [],
   missingDetails,
   planResult,
+  previousPlanForApi = null,
   messages,
   setMessages,
   setMissingDetails,
@@ -236,7 +239,7 @@ export function ChatPanel({
         missingDetails as never[],
         trimmed,
         userId ?? "",
-        planResult,
+        previousPlanForApi ?? planResult,
         {
           parsed_rows: parsedRows,
           completed_course_codes: completedCourseCodesFromRows(parsedRows),
@@ -286,6 +289,7 @@ export function ChatPanel({
     missingDetails,
     userId,
     planResult,
+    previousPlanForApi,
     parsedRows,
     fileUploaded,
     setPlanResult,
