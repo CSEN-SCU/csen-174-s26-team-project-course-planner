@@ -23,7 +23,7 @@ services:
       # Closed-world deterministic planner (see AGENTS.md). Flip to "legacy"
       # to roll back the engine without a code change.
       - key: PLAN_ENGINE
-        value: constrained_v2
+        value: llm
       # Public origin of the Vercel frontend — used for CORS + OAuth redirects.
       # Set this to your real Vercel URL after the first frontend deploy.
       - key: FRONTEND_BASE_URL
