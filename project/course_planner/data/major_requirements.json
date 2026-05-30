@@ -89,9 +89,7 @@
       "school": "engineering",
       "detect_patterns": [
         "electrical and computer engineering",
-        "electrical engineering major",
-        "ecen major",
-        "elen major"
+        "ecen major"
       ],
       "required_courses": [
         "MATH 11",

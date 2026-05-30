@@ -71,9 +71,7 @@ POPULAR_MAJORS: dict[str, dict[str, Any]] = {
         "subject_prefixes": ["ECEN", "ELEN", "CSEN", "ENGR", "MECH", "MATH", "AMTH", "PHYS", "CHEM", "CSCI"],
         "detect_patterns": [
             "electrical and computer engineering",
-            "electrical engineering major",
             "ecen major",
-            "elen major",
         ],
         "senior_design_sequence": ["ECEN 192", "ECEN 194", "ECEN 195", "ECEN 196"],
         "senior_design_final_year_only": True,

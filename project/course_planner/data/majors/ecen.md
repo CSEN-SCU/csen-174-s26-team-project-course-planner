@@ -6,9 +6,7 @@ bulletin_url: https://www.scu.edu/bulletin/undergraduate/chapter-5-school-of-eng
 scraped_at: 2026-05-29
 detect_patterns:
   - electrical and computer engineering
-  - electrical engineering major
   - ecen major
-  - elen major
 senior_design_sequence:
   - ECEN 192
   - ECEN 194
