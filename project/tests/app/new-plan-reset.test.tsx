@@ -34,6 +34,8 @@ vi.mock("../../web/src/api/client", () => ({
   generateFourYearPlan: vi.fn(async () => ({ plan: null })),
   listCourses: vi.fn(async () => []),
   googleSignInUrl: vi.fn(() => ""),
+  listMajors: vi.fn(async () => ({ majors: [] })),
+  confirmStudentMajor: vi.fn(async () => ({})),
 }));
 
 vi.mock("../../web/src/auth/session", () => ({

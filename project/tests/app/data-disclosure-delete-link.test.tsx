@@ -1,7 +1,7 @@
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import App from "../../web/src/App";
+import { Root } from "../../web/src/Root";
 import { DataDisclosureContent } from "../../web/src/components/DataDisclosureContent";
 
 vi.mock("../../web/src/api/client", () => ({
@@ -12,10 +12,23 @@ vi.mock("../../web/src/api/client", () => ({
   generateFourYearPlan: vi.fn(async () => ({ plan: null })),
   listCourses: vi.fn(async () => []),
   googleSignInUrl: vi.fn(() => ""),
+  listMajors: vi.fn(async () => ({ majors: [] })),
+  confirmStudentMajor: vi.fn(async () => ({})),
 }));
 
 vi.mock("../../web/src/auth/session", () => ({
   clearLocalSession: vi.fn(),
+}));
+
+// The delete-user-data query-param handler lives in <Root>, which derives the
+// logged-in user from useAuth. Stub it so Root renders the authenticated shell.
+vi.mock("../../web/src/hooks/useAuth", () => ({
+  useAuth: () => ({
+    userId: "test-user",
+    googleAuthError: null,
+    googleAuthPending: false,
+    signOut: vi.fn(),
+  }),
 }));
 
 vi.mock("../../web/src/components/ChatPanel", () => ({
@@ -65,7 +78,7 @@ describe("data disclosure delete link", () => {
   it("opens the delete dialog when the delete-user-data query param is present", async () => {
     window.history.replaceState({}, "", "/?delete-user-data=1");
 
-    render(<App userId="test-user" onSignOut={() => {}} />);
+    render(<Root />);
 
     expect(await screen.findByRole("alertdialog", { name: /delete user data/i }))
       .toBeInTheDocument();
