@@ -122,6 +122,20 @@ def _grade_findings(student: SyntheticStudent, plan: dict[str, Any]) -> list[Gra
 def evaluate_student(major_id: str, grade: str) -> GradeReport:
     """Build a synthetic student, run the engine offline, score + analyze."""
     student = make_student(major_id, grade)
+    # Some majors define requirements by upper-division unit counts rather
+    # than specific course codes (e.g. the language majors), so a
+    # higher-grade student can have an empty remaining-requirement list.
+    # That is a valid "nothing left to plan" state, not an engine error —
+    # report it as an empty, all-pass plan instead of crashing the sweep.
+    if not student.missing_details:
+        return GradeReport(
+            major_id=major_id,
+            grade=grade,
+            n_recommended=0,
+            total_units=0,
+            mean_score=1.0,
+            findings=[GradeFinding("nothing_to_plan", True, "no remaining requirements")],
+        )
     plan = run_constrained_planner(
         student.missing_details,
         "balanced quarter, stay on track to graduate",
