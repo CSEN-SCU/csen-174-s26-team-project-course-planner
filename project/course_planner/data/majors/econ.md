@@ -3,7 +3,7 @@ major_id: econ
 name: Economics
 school: business
 bulletin_url: https://www.scu.edu/bulletin/undergraduate/chapter-4-leavey-school-of-business/economics.html
-scraped_at: 2026-05-27
+scraped_at: 2026-05-29
 detect_patterns:
   - economics major
   - majoring in economics
@@ -25,7 +25,7 @@ required_courses:
 # Economics
 
 Source: [SCU Undergraduate Bulletin](https://www.scu.edu/bulletin/undergraduate/chapter-4-leavey-school-of-business/economics.html)
-Scraped: 2026-05-27
+Scraped: 2026-05-29
 
 ## Degree requirements
 

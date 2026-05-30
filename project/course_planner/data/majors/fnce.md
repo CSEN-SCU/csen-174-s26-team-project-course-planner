@@ -3,7 +3,7 @@ major_id: fnce
 name: Finance
 school: business
 bulletin_url: https://www.scu.edu/bulletin/undergraduate/chapter-4-leavey-school-of-business/finance.html
-scraped_at: 2026-05-27
+scraped_at: 2026-05-29
 detect_patterns:
   - finance major
   - majoring in finance
@@ -31,7 +31,7 @@ required_courses:
 # Finance
 
 Source: [SCU Undergraduate Bulletin](https://www.scu.edu/bulletin/undergraduate/chapter-4-leavey-school-of-business/finance.html)
-Scraped: 2026-05-27
+Scraped: 2026-05-29
 
 ## Degree requirements
 

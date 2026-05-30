@@ -3,7 +3,7 @@ major_id: csci
 name: Computer Science
 school: arts_sciences
 bulletin_url: https://www.scu.edu/bulletin/undergraduate/chapter-3-college-of-arts-and-sciences/mathematics-and-computer-science.html
-scraped_at: 2026-05-27
+scraped_at: 2026-05-29
 detect_patterns:
   - computer science major
   - major in computer science
@@ -36,7 +36,7 @@ required_courses:
 # Computer Science
 
 Source: [SCU Undergraduate Bulletin](https://www.scu.edu/bulletin/undergraduate/chapter-3-college-of-arts-and-sciences/mathematics-and-computer-science.html)
-Scraped: 2026-05-27
+Scraped: 2026-05-29
 
 ## Computer Science
 

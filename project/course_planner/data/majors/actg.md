@@ -3,7 +3,7 @@ major_id: actg
 name: Accounting
 school: business
 bulletin_url: https://www.scu.edu/bulletin/undergraduate/chapter-4-leavey-school-of-business/accounting.html
-scraped_at: 2026-05-27
+scraped_at: 2026-05-29
 detect_patterns:
   - accounting major
   - majoring in accounting
@@ -22,7 +22,7 @@ required_courses:
 # Accounting
 
 Source: [SCU Undergraduate Bulletin](https://www.scu.edu/bulletin/undergraduate/chapter-4-leavey-school-of-business/accounting.html)
-Scraped: 2026-05-27
+Scraped: 2026-05-29
 
 ## Accounting
 

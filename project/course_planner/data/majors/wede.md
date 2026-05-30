@@ -3,7 +3,7 @@ major_id: wede
 name: Web Design and Engineering
 school: engineering
 bulletin_url: https://www.scu.edu/bulletin/undergraduate/chapter-5-school-of-engineering/computer-science-and-engineering.html
-scraped_at: 2026-05-27
+scraped_at: 2026-05-29
 detect_patterns:
   - web design and engineering
   - wede
@@ -34,7 +34,7 @@ required_courses:
 # Web Design and Engineering
 
 Source: [SCU Undergraduate Bulletin](https://www.scu.edu/bulletin/undergraduate/chapter-5-school-of-engineering/computer-science-and-engineering.html)
-Scraped: 2026-05-27
+Scraped: 2026-05-29
 
 ## Bachelor of Science in Web Design and Engineering
 

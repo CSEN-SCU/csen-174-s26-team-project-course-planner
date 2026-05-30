@@ -3,7 +3,7 @@ major_id: biol
 name: Biology
 school: arts_sciences
 bulletin_url: https://www.scu.edu/bulletin/undergraduate/chapter-3-college-of-arts-and-sciences/biology.html
-scraped_at: 2026-05-27
+scraped_at: 2026-05-29
 detect_patterns:
   - biology major
   - majoring in biology
@@ -21,7 +21,7 @@ required_courses:
 # Biology
 
 Source: [SCU Undergraduate Bulletin](https://www.scu.edu/bulletin/undergraduate/chapter-3-college-of-arts-and-sciences/biology.html)
-Scraped: 2026-05-27
+Scraped: 2026-05-29
 
 ## Degree requirements
 

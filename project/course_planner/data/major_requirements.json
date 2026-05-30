@@ -581,6 +581,759 @@
       "senior_design_sequence": [],
       "senior_design_final_year_only": false,
       "markdown_path": "majors/biol.md"
+    },
+    "anth": {
+      "id": "anth",
+      "name": "Anthropology",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "anthropology",
+        "anthropology major",
+        "major in anthropology"
+      ],
+      "required_courses": [
+        "ANTH 1",
+        "ANTH 2",
+        "ANTH 3",
+        "ANTH 4",
+        "ANTH 110",
+        "ANTH 111",
+        "ANTH 114",
+        "ANTH 198",
+        "ANTH 140",
+        "ANTH 130",
+        "ANTH 150"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/anth.md"
+    },
+    "arth": {
+      "id": "arth",
+      "name": "Art History",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "art history",
+        "art history major",
+        "major in art history"
+      ],
+      "required_courses": [
+        "ARTH 100",
+        "ARTH 196",
+        "ARTH 98",
+        "ARTH 194",
+        "ARTH 198",
+        "ARTS 30",
+        "ARTS 74",
+        "ARTS 32",
+        "ARTS 33",
+        "ARTS 194",
+        "ARTH 11A",
+        "ARTH 185",
+        "ARTS 100",
+        "ARTS 190",
+        "ARTS 196",
+        "ARTS 70",
+        "ARTS 170",
+        "ARTS 81",
+        "ARTS 181",
+        "ARTS 131"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/arth.md"
+    },
+    "arts": {
+      "id": "arts",
+      "name": "Studio Art",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "studio art",
+        "studio art major",
+        "major in studio art"
+      ],
+      "required_courses": [
+        "ARTH 100",
+        "ARTH 196",
+        "ARTH 98",
+        "ARTH 194",
+        "ARTH 198",
+        "ARTS 30",
+        "ARTS 74",
+        "ARTS 32",
+        "ARTS 33",
+        "ARTS 194",
+        "ARTH 11A",
+        "ARTH 185",
+        "ARTS 100",
+        "ARTS 190",
+        "ARTS 196",
+        "ARTS 70",
+        "ARTS 170",
+        "ARTS 81",
+        "ARTS 181",
+        "ARTS 131"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/arts.md"
+    },
+    "chem": {
+      "id": "chem",
+      "name": "Chemistry",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "chemistry",
+        "chemistry major",
+        "major in chemistry"
+      ],
+      "required_courses": [
+        "CHEM 11",
+        "CHEM 31",
+        "CHEM 102",
+        "CHEM 15",
+        "CHEM 182",
+        "CHEM 115",
+        "MATH 11",
+        "MATH 35",
+        "PHYS 11",
+        "PHYS 31",
+        "CHEM 183",
+        "CHEM 101",
+        "BIOL 110",
+        "BIOL 1A",
+        "CHEM 14"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/chem.md"
+    },
+    "bioc": {
+      "id": "bioc",
+      "name": "Biochemistry",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "biochemistry",
+        "biochemistry major",
+        "major in biochemistry"
+      ],
+      "required_courses": [
+        "CHEM 11",
+        "CHEM 31",
+        "CHEM 102",
+        "CHEM 15",
+        "CHEM 182",
+        "CHEM 115",
+        "MATH 11",
+        "MATH 35",
+        "PHYS 11",
+        "PHYS 31",
+        "CHEM 183",
+        "CHEM 101",
+        "BIOL 110",
+        "BIOL 1A",
+        "CHEM 14"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/bioc.md"
+    },
+    "chst": {
+      "id": "chst",
+      "name": "Child Studies",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "child studies",
+        "child studies major",
+        "major in child studies"
+      ],
+      "required_courses": [
+        "CHST 3",
+        "PSYC 2",
+        "CHST 66",
+        "PSYC 134"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/chst.md"
+    },
+    "clas": {
+      "id": "clas",
+      "name": "Classics",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "classics",
+        "classics major",
+        "major in classics"
+      ],
+      "required_courses": [
+        "CLAS 197A",
+        "CLAS 197B",
+        "CLAS 5"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/clas.md"
+    },
+    "comm": {
+      "id": "comm",
+      "name": "Communication",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "communication",
+        "communication major",
+        "major in communication"
+      ],
+      "required_courses": [
+        "COMM 1",
+        "COMM 2",
+        "COMM 3",
+        "COMM 4",
+        "COMM 10",
+        "COMM 30",
+        "COMM 50",
+        "COMM 60",
+        "COMM 80",
+        "COMM 100",
+        "COMM 197",
+        "COMM 12",
+        "COMM 20",
+        "COMM 40",
+        "COMM 110",
+        "COMM 111",
+        "COMM 101",
+        "COMM 108",
+        "COMM 141",
+        "COMM 142",
+        "COMM 144",
+        "COMM 171",
+        "COMM 180",
+        "COMM 181A",
+        "COMM 181D",
+        "COMM 183",
+        "COMM 184",
+        "COMM 185",
+        "COMM 187",
+        "COMM 114",
+        "COMM 115",
+        "COMM 115G",
+        "COMM 116",
+        "COMM 116G",
+        "COMM 133",
+        "COMM 137",
+        "COMM 143",
+        "COMM 145",
+        "COMM 154",
+        "COMM 189",
+        "COMM 102",
+        "COMM 112",
+        "COMM 115J",
+        "COMM 115V",
+        "COMM 116T",
+        "COMM 118",
+        "COMM 119",
+        "COMM 120",
+        "COMM 121",
+        "COMM 122",
+        "COMM 123",
+        "COMM 125",
+        "COMM 126",
+        "COMM 129",
+        "COMM 153",
+        "COMM 198",
+        "COMM 116M",
+        "COMM 117",
+        "COMM 140",
+        "COMM 140B",
+        "COMM 140C",
+        "COMM 140W",
+        "COMM 140Q",
+        "COMM 103",
+        "COMM 130",
+        "COMM 130A",
+        "COMM 131F",
+        "COMM 131D",
+        "COMM 131E",
+        "COMM 132",
+        "COMM 132D",
+        "COMM 133W",
+        "COMM 134",
+        "COMM 135",
+        "COMM 104",
+        "COMM 136S",
+        "COMM 136F",
+        "COMM 138",
+        "COMM 139",
+        "COMM 146",
+        "COMM 106",
+        "COMM 160",
+        "COMM 161",
+        "COMM 161C",
+        "COMM 163",
+        "COMM 164",
+        "COMM 165",
+        "COMM 165M",
+        "COMM 168",
+        "COMM 156",
+        "COMM 166",
+        "COMM 167",
+        "COMM 169",
+        "COMM 190",
+        "COMM 192",
+        "COMM 150",
+        "COMM 151",
+        "COMM 151A",
+        "COMM 157",
+        "COMM 105",
+        "COMM 124",
+        "COMM 152",
+        "COMM 154Y",
+        "COMM 155",
+        "COMM 158"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/comm.md"
+    },
+    "engl": {
+      "id": "engl",
+      "name": "English",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "english",
+        "english major",
+        "major in english"
+      ],
+      "required_courses": [
+        "ENGL 14"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/engl.md"
+    },
+    "envs": {
+      "id": "envs",
+      "name": "Environmental Studies",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "environmental studies",
+        "environmental studies major",
+        "major in environmental studies"
+      ],
+      "required_courses": [
+        "ENVS 21",
+        "ENVS 79",
+        "ENVS 100",
+        "ENVS 110",
+        "BIOL 160",
+        "ENVS 116",
+        "ENVS 188",
+        "BIOL 1A",
+        "ENVS 50",
+        "ENVS 111",
+        "CENG 160"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/envs.md"
+    },
+    "ethn": {
+      "id": "ethn",
+      "name": "Ethnic Studies",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "ethnic studies",
+        "ethnic studies major",
+        "major in ethnic studies"
+      ],
+      "required_courses": [
+        "ETHN 5",
+        "ETHN 10",
+        "ETHN 11",
+        "ETHN 112",
+        "ETHN 120",
+        "ETHN 100",
+        "ETHN 111",
+        "ETHN 165",
+        "ETHN 198",
+        "ETHN 21"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/ethn.md"
+    },
+    "gnsx": {
+      "id": "gnsx",
+      "name": "Gender and Sexuality Studies",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "gender and sexuality studies",
+        "gender and sexuality studies major",
+        "major in gender and sexuality studies"
+      ],
+      "required_courses": [
+        "GNSX 1A",
+        "GNSX 11A",
+        "GNSX 25",
+        "GNSX 50",
+        "GNSX 51",
+        "GNSX 52",
+        "GNSX 59",
+        "GNSX 112",
+        "GNSX 101",
+        "GNSX 102",
+        "GNSX 105",
+        "GNSX 190"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/gnsx.md"
+    },
+    "hist": {
+      "id": "hist",
+      "name": "History",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "history",
+        "history major",
+        "major in history"
+      ],
+      "required_courses": [
+        "HIST 11A",
+        "HIST 100",
+        "HIST 101S",
+        "HIST 197",
+        "HIST 199"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/hist.md"
+    },
+    "fren": {
+      "id": "fren",
+      "name": "French and Francophone Studies",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "french and francophone studies",
+        "french and francophone studies major",
+        "major in french and francophone studies"
+      ],
+      "required_courses": [
+        "FREN 100"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/fren.md"
+    },
+    "ital": {
+      "id": "ital",
+      "name": "Italian Studies",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "italian studies",
+        "italian studies major",
+        "major in italian studies"
+      ],
+      "required_courses": [
+        "ITAL 100"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/ital.md"
+    },
+    "span": {
+      "id": "span",
+      "name": "Spanish Studies",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "spanish studies",
+        "spanish studies major",
+        "major in spanish studies"
+      ],
+      "required_courses": [],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/span.md"
+    },
+    "musc": {
+      "id": "musc",
+      "name": "Music",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "music",
+        "music major",
+        "major in music"
+      ],
+      "required_courses": [
+        "MUSC 1",
+        "MUSC 1A",
+        "MUSC 7",
+        "MUSC 16",
+        "MUSC 114",
+        "MUSC 9"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/musc.md"
+    },
+    "neur": {
+      "id": "neur",
+      "name": "Neuroscience",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "neuroscience",
+        "neuroscience major",
+        "major in neuroscience"
+      ],
+      "required_courses": [
+        "NEUR 1",
+        "BIOL 1A",
+        "CHEM 11",
+        "PSYC 1",
+        "BIOL 110",
+        "PSYC 120",
+        "NEUR 175",
+        "CHEM 141"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/neur.md"
+    },
+    "phil": {
+      "id": "phil",
+      "name": "Philosophy",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "philosophy",
+        "philosophy major",
+        "major in philosophy"
+      ],
+      "required_courses": [
+        "PHIL 40",
+        "PHIL 1A",
+        "PHIL 11A",
+        "PHIL 14",
+        "PHIL 17",
+        "PHIL 19",
+        "PHIL 124",
+        "PHIL 109",
+        "PHIL 150",
+        "PHIL 108",
+        "PHIL 199"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/phil.md"
+    },
+    "phys": {
+      "id": "phys",
+      "name": "Physics",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "physics",
+        "physics major",
+        "major in physics"
+      ],
+      "required_courses": [
+        "MATH 11",
+        "MATH 23",
+        "PHYS 31",
+        "PHYS 11",
+        "PHYS 33",
+        "MECH 45",
+        "PHYS 104",
+        "MECH 121",
+        "PHYS 120",
+        "MECH 10",
+        "MECH 11",
+        "MECH 15",
+        "MECH 122",
+        "MECH 143"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/phys.md"
+    },
+    "poli": {
+      "id": "poli",
+      "name": "Political Science",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "political science",
+        "political science major",
+        "major in political science"
+      ],
+      "required_courses": [
+        "POLI 1",
+        "POLI 40"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/poli.md"
+    },
+    "phsc": {
+      "id": "phsc",
+      "name": "Public Health Science",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "public health science",
+        "public health science major",
+        "major in public health science"
+      ],
+      "required_courses": [
+        "PHSC 1",
+        "BIOL 1A",
+        "PHSC 50",
+        "BIOL 160",
+        "PSYC 51",
+        "BIOL 2",
+        "BIOL 11"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/phsc.md"
+    },
+    "rsoc": {
+      "id": "rsoc",
+      "name": "Religious Studies",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "religious studies",
+        "religious studies major",
+        "major in religious studies"
+      ],
+      "required_courses": [
+        "SCTR 111",
+        "SCTR 111R",
+        "SCTR 128",
+        "TESP 119",
+        "TESP 119R",
+        "TESP 124",
+        "TESP 124R",
+        "TESP 131",
+        "TESP 131R",
+        "TESP 141",
+        "TESP 152",
+        "TESP 185",
+        "TESP 185R",
+        "TESP 196",
+        "TESP 196R"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/rsoc.md"
+    },
+    "soci": {
+      "id": "soci",
+      "name": "Sociology",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "sociology",
+        "sociology major",
+        "major in sociology"
+      ],
+      "required_courses": [
+        "SOCI 1",
+        "SOCI 35",
+        "SOCI 121",
+        "SOCI 26"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/soci.md"
+    },
+    "thtr": {
+      "id": "thtr",
+      "name": "Theatre Arts",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "theatre arts",
+        "theatre arts major",
+        "major in theatre arts"
+      ],
+      "required_courses": [
+        "THTR 8",
+        "THTR 31",
+        "DANC 40",
+        "THTR 41",
+        "THTR 112",
+        "DANC 159",
+        "THTR 185",
+        "THTR 39",
+        "THTR 192",
+        "THTR 9",
+        "DANC 48",
+        "DANC 49",
+        "DANC 67",
+        "DANC 143",
+        "DANC 140",
+        "DANC 162",
+        "DANC 192"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/thtr.md"
+    },
+    "danc": {
+      "id": "danc",
+      "name": "Dance",
+      "school": "arts_sciences",
+      "detect_patterns": [
+        "dance",
+        "dance major",
+        "major in dance"
+      ],
+      "required_courses": [
+        "THTR 8",
+        "THTR 31",
+        "DANC 40",
+        "THTR 41",
+        "THTR 112",
+        "DANC 159",
+        "THTR 185",
+        "THTR 39",
+        "THTR 192",
+        "THTR 9",
+        "DANC 48",
+        "DANC 49",
+        "DANC 67",
+        "DANC 143",
+        "DANC 140",
+        "DANC 162",
+        "DANC 192"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/danc.md"
+    },
+    "genr": {
+      "id": "genr",
+      "name": "General Engineering",
+      "school": "engineering",
+      "detect_patterns": [
+        "general engineering",
+        "general engineering major",
+        "major in general engineering"
+      ],
+      "required_courses": [
+        "MATH 11",
+        "PHYS 31",
+        "ENGR 1",
+        "ENGR 2",
+        "ENGR 110",
+        "CENG 41",
+        "MECH 10L",
+        "ENGR 193",
+        "ENGR 197A",
+        "ENGR 163",
+        "ENGR 194",
+        "ENGR 197B",
+        "CENG 192A",
+        "MECH 194"
+      ],
+      "senior_design_sequence": [],
+      "senior_design_final_year_only": false,
+      "markdown_path": "majors/genr.md"
     }
   },
   "prerequisites": {},

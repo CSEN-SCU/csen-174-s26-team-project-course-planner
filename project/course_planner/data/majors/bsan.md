@@ -3,7 +3,7 @@ major_id: bsan
 name: Business Analytics
 school: business
 bulletin_url: https://www.scu.edu/bulletin/undergraduate/chapter-4-leavey-school-of-business/information-systems-analytics.html
-scraped_at: 2026-05-27
+scraped_at: 2026-05-29
 detect_patterns:
   - business analytics
   - bsan
@@ -37,7 +37,7 @@ required_courses:
 # Business Analytics
 
 Source: [SCU Undergraduate Bulletin](https://www.scu.edu/bulletin/undergraduate/chapter-4-leavey-school-of-business/information-systems-analytics.html)
-Scraped: 2026-05-27
+Scraped: 2026-05-29
 
 ## Business Analytics
 

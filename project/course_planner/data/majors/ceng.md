@@ -3,7 +3,7 @@ major_id: ceng
 name: Civil, Environmental, and Sustainable Engineering
 school: engineering
 bulletin_url: https://www.scu.edu/bulletin/undergraduate/chapter-5-school-of-engineering/civil-environmental-and-sustainable-engineering.html
-scraped_at: 2026-05-27
+scraped_at: 2026-05-29
 detect_patterns:
   - civil engineering
   - civil, environmental
@@ -32,7 +32,7 @@ required_courses:
 # Civil, Environmental, and Sustainable Engineering
 
 Source: [SCU Undergraduate Bulletin](https://www.scu.edu/bulletin/undergraduate/chapter-5-school-of-engineering/civil-environmental-and-sustainable-engineering.html)
-Scraped: 2026-05-27
+Scraped: 2026-05-29
 
 ## Degree requirements
 

@@ -3,7 +3,7 @@ major_id: csen
 name: Computer Science and Engineering
 school: engineering
 bulletin_url: https://www.scu.edu/bulletin/undergraduate/chapter-5-school-of-engineering/computer-science-and-engineering.html
-scraped_at: 2026-05-27
+scraped_at: 2026-05-29
 detect_patterns:
   - computer science and engineering
   - csen/coen
@@ -47,7 +47,7 @@ required_courses:
 # Computer Science and Engineering
 
 Source: [SCU Undergraduate Bulletin](https://www.scu.edu/bulletin/undergraduate/chapter-5-school-of-engineering/computer-science-and-engineering.html)
-Scraped: 2026-05-27
+Scraped: 2026-05-29
 
 ## Bachelor of Science in Computer Science and Engineering
 

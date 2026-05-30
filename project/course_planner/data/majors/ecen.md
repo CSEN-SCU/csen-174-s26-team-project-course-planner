@@ -3,7 +3,7 @@ major_id: ecen
 name: Electrical and Computer Engineering
 school: engineering
 bulletin_url: https://www.scu.edu/bulletin/undergraduate/chapter-5-school-of-engineering/electrical-and-computer-engineering.html
-scraped_at: 2026-05-27
+scraped_at: 2026-05-29
 detect_patterns:
   - electrical and computer engineering
   - electrical engineering major
@@ -49,7 +49,7 @@ required_courses:
 # Electrical and Computer Engineering
 
 Source: [SCU Undergraduate Bulletin](https://www.scu.edu/bulletin/undergraduate/chapter-5-school-of-engineering/electrical-and-computer-engineering.html)
-Scraped: 2026-05-27
+Scraped: 2026-05-29
 
 ## Electrical Engineering
 

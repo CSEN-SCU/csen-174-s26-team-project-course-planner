@@ -3,7 +3,7 @@ major_id: elen
 name: Electrical Engineering
 school: engineering
 bulletin_url: https://www.scu.edu/bulletin/undergraduate/chapter-5-school-of-engineering/electrical-and-computer-engineering.html
-scraped_at: 2026-05-27
+scraped_at: 2026-05-29
 detect_patterns:
   - electrical engineering
   - elen major
@@ -46,7 +46,7 @@ required_courses:
 # Electrical Engineering
 
 Source: [SCU Undergraduate Bulletin](https://www.scu.edu/bulletin/undergraduate/chapter-5-school-of-engineering/electrical-and-computer-engineering.html)
-Scraped: 2026-05-27
+Scraped: 2026-05-29
 
 ## Electrical Engineering
 

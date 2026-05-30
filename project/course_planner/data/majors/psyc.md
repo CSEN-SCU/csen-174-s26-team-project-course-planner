@@ -3,7 +3,7 @@ major_id: psyc
 name: Psychology
 school: arts_sciences
 bulletin_url: https://www.scu.edu/bulletin/undergraduate/chapter-3-college-of-arts-and-sciences/psychology.html
-scraped_at: 2026-05-27
+scraped_at: 2026-05-29
 detect_patterns:
   - psychology major
   - majoring in psychology
@@ -23,7 +23,7 @@ required_courses:
 # Psychology
 
 Source: [SCU Undergraduate Bulletin](https://www.scu.edu/bulletin/undergraduate/chapter-3-college-of-arts-and-sciences/psychology.html)
-Scraped: 2026-05-27
+Scraped: 2026-05-29
 
 ## Degree requirements
 
