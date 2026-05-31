@@ -1021,7 +1021,7 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
         </PlannerColumnHeader>
 
         {viewMode === "calendar" ? (
-          <div className="relative min-h-0 flex-1">
+          <div className="relative flex min-h-0 flex-1 flex-col">
             <CalendarView
               recommendedCourses={effectiveRecommended ?? []}
               onRemoveCourse={handleRemoveCourse}

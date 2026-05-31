@@ -67,7 +67,7 @@ export function CalendarView({
 
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#F5F5F5]">
-      <div className="min-h-0 flex-1 overflow-auto p-3 space-y-3">
+      <div className="min-h-0 flex-1 overflow-auto p-3 pb-6 space-y-3">
         <div className="relative min-w-[720px] rounded-lg border border-neutral-200 bg-white shadow-sm">
           {/* Empty state hint — pointer-events-none so time slots stay clickable */}
           {isEmpty && (
