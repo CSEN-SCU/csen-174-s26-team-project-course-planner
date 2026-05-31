@@ -13,12 +13,13 @@ import { CoursePlannerTutorialPage } from "./pages/CoursePlannerTutorialPage";
 import { DataDisclosurePage } from "./pages/DataDisclosurePage";
 import { AuthLoadingPage } from "./pages/AuthLoadingPage";
 import { HomePage } from "./pages/HomePage";
+import { SignOutLoadingPage } from "./pages/SignOutLoadingPage";
 import { resetPageScroll } from "./lib/scroll";
 import { useDeleteUserDataModal } from "./hooks/useDeleteUserDataModal";
 
 export function Root() {
   const [route, setRoute] = useState(resolveClientRoute);
-  const { userId, googleAuthError, googleAuthPending, signOut } = useAuth();
+  const { userId, googleAuthError, googleAuthPending, signOutPending, signOut } = useAuth();
   const { openDeleteModal, deleteModal } = useDeleteUserDataModal(userId);
 
   const isInfoRoute =
@@ -26,7 +27,7 @@ export function Root() {
     route === ACADEMIC_PROGRESS_TUTORIAL_PATH ||
     route === COURSE_PLANNER_TUTORIAL_PATH;
 
-  usePlannerShell(Boolean(userId) || googleAuthPending || isInfoRoute);
+  usePlannerShell(Boolean(userId) || googleAuthPending || signOutPending || isInfoRoute);
 
   useLayoutEffect(() => {
     resetPageScroll();
@@ -65,6 +66,10 @@ export function Root() {
     onSignOut: userId ? signOut : undefined,
     onDeleteUserData: userId ? openDeleteModal : undefined,
   };
+
+  if (signOutPending) {
+    return <SignOutLoadingPage />;
+  }
 
   if (route === DATA_DISCLOSURE_PATH) {
     return (

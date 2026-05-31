@@ -27,6 +27,7 @@ vi.mock("../../web/src/hooks/useAuth", () => ({
     userId: "test-user",
     googleAuthError: null,
     googleAuthPending: false,
+    signOutPending: false,
     signOut: vi.fn(),
   }),
 }));

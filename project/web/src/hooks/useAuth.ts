@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { exchangeGoogleOauth } from "../api/client";
 import {
   clearGoogleOauthPending,
@@ -9,10 +9,14 @@ import {
   readStoredUserId,
 } from "../auth/session";
 
+const SIGN_OUT_DELAY_MS = 1000;
+
 export function useAuth() {
   const [userId, setUserIdState] = useState<string | null>(() => readStoredUserId());
   const [googleAuthError, setGoogleAuthError] = useState<string | null>(null);
   const [googleAuthPending, setGoogleAuthPending] = useState(() => isGoogleOauthPending());
+  const [signOutPending, setSignOutPending] = useState(false);
+  const signOutPendingRef = useRef(false);
 
   const setUserId = useCallback((id: string | null, sessionToken?: string | null) => {
     persistUserId(id);
@@ -21,9 +25,16 @@ export function useAuth() {
   }, []);
 
   const signOut = useCallback(() => {
-    clearLocalSession();
-    setUserIdState(null);
-    setGoogleAuthError(null);
+    if (signOutPendingRef.current) return;
+    signOutPendingRef.current = true;
+    setSignOutPending(true);
+    window.setTimeout(() => {
+      clearLocalSession();
+      setUserIdState(null);
+      setGoogleAuthError(null);
+      signOutPendingRef.current = false;
+      setSignOutPending(false);
+    }, SIGN_OUT_DELAY_MS);
   }, []);
 
   useLayoutEffect(() => {
@@ -75,6 +86,7 @@ export function useAuth() {
     userId,
     googleAuthError,
     googleAuthPending,
+    signOutPending,
     signOut,
   };
 }
