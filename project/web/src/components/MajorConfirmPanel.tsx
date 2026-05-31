@@ -75,7 +75,7 @@ export function MajorConfirmPanel({
   if (majorConfirmed && selectedMajorId) {
     return (
       <div data-testid="major-confirmed-banner">
-        <span className="font-medium">Current major:</span> {displayName} ({selectedMajorId})
+        <span className="font-medium">Current major:</span> {displayName}
         <button
           type="button"
           className="ml-2 text-neutral-600 underline hover:text-[var(--scu-text)]"

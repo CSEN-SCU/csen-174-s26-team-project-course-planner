@@ -794,11 +794,13 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
     });
   }, [missingDetails, satisfiedCoverLabels]);
 
+  const majorReadyForPlanning = majorConfirmed && !majorEditMode && !!studentMajorId;
+
   const handleGenerateFourYearPlan = useCallback(async (preferences: string) => {
     if (!missingDetails.length || fourYearGenerating) return;
     setFourYearGenerating(true);
     try {
-      if (!majorConfirmed || !studentMajorId) {
+      if (!majorReadyForPlanning) {
         setMessages((m) => [
           ...m,
           {
@@ -867,7 +869,16 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
     } finally {
       setFourYearGenerating(false);
     }
-  }, [missingDetails, userId, fourYearGenerating, activeSessionId, planSnapshots]);
+  }, [
+    missingDetails,
+    userId,
+    fourYearGenerating,
+    activeSessionId,
+    planSnapshots,
+    majorReadyForPlanning,
+    studentMajorId,
+    parsedRows,
+  ]);
 
   const handleFinishFirstLoginCarousel = useCallback(() => {
     markFirstLoginCarouselSeen(userId);
@@ -1016,7 +1027,7 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
                 <button
                   type="button"
                   onClick={() => handleGenerateFourYearPlan("")}
-                  disabled={fourYearGenerating || !fileUploaded}
+                  disabled={fourYearGenerating || !fileUploaded || !majorReadyForPlanning}
                   className="flex items-center gap-1.5 rounded-md bg-[var(--scu-red)] px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {fourYearGenerating

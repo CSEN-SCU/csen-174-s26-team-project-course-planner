@@ -24,8 +24,6 @@ export type FourYearPlanViewProps = {
 
 function categoryChipClass(category: string): string {
   const c = category.toLowerCase();
-  if (c.includes("senior") || c.includes("design") || c.includes("capstone"))
-    return "bg-orange-100 text-orange-800 border-orange-200";
   if (
     c.includes("engineering") ||
     c.includes("csen") ||
@@ -61,6 +59,11 @@ function categoryChipClass(category: string): string {
   )
     return "bg-yellow-100 text-yellow-800 border-yellow-200";
   return "bg-gray-100 text-gray-700 border-gray-200";
+}
+
+function isSeniorDesignCategory(category: string): boolean {
+  const c = category.trim().toLowerCase();
+  return c.includes("senior design") || c.includes("capstone");
 }
 
 const SEASON_CARD_BG: Record<Season, string> = {
@@ -102,11 +105,13 @@ function RecommendedCourseRow({ course }: { course: PlanCourse }) {
         {course.title && (
           <p className="truncate text-[10px] text-neutral-500 leading-tight">{course.title}</p>
         )}
-        <span
-          className={`mt-0.5 inline-block rounded-full px-1.5 py-px text-[9px] font-medium border ${categoryChipClass(course.category)}`}
-        >
-          {course.category}
-        </span>
+        {course.category && !isSeniorDesignCategory(course.category) && (
+          <span
+            className={`mt-0.5 inline-block rounded-full px-1.5 py-px text-[9px] font-medium border ${categoryChipClass(course.category)}`}
+          >
+            {course.category}
+          </span>
+        )}
       </div>
     </div>
   );
@@ -220,10 +225,9 @@ function SummaryBar({ plan }: { plan: FourYearPlan }) {
 
 const LEGEND_ITEMS: { label: string; chip: string }[] = [
   { label: "Completed", chip: "bg-neutral-100 text-neutral-500 border-neutral-200" },
-  { label: "Senior Design", chip: "bg-orange-100 text-orange-800 border-orange-200" },
   { label: "Engineering", chip: "bg-green-100 text-green-800 border-green-200" },
   { label: "Math/Science", chip: "bg-purple-100 text-purple-800 border-purple-200" },
-  { label: "Core/Humanities", chip: "bg-yellow-100 text-yellow-800 border-yellow-200" },
+  { label: "Core", chip: "bg-red-100 text-red-800 border-red-200" },
   { label: "Elective/GE", chip: "bg-sky-100 text-sky-800 border-sky-200" },
   { label: "Ethics", chip: "bg-teal-100 text-teal-800 border-teal-200" },
 ];
