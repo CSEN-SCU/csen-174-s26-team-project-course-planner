@@ -20,14 +20,10 @@ from utils.academic_progress_helpers import (
 )
 from utils.enrichment_resolver import (
     EDUCATIONAL_ENRICHMENT_MARKER as _EDUCATIONAL_ENRICHMENT_MARKER,
-    filter_enrichment_codes_for_preference,
     has_educational_enrichment_gap,
     implicit_removal_codes_for_followup,
     infer_enrichment_subjects as _preferred_enrichment_subjects,
     is_low_level_chin_course,
-    list_enrichment_course_codes,
-    resolve_enrichment_subjects_for_slot,
-    should_show_slot_enrichment,
     try_enrichment_followup_plan,
     wants_advanced_chinese_only,
 )
@@ -2051,16 +2047,13 @@ def suggest_courses_for_slot(
     end_min: int,
     missing_details: list[dict[str, any]],
     exclude_codes: list[str] | None = None,
-    user_preference: str = "",
 ) -> dict[str, Any]:
     """Suggest courses for a calendar slot (R6).
 
-    - ``candidates``: Core / concrete requirements (must have non-empty ``covers``).
-    - ``enrichment``: optional block when transcript still has Educational
-      Enrichment — department-scoped list (e.g. CHIN / 中文), separate from Core tags.
+    Returns requirement-filling courses that fit the clicked time slot.
 
     Returns:
-        {"candidates": [...], "enrichment": {...} | None, "message": str | None}
+        {"candidates": [...], "message": str | None}
     """
     exclude_codes = exclude_codes or []
     schedule_index = load_schedule_section_index()
@@ -2267,69 +2260,14 @@ def suggest_courses_for_slot(
     with_covers = [c for c in candidates if c.get("covers")]
     with_covers.sort(key=_rank_key)
 
-    enrichment_block: dict[str, Any] | None = None
-    if should_show_slot_enrichment(
-        user_preference or "",
-        missing_details,
-        plan_course_codes=exclude_codes,
-    ):
-        subjects, track_label, enrich_prompt = resolve_enrichment_subjects_for_slot(
-            user_preference or ""
-        )
-        enrich_codes = list_enrichment_course_codes(
-            schedule_index,
-            subjects,
-            titles_index,
-            exclude_codes=exclude_codes,
-        )
-        enrich_codes = filter_enrichment_codes_for_preference(
-            enrich_codes, user_preference or ""
-        )
-        if wants_advanced_chinese_only(user_preference or ""):
-            enrich_prompt = (
-                (enrich_prompt or "")
-                + " Intro Chinese (CHIN 1, etc.) is hidden; only higher-level options are shown."
-            ).strip()
-        enrich_candidates: list[dict[str, Any]] = []
-        enrich_covers = ["Educational Enrichment", track_label]
-        enrich_rationale = f"Major enrichment · {track_label} · available at this time slot"
-        for code in enrich_codes:
-            for key in planned_section_keys(code):
-                section_info = schedule_index.get(key)
-                if not section_info or not _slot_fits(section_info):
-                    continue
-                enrich_candidates.append(
-                    _build_slot_candidate(
-                        code,
-                        section_info,
-                        covers=enrich_covers,
-                        rationale=enrich_rationale,
-                        kind="enrichment",
-                    )
-                )
-                break
-
-        def _enrich_rank(c: dict[str, Any]) -> tuple:
-            return (-(c.get("quality") or 0), -(c.get("rating") or 0), c.get("course", ""))
-
-        enrich_candidates.sort(key=_enrich_rank)
-        enrichment_block = {
-            "track_label": track_label,
-            "subjects": subjects,
-            "prompt": enrich_prompt,
-            "candidates": enrich_candidates[:5],
-        }
-
     core_out = with_covers[:5]
-    if core_out or enrichment_block:
+    if core_out:
         return {
             "candidates": core_out,
-            "enrichment": enrichment_block,
             "message": None,
         }
 
     return {
         "candidates": [],
-        "enrichment": enrichment_block,
         "message": _slot_suggestion_empty_message(missing_details, open_req_key_to_label),
     }

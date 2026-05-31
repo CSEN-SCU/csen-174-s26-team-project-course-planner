@@ -492,10 +492,6 @@ class SlotSuggestionRequest(BaseModel):
     end_min: int = Field(..., description="End time in minutes since midnight")
     missing_details: list[dict[str, Any]] = Field(..., description="Open requirements")
     exclude_codes: list[str] = Field(default_factory=list, description="Codes to exclude")
-    user_preference: str = Field(
-        default="",
-        description="Recent chat text for enrichment direction (e.g. 中文 / CHIN)",
-    )
 
 
 @router.post("/suggest_for_slot", dependencies=[Depends(limit("slot_suggest"))])
@@ -511,7 +507,6 @@ def suggest_for_slot(body: SlotSuggestionRequest) -> dict[str, Any]:
             end_min=body.end_min,
             missing_details=body.missing_details,
             exclude_codes=body.exclude_codes,
-            user_preference=body.user_preference,
         )
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=502, detail=f"suggestion failed: {exc}") from exc
@@ -520,13 +515,8 @@ def suggest_for_slot(body: SlotSuggestionRequest) -> dict[str, Any]:
     if not isinstance(candidates, list):
         candidates = []
 
-    enrichment = result.get("enrichment")
-    if enrichment is not None and not isinstance(enrichment, dict):
-        enrichment = None
-
     return {
         "candidates": candidates,
         "count": len(candidates),
         "message": result.get("message"),
-        "enrichment": enrichment,
     }

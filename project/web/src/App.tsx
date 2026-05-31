@@ -794,16 +794,6 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
     });
   }, [missingDetails, satisfiedCoverLabels]);
 
-  /** Last user chat line — passed to slot popover for enrichment direction (e.g. 中文). */
-  const slotUserPreference = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === "user") {
-        return messages[i].content.trim();
-      }
-    }
-    return "";
-  }, [messages]);
-
   const handleGenerateFourYearPlan = useCallback(async (preferences: string) => {
     if (!missingDetails.length || fourYearGenerating) return;
     setFourYearGenerating(true);
@@ -1086,7 +1076,6 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
                 missing_details={missingDetailsForSlot as Record<string, unknown>[]}
                 excluded_courses={effectiveCodes}
                 satisfied_covers={satisfiedCoverLabels}
-                user_preference={slotUserPreference}
                 onAddCourse={handleAddFromSlotSuggestion}
                 onClose={() => setSlotPopoverOpen(false)}
                 client_x={slotPopoverData.clientX}

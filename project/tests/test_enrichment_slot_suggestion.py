@@ -1,4 +1,4 @@
-"""Slot popover returns a separate enrichment block for department tracks."""
+"""Slot popover no longer returns a separate enrichment block."""
 
 from __future__ import annotations
 
@@ -49,25 +49,19 @@ def _stub_loaders(monkeypatch):
     )
 
 
-def test_slot_enrichment_shows_when_chin_on_plan_without_gap():
-    """Gap row may disappear after CHIN 1 is scheduled; popover still shows enrichment."""
+def test_slot_suggestion_omits_enrichment_block():
     out = suggest_courses_for_slot(
         day_index=0,
         start_min=60,
         end_min=120,
         missing_details=[{"requirement": "RTC 3"}],
         exclude_codes=["CHIN 1", "THTR 189"],
-        user_preference="我现在是中国人，所以我只能上高阶的中文课",
     )
-    enrich = out.get("enrichment")
-    assert enrich is not None
-    assert enrich.get("track_label") == "Chinese (CHIN)"
-    codes = [c["course"] for c in enrich.get("candidates") or []]
-    assert "CHIN 1" not in codes
-    assert "CHIN 125" in codes
+    assert "enrichment" not in out
+    assert out.get("candidates") == []
 
 
-def test_slot_enrichment_block_lists_chin_at_slot():
+def test_slot_suggestion_does_not_add_chin_enrichment_when_gap_open():
     missing = [{"requirement": "Educational Enrichment – Courses"}]
     out = suggest_courses_for_slot(
         day_index=0,
@@ -75,11 +69,7 @@ def test_slot_enrichment_block_lists_chin_at_slot():
         end_min=120,
         missing_details=missing,
         exclude_codes=[],
-        user_preference="中文 enrichment",
     )
-    enrich = out.get("enrichment")
-    assert enrich is not None
-    assert enrich.get("track_label") == "Chinese (CHIN)"
-    codes = [c["course"] for c in enrich.get("candidates") or []]
-    assert "CHIN 125" in codes
-    assert enrich["candidates"][0].get("kind") == "enrichment"
+    assert "enrichment" not in out
+    codes = [c["course"] for c in out.get("candidates") or []]
+    assert "CHIN 125" not in codes
