@@ -225,11 +225,10 @@ function SummaryBar({ plan }: { plan: FourYearPlan }) {
 
 const LEGEND_ITEMS: { label: string; chip: string }[] = [
   { label: "Completed", chip: "bg-neutral-100 text-neutral-500 border-neutral-200" },
-  { label: "Engineering", chip: "bg-green-100 text-green-800 border-green-200" },
+  { label: "Major", chip: "bg-green-100 text-green-800 border-green-200" },
   { label: "Math/Science", chip: "bg-purple-100 text-purple-800 border-purple-200" },
   { label: "Core", chip: "bg-red-100 text-red-800 border-red-200" },
-  { label: "Elective/GE", chip: "bg-sky-100 text-sky-800 border-sky-200" },
-  { label: "Ethics", chip: "bg-teal-100 text-teal-800 border-teal-200" },
+  { label: "Elective", chip: "bg-sky-100 text-sky-800 border-sky-200" },
 ];
 
 function Legend() {
@@ -332,28 +331,26 @@ export function FourYearPlanView({
             {sortedYears.map((y) => (
               <YearSection key={y.acYear} year={y} />
             ))}
+
+            <div className="rounded-lg border border-neutral-200 bg-white px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs text-neutral-500">
+                  Planned courses not yet taken appear in <span className="font-bold">bold</span> in
+                  the spreadsheet.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handleExport()}
+                  disabled={!canExport || isExporting}
+                  className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-[var(--scu-text)] shadow-sm transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isExporting ? "Exporting…" : "Export to Spreadsheet"}
+                </button>
+              </div>
+            </div>
           </>
         )}
       </div>
-
-      {showTimeline && !isGenerating && (
-        <div className="shrink-0 border-t border-neutral-200 bg-white px-4 py-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs text-neutral-500">
-              Planned courses not yet taken appear in <span className="font-bold">bold</span> in
-              the spreadsheet.
-            </p>
-            <button
-              type="button"
-              onClick={() => void handleExport()}
-              disabled={!canExport || isExporting}
-              className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-[var(--scu-text)] shadow-sm transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isExporting ? "Exporting…" : "Export to Spreadsheet"}
-            </button>
-          </div>
-        </div>
-      )}
     </main>
   );
 }
