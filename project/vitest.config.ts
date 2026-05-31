@@ -12,7 +12,8 @@ export default defineConfig({
       react: fileURLToPath(new URL("./node_modules/react", import.meta.url)),
       "react/jsx-runtime": fileURLToPath(new URL("./node_modules/react/jsx-runtime.js", import.meta.url)),
       "react-dom": fileURLToPath(new URL("./node_modules/react-dom", import.meta.url)),
-      "@testing-library/react": fileURLToPath(new URL("./node_modules/@testing-library/react", import.meta.url))
+      "@testing-library/react": fileURLToPath(new URL("./node_modules/@testing-library/react", import.meta.url)),
+      exceljs: fileURLToPath(new URL("./web/node_modules/exceljs", import.meta.url)),
     }
   },
   test: {
@@ -22,7 +23,7 @@ export default defineConfig({
     setupFiles: ["tests/vitest.setup.ts"],
     server: {
       deps: {
-        inline: ["@testing-library/jest-dom"]
+        inline: ["@testing-library/jest-dom", "exceljs"]
       }
     }
   }

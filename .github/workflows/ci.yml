@@ -17,11 +17,13 @@ jobs:
         with:
           node-version: "20.19"
           cache: "npm"
-          cache-dependency-path: project/package-lock.json
+          cache-dependency-path: |
+            project/package-lock.json
+            project/web/package-lock.json
 
-      - name: Install Node dependencies (Vitest + bridge test stack)
+      - name: Install Node dependencies (Vitest + web app)
         working-directory: project
-        run: npm ci
+        run: npm ci && npm ci --prefix web
 
       - name: Run project test suite (Vitest under project/tests)
         working-directory: project
