@@ -87,9 +87,9 @@ describe("ChatPanel academic progress state", () => {
 
     await user.upload(input, replacement);
     expect(screen.getByText(/Would you like to update it with the new file/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Reply \*\*yes\*\*/i)).not.toBeInTheDocument();
 
-    await user.type(screen.getByPlaceholderText("Message…"), "no");
-    await user.click(screen.getByRole("button", { name: "Send" }));
+    await user.click(screen.getByRole("button", { name: "No" }));
 
     await waitFor(() => {
       expect(setMissingDetails).toHaveBeenCalledWith([]);

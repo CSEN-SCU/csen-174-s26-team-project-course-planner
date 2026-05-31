@@ -192,55 +192,38 @@ export function ChatPanel({
     onTranscriptUploaded?.(null);
   }, [setMissingDetails, setParsedRows, setFileUploaded, setPlanResult, onTranscriptUploaded]);
 
+  const confirmPendingUpdate = useCallback(async () => {
+    if (!pendingFile) return;
+    const f = pendingFile;
+    setPendingFile(null);
+    await processFile(f);
+  }, [pendingFile, processFile]);
+
+  const discardPendingUpdate = useCallback(() => {
+    if (!pendingFile) return;
+    setPendingFile(null);
+    resetUploadedTranscript();
+    setMessages((m) => [
+      ...m,
+      {
+        id: `a-${Date.now()}`,
+        role: "assistant",
+        content:
+          "No problem. I discarded the uploaded transcript and cleared your academic progress. Please upload your Academic Progress again to start over.",
+      },
+    ]);
+  }, [pendingFile, resetUploadedTranscript, setMessages]);
+
   const sendText = useCallback(async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
+
+    if (pendingFile) return;
 
     // Capture conversation state before this turn so we can save a full snapshot
     const userMsg: ChatUiMessage = { id: `u-${Date.now()}`, role: "user", content: trimmed };
     const preTurnMessages = messages;
     setMessages((m) => [...m, userMsg]);
-
-    const lower = trimmed.toLowerCase();
-
-    // Handle pending Academic Progress update confirmation before other gates
-    // so "no" works even when the currently loaded transcript is unconfirmed.
-    if (pendingFile) {
-      const wantsUpdate = lower === "yes" || lower.startsWith("yes") || lower.includes("update");
-      const wantsDiscard = lower === "no" || lower.startsWith("no");
-
-      if (wantsUpdate) {
-        const f = pendingFile;
-        setPendingFile(null);
-        await processFile(f);
-        return;
-      }
-
-      if (wantsDiscard) {
-        setPendingFile(null);
-        resetUploadedTranscript();
-        setMessages((m) => [
-          ...m,
-          {
-            id: `a-${Date.now()}`,
-            role: "assistant",
-            content:
-              "No problem. I discarded the uploaded transcript and cleared your academic progress. Please upload your Academic Progress again to start over.",
-          },
-        ]);
-        return;
-      }
-
-      setMessages((m) => [
-        ...m,
-        {
-          id: `a-${Date.now()}`,
-          role: "assistant",
-          content: "Please reply **yes** to use the new file or **no** to discard it and start again.",
-        },
-      ]);
-      return;
-    }
 
     // Gate: must have Academic Progress export before planning
     if (!fileUploaded) {
@@ -331,18 +314,18 @@ export function ChatPanel({
     onPlanGenerated,
     setMessages,
     pendingFile,
-    processFile,
-    resetUploadedTranscript,
     majorConfirmed,
     studentMajorId,
   ]);
 
   const send = useCallback(async () => {
     const trimmed = input.trim();
-    if (!trimmed || isGenerating) return;
+    if (!trimmed || isGenerating || pendingFile) return;
     setInput("");
     await sendText(trimmed);
-  }, [input, sendText, isGenerating]);
+  }, [input, sendText, isGenerating, pendingFile]);
+
+  const inputLocked = !!pendingFile || isGenerating;
 
   const toggleVoice = useCallback(async () => {
     // Stop if already recording
@@ -434,7 +417,7 @@ export function ChatPanel({
             id: `a-${Date.now()}`,
             role: "assistant",
             content:
-              "You already have academic progress saved. Would you like to update it with the new file? Reply **yes** to use the new file or **no** to discard it and start again.",
+              "You already have academic progress saved. Would you like to update it with the new file?",
           },
         ]);
       } else {
@@ -549,6 +532,27 @@ export function ChatPanel({
           </div>
         ))}
 
+        {pendingFile && (
+          <div className="flex justify-start">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => void confirmPendingUpdate()}
+                className="rounded-md bg-[var(--scu-red)] px-4 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--scu-dark-red)]"
+              >
+                Yes
+              </button>
+              <button
+                type="button"
+                onClick={discardPendingUpdate}
+                className="rounded-md border border-neutral-300 bg-white px-4 py-1.5 text-sm font-semibold text-[var(--scu-text)] shadow-sm transition hover:bg-neutral-50"
+              >
+                No
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Animated typing indicator while AI is generating */}
         {isGenerating && (
           <div className="flex justify-start">
@@ -617,6 +621,7 @@ export function ChatPanel({
             ref={textareaRef}
             rows={1}
             value={input}
+            disabled={inputLocked}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -624,8 +629,8 @@ export function ChatPanel({
                 void send();
               }
             }}
-            placeholder="Message…"
-            className="min-h-0 flex-1 resize-none self-stretch rounded-md border border-neutral-300 px-3 py-2 text-sm text-[var(--scu-text)] outline-none ring-0 placeholder:text-neutral-400 focus:border-[var(--scu-red)] focus:ring-1 focus:ring-[var(--scu-red)]"
+            placeholder={pendingFile ? "Choose Yes or No above to continue…" : "Message…"}
+            className="min-h-0 flex-1 resize-none self-stretch rounded-md border border-neutral-300 px-3 py-2 text-sm text-[var(--scu-text)] outline-none ring-0 placeholder:text-neutral-400 focus:border-[var(--scu-red)] focus:ring-1 focus:ring-[var(--scu-red)] disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-400"
           />
           <div className="flex shrink-0 flex-col items-center justify-between gap-1">
             <button
@@ -639,7 +644,7 @@ export function ChatPanel({
             <button
               type="button"
               onClick={() => void toggleVoice()}
-              disabled={voiceStatus === "processing"}
+              disabled={inputLocked || voiceStatus === "processing"}
               title={micLabel}
               className={`rounded-md p-2 transition ${
                 voiceStatus === "recording"
@@ -654,7 +659,7 @@ export function ChatPanel({
             <button
               type="button"
               onClick={() => void send()}
-              disabled={isGenerating}
+              disabled={inputLocked}
               className="rounded-md bg-[var(--scu-red)] px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--scu-dark-red)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isGenerating ? "…" : "Send"}
