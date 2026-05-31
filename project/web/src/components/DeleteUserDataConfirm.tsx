@@ -33,15 +33,13 @@ export function DeleteUserDataConfirm({
           id="delete-user-data-title"
           className="text-center text-base font-semibold text-[var(--scu-text)] sm:text-lg"
         >
-          Delete user data?
+          Delete User Data?
         </h2>
         <p
           id="delete-user-data-desc"
           className="mt-3 text-center text-sm leading-relaxed text-neutral-600"
         >
-          This permanently removes all data associated with your account from our servers —
-          including saved schedules, your Academic Progress upload, course preferences, and chat
-          history — and signs you out on this device. This action cannot be undone.
+          This will permanently delete all of your user data. This action cannot be undone.
         </p>
         {error && (
           <p className="mt-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs text-amber-900">

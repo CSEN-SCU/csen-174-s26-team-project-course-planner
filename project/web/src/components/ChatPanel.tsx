@@ -510,7 +510,7 @@ export function ChatPanel({
 
   return (
     <aside
-      className="relative grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-[var(--scu-white)] shadow-sm"
+      className="relative grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto_auto] overflow-hidden border-l border-neutral-200 bg-[var(--scu-white)] shadow-sm"
       onDragEnter={onDragEnter}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
@@ -519,8 +519,6 @@ export function ChatPanel({
       <PlannerColumnHeader align="end">
         {onSignOut ? <SignOutButton onClick={onSignOut} /> : null}
       </PlannerColumnHeader>
-
-      <div className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto_auto] overflow-hidden border-l border-neutral-200">
       {isDragOver && canDropFiles && (
         <div
           className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-white/90 px-6 text-center ring-2 ring-inset ring-[var(--scu-red)]"
@@ -694,7 +692,6 @@ export function ChatPanel({
         <p className="mt-1.5 text-[10px] text-neutral-400">
           {uploadHelperText}
         </p>
-      </div>
       </div>
     </aside>
   );

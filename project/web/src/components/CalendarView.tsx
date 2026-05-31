@@ -196,10 +196,17 @@ export function CalendarView({
                       <p className="text-[10px] text-neutral-400">{c.professor}</p>
                       <p className="mt-1 text-[10px] text-amber-600 italic">Time not yet posted</p>
                     </div>
-                    {onRemoveCourse && (
+                    {(onCourseClick || onRemoveCourse) && (
                       <button
                         type="button"
-                        onClick={() => onRemoveCourse(c.index)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (onCourseClick) {
+                            onCourseClick(c.index, c.code, e.clientX, e.clientY);
+                          } else {
+                            onRemoveCourse?.(c.index);
+                          }
+                        }}
                         className="shrink-0 rounded p-0.5 text-neutral-300 hover:text-red-500 hover:bg-red-50 transition"
                         aria-label={`Remove ${c.code}`}
                       >
