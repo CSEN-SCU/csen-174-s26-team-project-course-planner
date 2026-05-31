@@ -326,14 +326,20 @@ export function ChatPanel({
     studentMajorId,
   ]);
 
+  const majorConfirmPending =
+    hasSavedTranscript &&
+    !!userId &&
+    !!(majorDetection || studentMajorId) &&
+    !majorConfirmed;
+
   const send = useCallback(async () => {
     const trimmed = input.trim();
-    if (!trimmed || isGenerating || pendingFile) return;
+    if (!trimmed || isGenerating || pendingFile || majorConfirmPending) return;
     setInput("");
     await sendText(trimmed);
-  }, [input, sendText, isGenerating, pendingFile]);
+  }, [input, sendText, isGenerating, pendingFile, majorConfirmPending]);
 
-  const inputLocked = !!pendingFile || isGenerating;
+  const inputLocked = !!pendingFile || isGenerating || majorConfirmPending;
 
   const toggleVoice = useCallback(async () => {
     // Stop if already recording
@@ -637,7 +643,13 @@ export function ChatPanel({
                 void send();
               }
             }}
-            placeholder={pendingFile ? "Choose Yes or No above to continue…" : "Message…"}
+            placeholder={
+              pendingFile
+                ? "Choose Yes or No above to continue…"
+                : majorConfirmPending
+                  ? "Confirm your major above to continue…"
+                  : "Message…"
+            }
             className="min-h-0 flex-1 resize-none self-stretch rounded-md border border-neutral-300 px-3 py-2 text-sm text-[var(--scu-text)] outline-none ring-0 placeholder:text-neutral-400 focus:border-[var(--scu-red)] focus:ring-1 focus:ring-[var(--scu-red)] disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-400"
           />
           <div className="flex shrink-0 flex-col items-center justify-between gap-1">
