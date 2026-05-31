@@ -60,6 +60,8 @@ export type ChatPanelProps = {
   onMajorConfirmed?: () => void;
   onRequestMajorChange?: () => void;
   onTranscriptUploaded?: (detection: MajorDetection | null) => void;
+  /** Clears persisted transcript memory when the user discards a re-upload. */
+  onDiscardTranscript?: () => void | Promise<void>;
 };
 
 function planSummaryText(plan: Record<string, unknown>): string {
@@ -131,12 +133,14 @@ export function ChatPanel({
   onMajorConfirmed,
   onRequestMajorChange,
   onTranscriptUploaded,
+  onDiscardTranscript,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [voiceStatus, setVoiceStatus] = useState<"idle" | "recording" | "processing">("idle");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [transcriptDiscarded, setTranscriptDiscarded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -145,7 +149,8 @@ export function ChatPanel({
   const [isDragOver, setIsDragOver] = useState(false);
 
   const hasUserInput = messages.some((m) => m.role === "user");
-  const canDropFiles = !hasUserInput;
+  const hasSavedTranscript = fileUploaded && !transcriptDiscarded;
+  const canDropFiles = !hasUserInput || !hasSavedTranscript;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -174,6 +179,7 @@ export function ChatPanel({
       const pr = (data.parsed_rows as ParsedRow[]) ?? [];
       setParsedRows?.(pr);
       setFileUploaded(true);
+      setTranscriptDiscarded(false);
       const det = (data.major_detection as MajorDetection | undefined) ?? null;
       onTranscriptUploaded?.(det);
       const reply = `Got it! Found ${md.length} missing requirements${userId ? " and saved your progress" : ""}. Confirm your major below, then tell me your preferences for next quarter.`;
@@ -202,7 +208,9 @@ export function ChatPanel({
   const discardPendingUpdate = useCallback(() => {
     if (!pendingFile) return;
     setPendingFile(null);
+    setTranscriptDiscarded(true);
     resetUploadedTranscript();
+    void onDiscardTranscript?.();
     setMessages((m) => [
       ...m,
       {
@@ -212,7 +220,7 @@ export function ChatPanel({
           "No problem. I discarded the uploaded transcript and cleared your academic progress. Please upload your Academic Progress again to start over.",
       },
     ]);
-  }, [pendingFile, resetUploadedTranscript, setMessages]);
+  }, [pendingFile, resetUploadedTranscript, setMessages, onDiscardTranscript]);
 
   const sendText = useCallback(async (text: string) => {
     const trimmed = text.trim();
@@ -226,7 +234,7 @@ export function ChatPanel({
     setMessages((m) => [...m, userMsg]);
 
     // Gate: must have Academic Progress export before planning
-    if (!fileUploaded) {
+    if (!hasSavedTranscript) {
       setMessages((m) => [
         ...m,
         {
@@ -309,7 +317,7 @@ export function ChatPanel({
     userId,
     planResult,
     parsedRows,
-    fileUploaded,
+    hasSavedTranscript,
     setPlanResult,
     onPlanGenerated,
     setMessages,
@@ -409,7 +417,7 @@ export function ChatPanel({
         return;
       }
 
-      if (fileUploaded) {
+      if (hasSavedTranscript) {
         setPendingFile(f);
         setMessages((m) => [
           ...m,
@@ -424,7 +432,7 @@ export function ChatPanel({
         void processFile(f);
       }
     },
-    [fileUploaded, processFile, setMessages],
+    [hasSavedTranscript, processFile, setMessages],
   );
 
   const onFilePick = () => fileInputRef.current?.click();
@@ -485,7 +493,7 @@ export function ChatPanel({
       : voiceStatus === "processing"
       ? "Transcribing…"
       : "Tap to speak";
-  const uploadHelperText = fileUploaded
+  const uploadHelperText = hasSavedTranscript
     ? "Academic Progress is saved. Use the paperclip if you want to update it."
     : canDropFiles
     ? "Drag and drop your Academic Progress (.xlsx or .xlsm files) here, or use the paperclip to upload."
@@ -567,7 +575,7 @@ export function ChatPanel({
         <div ref={messagesEndRef} />
       </div>
 
-      {fileUploaded && userId && (majorDetection || studentMajorId) && (
+      {hasSavedTranscript && userId && (majorDetection || studentMajorId) && (
         <div className="shrink-0 px-4 pb-3">
           <div className="flex justify-start">
             <div className="max-w-[90%] rounded-lg bg-[var(--scu-gray)] px-3 py-2 text-sm leading-relaxed text-[var(--scu-text)] ring-1 ring-neutral-200">
@@ -637,7 +645,7 @@ export function ChatPanel({
               type="button"
               onClick={onFilePick}
               className="rounded-md p-2 text-neutral-500 hover:bg-neutral-100"
-              title={fileUploaded ? "Update Academic Progress" : "Upload Academic Progress"}
+              title={hasSavedTranscript ? "Update Academic Progress" : "Upload Academic Progress"}
             >
               <PaperclipIcon />
             </button>
