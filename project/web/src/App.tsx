@@ -399,9 +399,10 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
   }, []);
 
   const beginNewPlanFlow = useCallback(() => {
-    resetActivePlanState();
+    // Defer reset until the user picks Manual/AI — closing PlanStartModal must
+    // leave the current schedule visible (Cancel should not wipe the calendar).
     setPlanStartModalOpen(true);
-  }, [resetActivePlanState]);
+  }, []);
 
   const startDraftPlanSession = useCallback(() => {
     setActiveSessionId(`draft-${Date.now()}`);

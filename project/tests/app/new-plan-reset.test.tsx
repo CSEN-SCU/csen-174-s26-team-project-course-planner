@@ -92,10 +92,12 @@ vi.mock("../../web/src/components/PlanStartModal", () => ({
     open,
     onManual,
     onAi,
+    onClose,
   }: {
     open: boolean;
     onManual: () => void;
     onAi: () => void;
+    onClose: () => void;
   }) =>
     open ? (
       <div data-testid="plan-start-modal">
@@ -104,6 +106,9 @@ vi.mock("../../web/src/components/PlanStartModal", () => ({
         </button>
         <button type="button" onClick={onAi}>
           Have AI recommend my schedule
+        </button>
+        <button type="button" onClick={onClose}>
+          Cancel
         </button>
       </div>
     ) : null,
@@ -299,9 +304,10 @@ describe("App.handleNewPlan state reset (RT#4)", () => {
       expect(screen.getByTestId("plan-result")).toHaveTextContent("set");
     });
 
-    // Click "New Plan"
+    // Click "New Plan" then commit via AI path
     const newPlanBtn = screen.getByRole("button", { name: /new plan/i });
     await user.click(newPlanBtn);
+    await user.click(screen.getByRole("button", { name: /have ai recommend my schedule/i }));
 
     // PIN: planResult must be null after reset
     await waitFor(() => {
@@ -322,13 +328,39 @@ describe("App.handleNewPlan state reset (RT#4)", () => {
       expect(screen.getByTestId("calendar-view")).toHaveAttribute("data-course-count", "3");
     });
 
-    // Click "New Plan"
+    // Click "New Plan" then commit via AI path
     const newPlanBtn = screen.getByRole("button", { name: /new plan/i });
     await user.click(newPlanBtn);
+    await user.click(screen.getByRole("button", { name: /have ai recommend my schedule/i }));
 
     // PIN: course count must be 0 after reset
     await waitFor(() => {
       expect(screen.getByTestId("calendar-view")).toHaveAttribute("data-course-count", "0");
+    });
+  });
+
+  it("canceling PlanStartModal keeps the current schedule visible", async () => {
+    const user = userEvent.setup();
+    render(<App userId="test-user" onSignOut={() => {}} />);
+
+    await waitFor(() => expect(lastChatProps).not.toBeNull());
+    await injectPlan(["CSEN 12", "CSEN 20", "MATH 11"]);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("calendar-view")).toHaveAttribute("data-course-count", "3");
+    });
+
+    await user.click(screen.getByRole("button", { name: /new plan/i }));
+    await waitFor(() => {
+      expect(screen.getByTestId("plan-start-modal")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: /^cancel$/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("plan-start-modal")).not.toBeInTheDocument();
+      expect(screen.getByTestId("calendar-view")).toHaveAttribute("data-course-count", "3");
+      expect(screen.getByTestId("plan-result")).toHaveTextContent("set");
     });
   });
 
