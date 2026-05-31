@@ -215,3 +215,54 @@ def test_raises_without_any_data(monkeypatch):
     _patch(monkeypatch, payload={"recommended": [], "total_units": 0, "advice": "", "assistant_reply": ""})
     with pytest.raises(ValueError):
         llm.run_llm_planner([], "")
+
+
+def test_prompt_includes_full_offered_catalog_with_schedule(monkeypatch):
+    captured: list[str] = []
+
+    def fake_call(prompt, system_instruction, model):
+        captured.append(prompt)
+        return (
+            {
+                "recommended": [_rec("CSEN 174", units=4)],
+                "total_units": 4,
+                "advice": "a",
+                "assistant_reply": "b",
+            },
+            model,
+        )
+
+    _patch(
+        monkeypatch,
+        payload={"recommended": [], "total_units": 0, "advice": "", "assistant_reply": ""},
+        offered=[
+            {
+                "course": "CSEN 174",
+                "title": "Software Engineering",
+                "units": 4,
+                "meeting_days": [0, 2],
+                "meeting_start_min": 60,
+                "meeting_end_min": 165,
+            },
+            {
+                "course": "MATH 53",
+                "title": "Linear Algebra",
+                "units": 4,
+                "meeting_days": [1, 3],
+                "meeting_start_min": 120,
+                "meeting_end_min": 225,
+            },
+        ],
+    )
+    monkeypatch.setattr(llm, "_call_selection_llm", fake_call)
+
+    llm.run_llm_planner(
+        [{"course": "CSEN 174", "category": "Major"}], "minimize classes on Tuesdays"
+    )
+
+    assert captured, "expected LLM prompt to be captured"
+    prompt = captured[0]
+    assert "=== COURSES CONFIRMED IN NEXT-TERM SCHEDULE ===" not in prompt
+    assert "=== FULL LIST OF COURSES OFFERED NEXT QUARTER ===" in prompt
+    assert "CSEN 174 — Software Engineering (4u; M W 9:00 AM–10:45 AM) ★" in prompt
+    assert "MATH 53 — Linear Algebra (4u; T Th 10:00 AM–11:45 AM)" in prompt

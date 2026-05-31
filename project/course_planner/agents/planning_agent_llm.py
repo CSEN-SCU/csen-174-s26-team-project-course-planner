@@ -57,6 +57,7 @@ from agents.planning_agent import (
     _build_completed_block,
     _build_memory_block,
     _build_schedule_block,
+    build_offered_catalog_block,
     _candidate_models,
     _enforce_unit_cap,
     _enrich_recommended_units,
@@ -94,57 +95,6 @@ from utils.scu_course_schedule_xlsx import (
 )
 
 log = logging.getLogger(__name__)
-
-# How many offered courses to put in the prompt's full catalog block.
-# Requirement-relevant courses are always listed first, so truncation only
-# ever drops low-signal electives the student is unlikely to need.
-_CATALOG_MAX = int(os.environ.get("LLM_PLAN_CATALOG_MAX", "450"))
-
-
-def _build_offered_catalog_block(
-    offered: list[dict[str, Any]],
-    requirement_codes: set[str],
-) -> str:
-    """Prompt block listing every course offered next quarter.
-
-    Requirement-relevant courses are surfaced first (and ★-marked) so the
-    model sees the highest-signal options even when the catalog is
-    truncated to ``_CATALOG_MAX``.
-    """
-    if not offered:
-        return ""
-
-    relevant: list[dict[str, Any]] = []
-    others: list[dict[str, Any]] = []
-    for c in offered:
-        code = _normalize_code(c.get("course"))
-        (relevant if code in requirement_codes else others).append(c)
-
-    ordered = relevant + others
-    truncated = len(ordered) > _CATALOG_MAX
-    ordered = ordered[:_CATALOG_MAX]
-
-    lines = [
-        "=== FULL LIST OF COURSES OFFERED NEXT QUARTER ===",
-        "Every course below is actually offered next term. You may ONLY "
-        "recommend courses from this list. Copy each course code "
-        "CHARACTER-FOR-CHARACTER — never invent, abbreviate, or substitute a "
-        "code. Courses marked ★ satisfy one of the student's remaining "
-        "requirements — strongly prefer those.",
-    ]
-    for c in ordered:
-        code = c.get("course", "?")
-        title = c.get("title") or ""
-        units = c.get("units")
-        unit_str = f"{units}u" if units not in (None, "", "?") else "see catalog"
-        star = " ★" if _normalize_code(code) in requirement_codes else ""
-        lines.append(f"  {code} — {title} ({unit_str}){star}")
-    if truncated:
-        lines.append(
-            f"  … (catalog truncated to {_CATALOG_MAX} courses; the "
-            "requirement-matching courses above are complete)"
-        )
-    return "\n".join(lines) + "\n\n"
 
 
 def _canonicalize_titles_units(
@@ -191,6 +141,9 @@ def _selection_system_instruction() -> str:
         "- Never recommend a course listed under ALREADY COMPLETED.\n"
         "- Prefer courses that close remaining requirements; among those, "
         "prefer ones that satisfy multiple requirements at once.\n"
+        "- Respect schedule preferences using the meeting days/times shown in "
+        "the FULL LIST OF COURSES OFFERED NEXT QUARTER block (e.g. minimize "
+        "or avoid a weekday).\n"
         "- Respect the prerequisite ordering described in the bulletin: do "
         "not recommend a course whose prerequisites the student has not met.\n"
         "- Target 12-16 units; never exceed 20 unless the student asks.\n"
@@ -205,7 +158,6 @@ def _selection_prompt(
     prev_block: str,
     completed_block: str,
     major_block: str,
-    schedule_block: str,
     catalog_block: str,
     missing_details: list[dict[str, Any]],
     safe_preference: str,
@@ -228,7 +180,7 @@ def _selection_prompt(
 
     return (
         f"{memory_block}{prev_block}{completed_block}{major_block}"
-        f"{schedule_block}{catalog_block}"
+        f"{catalog_block}"
         "=== STUDENT'S REMAINING REQUIREMENTS (gap analysis from Academic "
         "Progress report) ===\n"
         f"{json.dumps(missing_details, ensure_ascii=False, indent=2)}\n\n"
@@ -330,9 +282,8 @@ def run_llm_planner(
     titles_index = load_course_titles_index()
     units_index = load_course_units_index()
 
-    # Requirement-matched offered courses (with ★ double-tag marking) plus the
-    # set of offered (subject, number) keys that close a requirement.
-    schedule_block, offered_keys = _build_schedule_block(
+    # Resolve which offered courses close a remaining requirement (★ in catalog).
+    _, offered_keys = _build_schedule_block(
         missing_details,
         schedule_index,
         category_index,
@@ -343,7 +294,7 @@ def run_llm_planner(
 
     # The full list of available courses next quarter.
     offered = list_offered_courses()
-    catalog_block = _build_offered_catalog_block(offered, requirement_codes)
+    catalog_block = build_offered_catalog_block(offered, requirement_codes)
 
     memory_block = _build_memory_block(memory_snippets)
     prev_block = _summarize_previous_plan(previous_plan)
@@ -365,7 +316,6 @@ def run_llm_planner(
         prev_block=prev_block,
         completed_block=completed_block,
         major_block=major_block,
-        schedule_block=schedule_block,
         catalog_block=catalog_block,
         missing_details=missing_details,
         safe_preference=safe_preference,

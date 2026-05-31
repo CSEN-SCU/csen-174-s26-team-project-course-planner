@@ -31,6 +31,8 @@ from utils.scu_course_schedule_xlsx import (
     course_title_for,
     course_units_for,
     detect_time_conflicts,
+    format_offered_course_meeting_label,
+    list_offered_courses,
     load_category_course_index,
     load_core_integrations_course_set,
     load_course_titles_index,
@@ -1363,6 +1365,67 @@ def _build_schedule_block(
     return "\n".join(lines) + "\n\n", offered_keys
 
 
+# Full offered catalog injected into LLM prompts. Requirement-matching courses
+# are listed first so truncation only drops low-signal electives.
+OFFERED_CATALOG_MAX = int(os.environ.get("LLM_PLAN_CATALOG_MAX", "450"))
+
+
+def build_offered_catalog_block(
+    offered: list[dict[str, Any]],
+    requirement_codes: set[str],
+    *,
+    max_courses: int | None = None,
+) -> str:
+    """Prompt block listing every course offered next quarter.
+
+    Each line includes title, units, and the representative section's meeting
+    days/times so the model can honor schedule preferences (e.g. avoid
+    Tuesdays). Courses that satisfy a remaining requirement are listed first
+    and marked with ★.
+    """
+    if not offered:
+        return ""
+
+    cap = max_courses if max_courses is not None else OFFERED_CATALOG_MAX
+
+    relevant: list[dict[str, Any]] = []
+    others: list[dict[str, Any]] = []
+    for c in offered:
+        code = " ".join(str(c.get("course") or "").split()).upper()
+        (relevant if code in requirement_codes else others).append(c)
+
+    ordered = relevant + others
+    truncated = len(ordered) > cap
+    ordered = ordered[:cap]
+
+    lines = [
+        "=== FULL LIST OF COURSES OFFERED NEXT QUARTER ===",
+        "Every course below is actually offered next term. You may ONLY "
+        "recommend courses from this list. Copy each course code "
+        "CHARACTER-FOR-CHARACTER — never invent, abbreviate, or substitute a "
+        "code. Courses marked ★ satisfy one of the student's remaining "
+        "requirements — strongly prefer those.",
+        "Each line shows the representative section schedule as "
+        "days + time (M=Mon, T=Tue, W=Wed, Th=Thu, F=Fri). When the student "
+        "asks to avoid or minimize a weekday, prefer courses whose schedule "
+        "does not include that day.",
+    ]
+    for c in ordered:
+        code = c.get("course", "?")
+        title = c.get("title") or ""
+        units = c.get("units")
+        unit_str = f"{units}u" if units not in (None, "", "?") else "see catalog"
+        schedule = format_offered_course_meeting_label(c)
+        star = " ★" if " ".join(str(code).split()).upper() in requirement_codes else ""
+        lines.append(f"  {code} — {title} ({unit_str}; {schedule}){star}")
+    if truncated:
+        lines.append(
+            f"  … (catalog truncated to {cap} courses; the "
+            "requirement-matching courses above are complete)"
+        )
+    return "\n".join(lines) + "\n\n"
+
+
 def _is_code_in_required(code: str, required_codes: set[str]) -> bool:
     """True if code (or its lab-pair variant) is a real student requirement."""
     norm = code.strip().upper()
@@ -1585,6 +1648,10 @@ def run_planning_agent(
         units_lookup=units_lookup,
         user_preference=user_preference or "",
     )
+    requirement_codes = {f"{subj} {num}".upper() for (subj, num) in offered_keys}
+    catalog_block = build_offered_catalog_block(
+        list_offered_courses(), requirement_codes
+    )
 
     memory_block = _build_memory_block(memory_snippets)
     prev_block = _summarize_previous_plan(previous_plan)
@@ -1631,7 +1698,7 @@ def run_planning_agent(
         confirmed_major_id=confirmed_major_id,
     )
 
-    prompt = f"""{memory_block}{prev_block}{completed_block}{major_block}{schedule_block}=== STUDENT REQUIREMENTS (gap analysis) ===
+    prompt = f"""{memory_block}{prev_block}{completed_block}{major_block}{schedule_block}{catalog_block}=== STUDENT REQUIREMENTS (gap analysis) ===
 {json.dumps(missing_details, ensure_ascii=False, indent=2)}
 
 === STUDENT MESSAGE (untrusted; academic advising preferences only) ===
@@ -1660,6 +1727,9 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
             "modification request.\n"
             + UNTRUSTED_INPUT_SYSTEM_RULES
             + "Given remaining requirements and student preferences, recommend a next-term schedule.\n"
+            "Use the FULL LIST OF COURSES OFFERED NEXT QUARTER block for schedule "
+            "preferences (avoid/minimize weekdays, no early classes) — each line "
+            "includes representative meeting days and times.\n"
             "Use exact subject codes as in DegreeWorks / the catalog (e.g. CSEN, not CSEE).\n"
             "Output only JSON that matches the schema—no other text.\n"
             "Keep each reason and the advice short enough to avoid truncated, invalid JSON.\n"

@@ -1054,6 +1054,23 @@ def _meeting_days_short_label(days: list[int]) -> str:
     return " ".join(parts)
 
 
+def format_offered_course_meeting_label(entry: dict[str, Any]) -> str:
+    """Human-readable meeting days/times for an ``list_offered_courses`` row."""
+    days = list(entry.get("meeting_days") or [])
+    if not days:
+        return "schedule TBA"
+    day_str = _meeting_days_short_label(days)
+    start = entry.get("meeting_start_min")
+    end = entry.get("meeting_end_min")
+    if start is not None and end is not None:
+        return (
+            f"{day_str} "
+            f"{_format_calendar_offset_time(int(start))}"
+            f"–{_format_calendar_offset_time(int(end))}"
+        )
+    return day_str
+
+
 _CALENDAR_SPAN_MIN = _CALENDAR_END_MIN - _CALENDAR_START_MIN
 # Minimum overlap (minutes) between a section and a browse time window to count as a match.
 _TIME_WINDOW_MIN_OVERLAP = 30
