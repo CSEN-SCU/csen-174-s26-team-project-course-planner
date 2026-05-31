@@ -45,7 +45,13 @@ export function StaticInfoPageLayout({
 
     if (footerWrap) {
       const footerTop = footerWrap.getBoundingClientRect().top;
-      panel.style.bottom = `${window.innerHeight - footerTop}px`;
+      let bottomInset = window.innerHeight - footerTop;
+      if (roundPanelBottom && anchor.parentElement) {
+        const bottomGap =
+          parseFloat(getComputedStyle(anchor.parentElement).paddingBottom) || 0;
+        bottomInset += bottomGap;
+      }
+      panel.style.bottom = `${bottomInset}px`;
     }
 
     if (panelSurface) {
@@ -111,7 +117,7 @@ export function StaticInfoPageLayout({
         </div>
 
         <main ref={mainRef} className="relative z-10 h-full overflow-y-auto px-6 pb-8">
-          <div className="pt-[5%]">
+          <div className={roundPanelBottom ? "pt-[5%] pb-[5%]" : "pt-[5%]"}>
             <div ref={anchorRef} className="h-0 w-full" aria-hidden />
             <article className={`relative mx-auto w-full ${maxWidth} px-6 py-10 sm:px-10 sm:py-12`}>
               {children}
