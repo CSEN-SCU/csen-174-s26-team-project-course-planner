@@ -1,4 +1,15 @@
-import type { FourYearPlan, ParsedRow, PlanCourse, QuarterPlan } from "../types";
+import type { FourYearPlan, ParsedRow, PlanCourse } from "../types";
+import {
+  buildCompletedByTerm,
+  buildUnifiedTimeline,
+  type CompletedCourse,
+  type Season,
+  type UnifiedQuarter,
+  type UnifiedYear,
+} from "../lib/fourYearPlanTimeline";
+import { buildFourYearPlanExportRows } from "../lib/fourYearPlanExportRows";
+import { downloadFourYearPlanExcel } from "../lib/exportFourYearPlanExcel";
+import { useState } from "react";
 
 export type FourYearPlanViewProps = {
   plan: FourYearPlan | null;
@@ -52,204 +63,11 @@ function categoryChipClass(category: string): string {
   return "bg-gray-100 text-gray-700 border-gray-200";
 }
 
-// ── Parse academic_period strings into a canonical "Season YYYY" key ─────────
-
-function parseTermKey(period: string): string | null {
-  const p = period.trim();
-  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
-
-  // "Fall 2023 Quarter" / "Winter 2024 Quarter" / "Spring 2025 Quarter"
-  // (SCU Workday's actual format — single calendar year + 'Quarter' suffix)
-  const m0 = p.match(/^(Fall|Winter|Spring)\s+(\d{4})\s+Quarter$/i);
-  if (m0) return `${cap(m0[1])} ${m0[2]}`;
-
-  // "2022-2023 Fall Quarter" → "Fall 2022"
-  // "2022-2023 Winter Quarter" → "Winter 2023"
-  // "2022-2023 Spring Quarter" → "Spring 2023"
-  const m1 = p.match(/^(\d{4})-(\d{4})\s+(Fall|Winter|Spring)\s+Quarter$/i);
-  if (m1) {
-    const season = cap(m1[3]);
-    const startYear = parseInt(m1[1], 10);
-    const calYear = season === "Fall" ? startYear : startYear + 1;
-    return `${season} ${calYear}`;
-  }
-
-  // "Fall 2022-2023" → "Fall 2022"
-  const m2 = p.match(/^(Fall|Winter|Spring)\s+(\d{4})-\d{4}$/i);
-  if (m2) return `${cap(m2[1])} ${m2[2]}`;
-
-  // "Fall 2022" (bare)
-  const m3 = p.match(/^(Fall|Winter|Spring)\s+(\d{4})$/i);
-  if (m3) return `${cap(m3[1])} ${m3[2]}`;
-
-  return null;
-}
-
-// ── Completed course derived from ParsedRow ───────────────────────────────────
-
-interface CompletedCourse {
-  code: string;
-  title: string;
-  units: number;
-}
-
-interface CompletedByTerm {
-  [termKey: string]: CompletedCourse[];
-}
-
-function buildCompletedByTerm(rows: ParsedRow[]): CompletedByTerm {
-  const result: CompletedByTerm = {};
-  const seen = new Set<string>();
-
-  for (const row of rows) {
-    if (!row.course_code || !row.academic_period) continue;
-    const status = (row.status ?? "").trim();
-    if (status !== "Satisfied" && status !== "In Progress") continue;
-
-    const termKey = parseTermKey(row.academic_period);
-    if (!termKey) continue;
-
-    const dedupeKey = `${termKey}||${row.course_code}`;
-    if (seen.has(dedupeKey)) continue;
-    seen.add(dedupeKey);
-
-    // Parse title from registration string: "CSEN 122 - Data Structures" → "Data Structures"
-    let title = "";
-    if (row.registration && row.registration.includes(" - ")) {
-      const parts = row.registration.split(" - ");
-      title = parts.slice(1).join(" - ").trim();
-    }
-
-    let units = 0;
-    if (typeof row.units === "number") {
-      units = row.units;
-    } else if (typeof row.units === "string") {
-      const parsed = parseFloat(row.units);
-      if (!isNaN(parsed)) units = parsed;
-    }
-
-    if (!result[termKey]) result[termKey] = [];
-    result[termKey].push({ code: row.course_code, title, units });
-  }
-
-  return result;
-}
-
-// ── Determine academic year from term key ─────────────────────────────────────
-// Academic year = the Fall year.  Fall 2022 → acYear=2022.
-// Winter 2023, Spring 2023 → also acYear=2022 (same academic year as Fall 2022).
-
-type Season = "Fall" | "Winter" | "Spring";
-const SEASON_ORDER: Record<Season, number> = { Fall: 0, Winter: 1, Spring: 2 };
-
-function parseTermKeyParts(termKey: string): { season: Season; calYear: number } | null {
-  const m = termKey.match(/^(Fall|Winter|Spring)\s+(\d{4})$/);
-  if (!m) return null;
-  return { season: m[1] as Season, calYear: parseInt(m[2], 10) };
-}
-
-function acYearFromTermKey(termKey: string): number | null {
-  const parts = parseTermKeyParts(termKey);
-  if (!parts) return null;
-  const { season, calYear } = parts;
-  return season === "Fall" ? calYear : calYear - 1;
-}
-
-function termSortKey(termKey: string): number {
-  const parts = parseTermKeyParts(termKey);
-  if (!parts) return 99999;
-  const acYear = parts.season === "Fall" ? parts.calYear : parts.calYear - 1;
-  return acYear * 3 + SEASON_ORDER[parts.season];
-}
-
-// ── Determine today's term ────────────────────────────────────────────────────
-
-function currentTermKey(): string {
-  const now = new Date();
-  const month = now.getMonth() + 1; // 1-12
-  const year = now.getFullYear();
-  // SCU approximate: Fall=Sep-Dec, Winter=Jan-Mar, Spring=Apr-Jun, Summer=Jul-Aug
-  if (month >= 9) return `Fall ${year}`;
-  if (month <= 3) return `Winter ${year}`;
-  if (month <= 6) return `Spring ${year}`;
-  return `Fall ${year}`;
-}
-
-// ── Build unified timeline ────────────────────────────────────────────────────
-
-interface UnifiedQuarter {
-  termKey: string;
-  season: Season;
-  calYear: number;
-  isPast: boolean;
-  completedCourses: CompletedCourse[];
-  plannedQuarter: QuarterPlan | null;
-}
-
-interface UnifiedYear {
-  label: string;
-  acYear: number;
-  quarters: UnifiedQuarter[];
-}
-
-function buildUnifiedTimeline(
-  completedByTerm: CompletedByTerm,
-  planQuarters: QuarterPlan[],
-): UnifiedYear[] {
-  const todayKey = currentTermKey();
-  const todaySortKey = termSortKey(todayKey);
-
-  // Collect all term keys
-  const allKeys = new Set<string>([
-    ...Object.keys(completedByTerm),
-    ...planQuarters.map((q) => q.term),
-  ]);
-
-  // Determine academic year range
-  const acYears = new Set<number>();
-  for (const k of allKeys) {
-    const ay = acYearFromTermKey(k);
-    if (ay != null) acYears.add(ay);
-  }
-  if (acYears.size === 0) return [];
-
-  const minAcYear = Math.min(...acYears);
-  const maxAcYear = Math.max(...acYears);
-
-  // Build plan lookup
-  const planByTerm = new Map<string, QuarterPlan>();
-  for (const q of planQuarters) planByTerm.set(q.term, q);
-
-  // Generate all quarters for each academic year in range
-  const years: UnifiedYear[] = [];
-  let yearLabel = 1;
-
-  for (let ay = minAcYear; ay <= maxAcYear; ay++) {
-    const quarters: UnifiedQuarter[] = [];
-    for (const season of ["Fall", "Winter", "Spring"] as Season[]) {
-      const calYear = season === "Fall" ? ay : ay + 1;
-      const termKey = `${season} ${calYear}`;
-      const sortKey = termSortKey(termKey);
-      const parts = parseTermKeyParts(termKey);
-      if (!parts) continue;
-
-      quarters.push({
-        termKey,
-        season,
-        calYear,
-        isPast: sortKey < todaySortKey,
-        completedCourses: completedByTerm[termKey] ?? [],
-        plannedQuarter: planByTerm.get(termKey) ?? null,
-      });
-    }
-    years.push({ label: `Year ${yearLabel}`, acYear: ay, quarters });
-    yearLabel++;
-  }
-
-  return years;
-}
-
-// ── Sub-components ────────────────────────────────────────────────────────────
+const SEASON_CARD_BG: Record<Season, string> = {
+  Fall: "bg-amber-50 border-amber-200",
+  Winter: "bg-sky-50 border-sky-200",
+  Spring: "bg-green-50 border-green-200",
+};
 
 function CompletedCourseRow({ course }: { course: CompletedCourse }) {
   return (
@@ -294,11 +112,6 @@ function RecommendedCourseRow({ course }: { course: PlanCourse }) {
   );
 }
 
-const SEASON_CARD_BG: Record<Season, string> = {
-  Fall: "bg-amber-50 border-amber-200",
-  Winter: "bg-sky-50 border-sky-200",
-  Spring: "bg-green-50 border-green-200",
-};
 const SEASON_HEADER_BG: Record<Season, string> = {
   Fall: "bg-amber-100 text-amber-900",
   Winter: "bg-sky-100 text-sky-900",
@@ -440,6 +253,7 @@ export function FourYearPlanView({
   onGenerate,
   parsedRows,
 }: FourYearPlanViewProps) {
+  const [isExporting, setIsExporting] = useState(false);
   const completedByTerm = buildCompletedByTerm(parsedRows);
   const planQuarters = plan?.quarters ?? [];
 
@@ -447,6 +261,8 @@ export function FourYearPlanView({
   const hasCompletedData = Object.keys(completedByTerm).length > 0;
   const hasPlannedData = planQuarters.length > 0;
   const showTimeline = hasCompletedData || hasPlannedData;
+  const exportRows = buildFourYearPlanExportRows(parsedRows, plan);
+  const canExport = showTimeline && !isGenerating && exportRows.length > 0;
 
   const unifiedYears = showTimeline
     ? buildUnifiedTimeline(completedByTerm, planQuarters)
@@ -454,6 +270,16 @@ export function FourYearPlanView({
 
   // Sort unified years by acYear
   const sortedYears = [...unifiedYears].sort((a, b) => a.acYear - b.acYear);
+
+  const handleExport = async () => {
+    if (!canExport || isExporting) return;
+    setIsExporting(true);
+    try {
+      await downloadFourYearPlanExcel(parsedRows, plan);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   return (
     <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#F5F5F5]">
@@ -505,6 +331,25 @@ export function FourYearPlanView({
           </>
         )}
       </div>
+
+      {showTimeline && !isGenerating && (
+        <div className="shrink-0 border-t border-neutral-200 bg-white px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-neutral-500">
+              Planned courses not yet taken appear in <span className="font-bold">bold</span> in
+              the spreadsheet.
+            </p>
+            <button
+              type="button"
+              onClick={() => void handleExport()}
+              disabled={!canExport || isExporting}
+              className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm font-semibold text-[var(--scu-text)] shadow-sm transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isExporting ? "Exporting…" : "Export to Spreadsheet"}
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
