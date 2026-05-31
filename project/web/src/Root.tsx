@@ -11,6 +11,7 @@ import {
 import { AcademicProgressExportTutorialPage } from "./pages/AcademicProgressExportTutorialPage";
 import { CoursePlannerTutorialPage } from "./pages/CoursePlannerTutorialPage";
 import { DataDisclosurePage } from "./pages/DataDisclosurePage";
+import { AuthLoadingPage } from "./pages/AuthLoadingPage";
 import { HomePage } from "./pages/HomePage";
 import { resetPageScroll } from "./lib/scroll";
 import { useDeleteUserDataModal } from "./hooks/useDeleteUserDataModal";
@@ -25,7 +26,7 @@ export function Root() {
     route === ACADEMIC_PROGRESS_TUTORIAL_PATH ||
     route === COURSE_PLANNER_TUTORIAL_PATH;
 
-  usePlannerShell(Boolean(userId) || isInfoRoute);
+  usePlannerShell(Boolean(userId) || googleAuthPending || isInfoRoute);
 
   useLayoutEffect(() => {
     resetPageScroll();
@@ -91,9 +92,10 @@ export function Root() {
   }
 
   if (!userId) {
-    return (
-      <HomePage externalAuthError={googleAuthError} authPending={googleAuthPending} />
-    );
+    if (googleAuthPending) {
+      return <AuthLoadingPage />;
+    }
+    return <HomePage externalAuthError={googleAuthError} />;
   }
 
   return (

@@ -1,3 +1,4 @@
+import { isGoogleOauthPending } from "../auth/session";
 import { resetPageScroll } from "./scroll";
 
 const USER_ID_KEY = "scu_planner_user_id_v2";
@@ -14,7 +15,7 @@ export function bootstrapPlannerShellClass(): void {
   try {
     const uid = sessionStorage.getItem(USER_ID_KEY);
     const tok = sessionStorage.getItem(SESSION_TOKEN_KEY);
-    if (uid && tok) {
+    if ((uid && tok) || isGoogleOauthPending()) {
       document.documentElement.classList.add(HTML_CLASS);
       resetPageScroll();
     }

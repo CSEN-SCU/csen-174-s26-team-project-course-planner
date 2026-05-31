@@ -8,10 +8,9 @@ const TAGLINE =
 
 export type HomePageProps = {
   externalAuthError?: string | null;
-  authPending?: boolean;
 };
 
-export function HomePage({ externalAuthError, authPending }: HomePageProps) {
+export function HomePage({ externalAuthError }: HomePageProps) {
   const [deleteDataNotice, setDeleteDataNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -62,11 +61,7 @@ export function HomePage({ externalAuthError, authPending }: HomePageProps) {
           )}
 
           <div className="flex flex-col items-center gap-4">
-            {authPending ? (
-              <p className="text-sm text-neutral-500">Signing in with Google…</p>
-            ) : (
-              <GoogleSignInButton />
-            )}
+            <GoogleSignInButton />
           </div>
         </div>
       </main>

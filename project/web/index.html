@@ -23,7 +23,10 @@
         try {
           var uid = sessionStorage.getItem("scu_planner_user_id_v2");
           var tok = sessionStorage.getItem("scu_planner_session_token");
-          if (uid && tok) {
+          var oauth = new URLSearchParams(location.search).get("google_oauth");
+          var oauthPending =
+            sessionStorage.getItem("scu_planner_google_oauth_pending") === "1";
+          if ((uid && tok) || (oauth && oauth.length > 0) || oauthPending) {
             document.documentElement.classList.add("planner-shell");
           }
         } catch (e) {
