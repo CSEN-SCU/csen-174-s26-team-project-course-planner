@@ -35,18 +35,22 @@ export function StaticInfoPageLayout({
     const panel = panelRef.current;
     const panelSurface = panelSurfaceRef.current;
     const footerWrap = footerWrapRef.current;
+    const main = mainRef.current;
     if (!anchor || !panel) return;
 
     const anchorTop = anchor.getBoundingClientRect().top;
     const headerBottom = headerRef.current?.getBoundingClientRect().bottom ?? anchorTop;
     const isTopClamped = anchorTop < headerBottom - 0.5;
+    const atScrollBottom = main
+      ? main.scrollTop + main.clientHeight >= main.scrollHeight - 1
+      : false;
 
     panel.style.top = `${Math.max(anchorTop, headerBottom)}px`;
 
     if (footerWrap) {
       const footerTop = footerWrap.getBoundingClientRect().top;
       let bottomInset = window.innerHeight - footerTop;
-      if (roundPanelBottom && anchor.parentElement) {
+      if (roundPanelBottom && anchor.parentElement && atScrollBottom) {
         const bottomGap =
           parseFloat(getComputedStyle(anchor.parentElement).paddingBottom) || 0;
         bottomInset += bottomGap;
@@ -62,9 +66,10 @@ export function StaticInfoPageLayout({
         const article = anchor.parentElement?.querySelector("article");
         const articleBottom = article?.getBoundingClientRect().bottom ?? 0;
         const footerTop = footerWrap?.getBoundingClientRect().top ?? window.innerHeight;
-        const isBottomClamped = articleBottom >= footerTop - 0.5;
-        panelSurface.classList.toggle("rounded-b-lg", !isBottomClamped);
-        panelSurface.classList.toggle("rounded-b-none", isBottomClamped);
+        const contentPastFooter = articleBottom >= footerTop - 0.5;
+        const showBottomRound = atScrollBottom && !contentPastFooter;
+        panelSurface.classList.toggle("rounded-b-lg", showBottomRound);
+        panelSurface.classList.toggle("rounded-b-none", !showBottomRound);
       }
     }
   }, [roundPanelBottom]);
