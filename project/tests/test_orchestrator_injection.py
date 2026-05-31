@@ -14,6 +14,7 @@ relies on the deterministic hash-based fallback embedder.
 
 from __future__ import annotations
 
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -56,6 +57,18 @@ def reply():
 def _patch_client(monkeypatch, captured_prompts, reply):
     stub = _stub_client(captured_prompts, reply)
     monkeypatch.setattr(planning_agent, "get_genai_client", lambda **_kw: stub)
+
+
+_MEMORY_BLOCK_RE = re.compile(
+    r"(=== BACKGROUND CONTEXT[\s\S]*?)\n(?==== )",
+)
+
+
+def _extract_memory_block(prompt: str) -> str:
+    """Return only the injected memory block, not later prompt sections."""
+    match = _MEMORY_BLOCK_RE.search(prompt)
+    assert match, "expected BACKGROUND CONTEXT block in prompt"
+    return match.group(1)
 
 
 def _fake_schedule_index(*codes: str) -> dict:
@@ -125,13 +138,10 @@ def test_prompt_prefix_respects_char_budget(monkeypatch, alice, reply):
     )
 
     prompt = captured[0]
-    header = "=== BACKGROUND CONTEXT"
-    assert header in prompt
-    head_idx = prompt.index(header)
-    body_end = prompt.index("STUDENT REQUIREMENTS")
-    prefix = prompt[head_idx:body_end]
-    assert len(prefix) <= planning_agent.MEMORY_INJECT_CHAR_BUDGET, (
-        f"Memory prefix is {len(prefix)} chars, budget {planning_agent.MEMORY_INJECT_CHAR_BUDGET}"
+    memory_block = _extract_memory_block(prompt)
+    assert len(memory_block) <= planning_agent.MEMORY_INJECT_CHAR_BUDGET, (
+        f"Memory block is {len(memory_block)} chars, "
+        f"budget {planning_agent.MEMORY_INJECT_CHAR_BUDGET}"
     )
 
 
