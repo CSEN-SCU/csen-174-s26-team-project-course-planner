@@ -35,27 +35,17 @@ export function StaticInfoPageLayout({
     const panel = panelRef.current;
     const panelSurface = panelSurfaceRef.current;
     const footerWrap = footerWrapRef.current;
-    const main = mainRef.current;
     if (!anchor || !panel) return;
 
     const anchorTop = anchor.getBoundingClientRect().top;
     const headerBottom = headerRef.current?.getBoundingClientRect().bottom ?? anchorTop;
     const isTopClamped = anchorTop < headerBottom - 0.5;
-    const atScrollBottom = main
-      ? main.scrollTop + main.clientHeight >= main.scrollHeight - 1
-      : false;
 
     panel.style.top = `${Math.max(anchorTop, headerBottom)}px`;
 
     if (footerWrap) {
       const footerTop = footerWrap.getBoundingClientRect().top;
-      let bottomInset = window.innerHeight - footerTop;
-      if (roundPanelBottom && anchor.parentElement && atScrollBottom) {
-        const bottomGap =
-          parseFloat(getComputedStyle(anchor.parentElement).paddingBottom) || 0;
-        bottomInset += bottomGap;
-      }
-      panel.style.bottom = `${bottomInset}px`;
+      panel.style.bottom = `${window.innerHeight - footerTop}px`;
     }
 
     if (panelSurface) {
@@ -66,10 +56,9 @@ export function StaticInfoPageLayout({
         const article = anchor.parentElement?.querySelector("article");
         const articleBottom = article?.getBoundingClientRect().bottom ?? 0;
         const footerTop = footerWrap?.getBoundingClientRect().top ?? window.innerHeight;
-        const contentPastFooter = articleBottom >= footerTop - 0.5;
-        const showBottomRound = atScrollBottom && !contentPastFooter;
-        panelSurface.classList.toggle("rounded-b-lg", showBottomRound);
-        panelSurface.classList.toggle("rounded-b-none", !showBottomRound);
+        const isBottomClamped = articleBottom >= footerTop - 0.5;
+        panelSurface.classList.toggle("rounded-b-lg", !isBottomClamped);
+        panelSurface.classList.toggle("rounded-b-none", isBottomClamped);
       }
     }
   }, [roundPanelBottom]);
@@ -122,7 +111,7 @@ export function StaticInfoPageLayout({
         </div>
 
         <main ref={mainRef} className="relative z-10 h-full overflow-y-auto px-6 pb-8">
-          <div className={roundPanelBottom ? "pt-[5%] pb-[5%]" : "pt-[5%]"}>
+          <div className="pt-[5%]">
             <div ref={anchorRef} className="h-0 w-full" aria-hidden />
             <article className={`relative mx-auto w-full ${maxWidth} px-6 py-10 sm:px-10 sm:py-12`}>
               {children}
