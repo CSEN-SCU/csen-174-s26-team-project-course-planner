@@ -1058,6 +1058,7 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
                 endMin={slotActionData.endMin}
                 clientX={slotActionData.clientX}
                 clientY={slotActionData.clientY}
+                hasAcademicProgress={fileUploaded}
                 onClose={() => setSlotActionOpen(false)}
                 onBrowse={() => {
                   const d = slotActionData;
