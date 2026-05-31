@@ -151,6 +151,12 @@ export function ChatPanel({
   const hasUserInput = messages.some((m) => m.role === "user");
   const hasSavedTranscript = fileUploaded && !transcriptDiscarded;
   const canDropFiles = !hasUserInput || !hasSavedTranscript;
+  const majorConfirmPending =
+    hasSavedTranscript &&
+    !!userId &&
+    !!(majorDetection || studentMajorId) &&
+    !majorConfirmed;
+  const inputLocked = !!pendingFile || isGenerating || majorConfirmPending;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -326,12 +332,6 @@ export function ChatPanel({
     studentMajorId,
   ]);
 
-  const majorConfirmPending =
-    hasSavedTranscript &&
-    !!userId &&
-    !!(majorDetection || studentMajorId) &&
-    !majorConfirmed;
-
   const send = useCallback(async () => {
     const trimmed = input.trim();
     if (!trimmed || isGenerating || pendingFile || majorConfirmPending) return;
@@ -339,9 +339,9 @@ export function ChatPanel({
     await sendText(trimmed);
   }, [input, sendText, isGenerating, pendingFile, majorConfirmPending]);
 
-  const inputLocked = !!pendingFile || isGenerating || majorConfirmPending;
-
   const toggleVoice = useCallback(async () => {
+    if (inputLocked && !isListening) return;
+
     // Stop if already recording
     if (isListening) {
       mediaRecorderRef.current?.stop();
@@ -399,7 +399,7 @@ export function ChatPanel({
     recorder.start();
     setIsListening(true);
     setVoiceStatus("recording");
-  }, [isListening, sendText, setMessages]);
+  }, [isListening, inputLocked, sendText, setMessages]);
 
   const handleFile = useCallback(
     (f: File) => {
@@ -441,7 +441,10 @@ export function ChatPanel({
     [hasSavedTranscript, processFile, setMessages],
   );
 
-  const onFilePick = () => fileInputRef.current?.click();
+  const onFilePick = useCallback(() => {
+    if (inputLocked) return;
+    fileInputRef.current?.click();
+  }, [inputLocked]);
 
   const onFileChange: ChangeEventHandler<HTMLInputElement> = (e) => {
     const f = e.target.files?.[0];
@@ -656,7 +659,8 @@ export function ChatPanel({
             <button
               type="button"
               onClick={onFilePick}
-              className="rounded-md p-2 text-neutral-500 hover:bg-neutral-100"
+              disabled={inputLocked}
+              className="rounded-md p-2 text-neutral-500 hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
               title={hasSavedTranscript ? "Update Academic Progress" : "Upload Academic Progress"}
             >
               <PaperclipIcon />
@@ -666,12 +670,12 @@ export function ChatPanel({
               onClick={() => void toggleVoice()}
               disabled={inputLocked || voiceStatus === "processing"}
               title={micLabel}
-              className={`rounded-md p-2 transition ${
+              className={`rounded-md p-2 transition disabled:cursor-not-allowed disabled:opacity-50 ${
                 voiceStatus === "recording"
                   ? "bg-[var(--scu-red)] text-white"
                   : voiceStatus === "processing"
                   ? "cursor-wait bg-neutral-100 text-neutral-400"
-                  : "text-neutral-500 hover:bg-neutral-100 hover:text-[var(--scu-text)]"
+                  : "text-neutral-500 hover:bg-neutral-100 hover:text-[var(--scu-text)] disabled:hover:bg-transparent disabled:hover:text-neutral-400"
               }`}
             >
               {voiceStatus === "processing" ? <SpinnerIcon /> : <MicIcon />}
