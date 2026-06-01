@@ -16,6 +16,22 @@ describe("reasonFromRecommended", () => {
     expect(reasonFromRecommended({ reason: "   " })).toBeUndefined();
     expect(reasonFromRecommended({})).toBeUndefined();
   });
+
+  it("truncates very long reasons for safe display", () => {
+    const long = "x".repeat(400);
+    const out = reasonFromRecommended({ reason: long });
+    expect(out).toBeDefined();
+    expect(out!.length).toBeLessThan(400);
+    expect(out!.endsWith("…")).toBe(true);
+  });
+
+  it("passes through literal angle brackets (chat text, not HTML)", () => {
+    const suffix = formatPlanCourseSummarySuffix({
+      reason: '<img src=x onerror="alert(1)">',
+      units: 4,
+    });
+    expect(suffix).toContain("<img");
+  });
 });
 
 describe("instructorRatingFromRecommended", () => {
@@ -49,6 +65,14 @@ describe("instructorRatingFromRecommended", () => {
     });
     expect(fields?.instructor_rating).toBe(4.2);
     expect(fields?.instructor_display).toBe("Weijia Shang");
+  });
+
+  it("ignores non-finite rating numbers", () => {
+    const fields = instructorRatingFromRecommended({
+      professors: [{ name: "X", rating: Number.NaN, difficulty: Infinity }],
+    });
+    expect(fields?.instructor_rating).toBeNull();
+    expect(fields?.instructor_difficulty).toBeNull();
   });
 
   it("prefers chosen section catalog fields when present", () => {
