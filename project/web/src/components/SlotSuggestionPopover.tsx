@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { suggestCoursesForSlot, type CourseSuggestion } from "../api/client";
+import { mergeSlotSuggestionIntoPlanRow } from "../lib/recommendedCourseDisplay";
 import { CALENDAR_START_HOUR } from "../types";
 
 export type SlotSuggestionPopoverProps = {
@@ -89,18 +90,22 @@ export function SlotSuggestionPopover({
   }, [day_index, start_min, end_min]);
 
   const handleAddCourse = (candidate: CourseSuggestion) => {
-    onAddCourse({
-      course: candidate.course,
-      title: candidate.title,
-      units: candidate.units,
-      category: "",
-      reason: candidate.rationale,
-      best_professor: candidate.instructor,
-      meeting_days: candidate.meeting_days,
-      meeting_start_min: candidate.meeting_start_min,
-      meeting_end_min: candidate.meeting_end_min,
-      covers: candidate.covers,
-    });
+    onAddCourse(
+      mergeSlotSuggestionIntoPlanRow(
+        {
+          course: candidate.course,
+          title: candidate.title,
+          units: candidate.units,
+          category: "",
+          reason: candidate.rationale,
+          meeting_days: candidate.meeting_days,
+          meeting_start_min: candidate.meeting_start_min,
+          meeting_end_min: candidate.meeting_end_min,
+          covers: candidate.covers,
+        },
+        candidate,
+      ),
+    );
     onClose();
   };
 

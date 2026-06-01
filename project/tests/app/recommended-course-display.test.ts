@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   formatPlanCourseSummarySuffix,
   instructorRatingFromRecommended,
+  mergeCatalogSectionIntoPlanRow,
+  mergeSlotSuggestionIntoPlanRow,
   reasonFromRecommended,
   recommendedCourseAriaSummary,
 } from "../../web/src/lib/recommendedCourseDisplay";
@@ -122,6 +124,58 @@ describe("recommendedToCalendarBlocks metadata", () => {
     ]);
     expect(tbd).toHaveLength(1);
     expect(tbd[0]?.reason).toBe("Core ethics");
+  });
+});
+
+describe("mergeCatalogSectionIntoPlanRow", () => {
+  it("copies catalog instructor ratings onto a plan row", () => {
+    const row = mergeCatalogSectionIntoPlanRow(
+      { course: "CSEN 174", reason: "Manual" },
+      {
+        course: "CSEN 174",
+        course_section: "CSEN 174-01",
+        section: 1,
+        subject: "CSEN",
+        number: "174",
+        title: "SE",
+        units: 4,
+        status: null,
+        enrolled_capacity: null,
+        instructors: ["Ada Lovelace"],
+        meeting_days: [0],
+        meeting_start_min: 100,
+        meeting_end_min: 200,
+        meeting_pattern: null,
+        location: null,
+        course_tags: [],
+        lab_partner: null,
+        instructor_rating: 4.6,
+        instructor_difficulty: 2.8,
+        instructor_wta_pct: 91,
+        instructor_display: "Ada Lovelace",
+      },
+    );
+    expect(row.instructor_rating).toBe(4.6);
+    expect(instructorRatingFromRecommended(row, null)?.instructor_rating).toBe(4.6);
+  });
+});
+
+describe("mergeSlotSuggestionIntoPlanRow", () => {
+  it("copies slot suggestion ratings onto a plan row", () => {
+    const row = mergeSlotSuggestionIntoPlanRow(
+      { course: "CSEN 10", reason: "Fits slot" },
+      {
+        course: "CSEN 10",
+        title: "Intro",
+        units: 4,
+        instructor: "Bob",
+        rating: 4.1,
+        difficulty: 2.5,
+        would_take_again_pct: 80,
+        rationale: "Fits slot",
+      },
+    );
+    expect(row.instructor_rating).toBe(4.1);
   });
 });
 

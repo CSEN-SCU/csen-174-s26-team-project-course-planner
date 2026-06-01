@@ -1,4 +1,4 @@
-import type { CatalogSection } from "../api/client";
+import type { CatalogSection, CourseSuggestion } from "../api/client";
 import type { ScheduleSection } from "../utils/planCalendar";
 
 export type InstructorRatingFields = Pick<
@@ -138,10 +138,119 @@ function pickProfessorEntry(item: Record<string, unknown>): Record<string, unkno
  * Prefers the displayed section, then plan-v2 ``section`` payload, then
  * ``professors`` / ``best_professor`` from the professor agent.
  */
+export function instructorFieldsFromCatalogSection(
+  section: Pick<
+    CatalogSection,
+    | "instructors"
+    | "instructor_display"
+    | "instructor_rating"
+    | "instructor_difficulty"
+    | "instructor_wta_pct"
+    | "instructor_rating_source"
+  >,
+): InstructorRatingFields {
+  const lead =
+    (typeof section.instructor_display === "string" && section.instructor_display.trim()) ||
+    (Array.isArray(section.instructors) && typeof section.instructors[0] === "string"
+      ? section.instructors[0].trim()
+      : null);
+  return {
+    instructor_rating: finiteRating(section.instructor_rating),
+    instructor_difficulty: finiteRating(section.instructor_difficulty),
+    instructor_wta_pct: finiteRating(section.instructor_wta_pct),
+    instructor_display: lead || null,
+    instructor_rating_source:
+      typeof section.instructor_rating_source === "string"
+        ? section.instructor_rating_source
+        : "rmp",
+  };
+}
+
+/** Merge catalog RMP fields onto a plan row (swap / manual add). */
+export function mergeCatalogSectionIntoPlanRow(
+  row: Record<string, unknown>,
+  section: CatalogSection,
+): Record<string, unknown> {
+  const ratingFields = instructorFieldsFromCatalogSection(section);
+  const profName =
+    (Array.isArray(section.instructors) && typeof section.instructors[0] === "string"
+      ? section.instructors[0].trim()
+      : "") || ratingFields.instructor_display;
+  const professors =
+    profName && (ratingFields.instructor_rating != null || ratingFields.instructor_difficulty != null)
+      ? [
+          {
+            name: profName,
+            rating: ratingFields.instructor_rating,
+            difficulty: ratingFields.instructor_difficulty,
+            would_take_again:
+              ratingFields.instructor_wta_pct != null
+                ? `${Math.round(ratingFields.instructor_wta_pct)}%`
+                : "N/A",
+          },
+        ]
+      : row.professors;
+  return {
+    ...row,
+    ...ratingFields,
+    best_professor: profName || row.best_professor,
+    professors,
+  };
+}
+
+export function mergeSlotSuggestionIntoPlanRow(
+  row: Record<string, unknown>,
+  candidate: CourseSuggestion,
+): Record<string, unknown> {
+  const rating = finiteRating(candidate.rating);
+  const difficulty = finiteRating(candidate.difficulty);
+  const wta = finiteRating(candidate.would_take_again_pct);
+  const name = candidate.instructor?.trim() || null;
+  return {
+    ...row,
+    instructor_rating: rating,
+    instructor_difficulty: difficulty,
+    instructor_wta_pct: wta,
+    instructor_display: name,
+    instructor_rating_source: candidate.source ?? "rmp",
+    best_professor: name ?? row.best_professor,
+    professors:
+      name && rating != null
+        ? [
+            {
+              name,
+              rating,
+              difficulty,
+              would_take_again: wta != null ? `${Math.round(wta)}%` : "N/A",
+            },
+          ]
+        : row.professors,
+  };
+}
+
 export function instructorRatingFromRecommended(
   item: Record<string, unknown>,
   chosenSection?: ScheduleSection | Record<string, unknown> | null,
 ): InstructorRatingFields | null {
+  const topRating = finiteRating(item.instructor_rating);
+  const topDifficulty = finiteRating(item.instructor_difficulty);
+  if (topRating != null || topDifficulty != null) {
+    const display =
+      (typeof item.instructor_display === "string" && item.instructor_display.trim()) ||
+      (typeof item.best_professor === "string" && item.best_professor.trim()) ||
+      null;
+    return {
+      instructor_rating: topRating,
+      instructor_difficulty: topDifficulty,
+      instructor_wta_pct: finiteRating(item.instructor_wta_pct),
+      instructor_display: display,
+      instructor_rating_source:
+        typeof item.instructor_rating_source === "string"
+          ? item.instructor_rating_source
+          : "rmp",
+    };
+  }
+
   if (chosenSection && typeof chosenSection === "object") {
     const fromSec = sectionRatingFields(chosenSection as Record<string, unknown>);
     if (fromSec) return fromSec;

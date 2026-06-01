@@ -28,6 +28,7 @@ import { SaveScheduleModal } from "./components/SaveScheduleModal";
 import { NewPlanWarningModal } from "./components/NewPlanWarningModal";
 import { DeleteScheduleConfirmModal } from "./components/DeleteScheduleConfirmModal";
 import { PlannerColumnHeader } from "./components/PlannerColumnHeader";
+import { mergeCatalogSectionIntoPlanRow } from "./lib/recommendedCourseDisplay";
 
 const WELCOME_TEXT =
   "Upload your Academic Progress Report to get started.";
@@ -643,22 +644,24 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
       const i = swapModalData.index;
       if (!base[i]) return;
       const curr = base[i] as Record<string, unknown>;
-      base[i] = {
-        ...curr,
-        course: section.course,
-        title: section.title ?? curr.title,
-        units: section.units ?? curr.units,
-        best_professor: section.instructors?.[0] ?? curr.best_professor,
-        meeting_days: section.meeting_days,
-        meeting_start_min: section.meeting_start_min,
-        meeting_end_min: section.meeting_end_min,
-        _section: section.section,
-        _slotAnchored: false,
-        _anchoredDayIndex: undefined,
-        _anchoredStartMin: undefined,
-        _anchoredEndMin: undefined,
-        _actualTimeLabel: undefined,
-      };
+      base[i] = mergeCatalogSectionIntoPlanRow(
+        {
+          ...curr,
+          course: section.course,
+          title: section.title ?? curr.title,
+          units: section.units ?? curr.units,
+          meeting_days: section.meeting_days,
+          meeting_start_min: section.meeting_start_min,
+          meeting_end_min: section.meeting_end_min,
+          _section: section.section,
+          _slotAnchored: false,
+          _anchoredDayIndex: undefined,
+          _anchoredStartMin: undefined,
+          _anchoredEndMin: undefined,
+          _actualTimeLabel: undefined,
+        },
+        section,
+      );
       setLocalOverride(base);
       setSwapModalOpen(false);
       setSwapModalData(null);
@@ -701,25 +704,30 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
       const additions = sections
         .filter((s) => !present.has(s.course.trim().toUpperCase()))
         .map((s) => {
-          const row: Record<string, unknown> = {
-            course: s.course,
-            title: s.title ?? undefined,
-            units: s.units ?? undefined,
-            best_professor: s.instructors?.[0] ?? undefined,
-            meeting_days: s.meeting_days,
-            meeting_start_min: s.meeting_start_min,
-            meeting_end_min: s.meeting_end_min,
-            category: "Manually added",
-            reason: "Added manually",
-            _manualAdd: true,
-            _section: s.section,
-          };
+          let row: Record<string, unknown> = mergeCatalogSectionIntoPlanRow(
+            {
+              course: s.course,
+              title: s.title ?? undefined,
+              units: s.units ?? undefined,
+              meeting_days: s.meeting_days,
+              meeting_start_min: s.meeting_start_min,
+              meeting_end_min: s.meeting_end_min,
+              category: "Manually added",
+              reason: "Added manually",
+              _manualAdd: true,
+              _section: s.section,
+            },
+            s,
+          );
           if (anchor) {
-            row._slotAnchored = true;
-            row._anchoredDayIndex = anchor.dayIndex;
-            row._anchoredStartMin = anchor.startMin;
-            row._anchoredEndMin = anchor.endMin;
-            row._actualTimeLabel = formatMeetingLabel(s.meeting_start_min, s.meeting_end_min);
+            row = {
+              ...row,
+              _slotAnchored: true,
+              _anchoredDayIndex: anchor.dayIndex,
+              _anchoredStartMin: anchor.startMin,
+              _anchoredEndMin: anchor.endMin,
+              _actualTimeLabel: formatMeetingLabel(s.meeting_start_min, s.meeting_end_min),
+            };
           }
           return row;
         });
