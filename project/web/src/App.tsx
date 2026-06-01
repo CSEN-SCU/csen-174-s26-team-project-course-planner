@@ -30,13 +30,13 @@ import { DeleteScheduleConfirmModal } from "./components/DeleteScheduleConfirmMo
 import { PlannerColumnHeader } from "./components/PlannerColumnHeader";
 
 const WELCOME_TEXT =
-  "Upload your Academic Progress file or describe your preferences to get started.";
+  "Upload your Academic Progress Report or describe your preferences to get started.";
 const NEW_PLAN_AI_TEXT =
-  "Started a new plan. Upload your Academic Progress file (.xlsx) if you have not yet, then describe your preferences for next quarter.";
+  "Started a new plan. Upload your Academic Progress Report (.xlsx) if you have not yet, then describe your preferences for next quarter.";
 const PROGRESS_LOADED_TEXT =
-  "Your Academic Progress is already loaded. Tell me what kind of schedule you want for next quarter.";
+  "Your Academic Progress Report is already loaded. Tell me what kind of schedule you want for next quarter.";
 const NEW_PLAN_AI_WITH_PROGRESS_TEXT =
-  "Started a new plan. Your Academic Progress is already loaded, so tell me your preferences for next quarter.";
+  "Started a new plan. Your Academic Progress Report is already loaded, so tell me your preferences for next quarter.";
 const NEW_PLAN_MANUAL_TEXT =
   "Started a new plan. Use Browse Courses to search the catalog, or click a time slot on the calendar.";
 const INTRO_SEEN_KEY_PREFIX = "scu_planner_intro_seen:";

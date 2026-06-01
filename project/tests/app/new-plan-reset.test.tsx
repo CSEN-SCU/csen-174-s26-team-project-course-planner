@@ -170,7 +170,7 @@ describe("App.handleNewPlan state reset (RT#4)", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("latest-message")).toHaveTextContent(
-        "Upload your Academic Progress file or describe your preferences to get started."
+        "Upload your Academic Progress Report or describe your preferences to get started."
       );
     });
   });
