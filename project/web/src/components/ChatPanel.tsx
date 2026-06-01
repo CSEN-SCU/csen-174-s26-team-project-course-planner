@@ -13,6 +13,7 @@ import {
   uploadTranscript,
   type MajorDetection,
 } from "../api/client";
+import { formatPlanCourseSummarySuffix } from "../lib/recommendedCourseDisplay";
 import type { ParsedRow } from "../types";
 import { MajorConfirmPanel } from "./MajorConfirmPanel";
 import { PlannerColumnHeader } from "./PlannerColumnHeader";
@@ -78,11 +79,17 @@ function planSummaryText(plan: Record<string, unknown>): string {
   for (const r of recs) {
     const code = norm(r);
     if (isGroupedLab(code)) continue; // emitted beneath its lecture below
-    lines.push(`• ${String(r.course ?? "?")} (${unitsOf(r)} units)`);
+    lines.push(
+      `• ${String(r.course ?? "?")} (${unitsOf(r)} units)${formatPlanCourseSummarySuffix(r)}`,
+    );
     const labCode = `${code}L`;
     if (codeSet.has(labCode)) {
       const lab = recs.find((x) => norm(x) === labCode);
-      if (lab) lines.push(`   ↳ ${String(lab.course)} — lab (${unitsOf(lab)} units)`);
+      if (lab) {
+        lines.push(
+          `   ↳ ${String(lab.course)} — lab (${unitsOf(lab)} units)${formatPlanCourseSummarySuffix(lab)}`,
+        );
+      }
     }
   }
 

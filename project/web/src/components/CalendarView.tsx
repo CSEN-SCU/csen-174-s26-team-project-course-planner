@@ -5,6 +5,8 @@ import {
   CALENDAR_START_HOUR,
   WEEKDAY_LABELS,
 } from "../types";
+import { shouldShowInstructorRating } from "../lib/recommendedCourseDisplay";
+import { InstructorRatingLine } from "./InstructorRatingLine";
 import { recommendedToCalendarBlocks, type TbdCourse } from "../utils/planCalendar";
 
 const SLOT_MINUTES = 30;
@@ -136,16 +138,32 @@ export function CalendarView({
                   const topPct = (c.startOffsetMin / CALENDAR_SPAN_MINUTES) * 100;
                   const heightPct = ((c.endOffsetMin - c.startOffsetMin) / CALENDAR_SPAN_MINUTES) * 100;
                   const idx = extractIndex(c.id);
+                  const blockTitle = [c.reason, c.professor].filter(Boolean).join(" · ");
+                  const showRating = shouldShowInstructorRating(c.instructorRating ?? null);
                   return (
                     <div
                       key={c.id}
                       className={`absolute left-1 right-1 z-10 overflow-hidden rounded-md bg-[var(--scu-red)] px-2 py-1 text-left text-white shadow-md ring-1 ring-black/10 ${onCourseClick ? "cursor-pointer" : ""}`}
                       style={{ top: `${topPct}%`, height: `${heightPct}%`, minHeight: 36 }}
+                      title={blockTitle || undefined}
                       onClick={(e) => onCourseClick?.(idx, c.code, e.clientX, e.clientY)}
                     >
                       <p className="text-xs font-bold leading-tight pr-4">{c.code}</p>
                       {c.title && <p className="truncate text-[10px] leading-tight opacity-90 font-medium">{c.title}</p>}
                       <p className="truncate text-[10px] leading-tight opacity-80">{c.professor}</p>
+                      {showRating && c.instructorRating && (
+                        <InstructorRatingLine
+                          section={c.instructorRating}
+                          showInstructor={false}
+                          variant="onDark"
+                          className="!text-[9px] leading-tight"
+                        />
+                      )}
+                      {c.reason && (
+                        <p className="line-clamp-2 text-[9px] leading-snug text-white/75" title={c.reason}>
+                          {c.reason}
+                        </p>
+                      )}
                       {c.slotAnchored && (
                         <p className="text-[9px] font-medium leading-tight opacity-95">Added for this time slot</p>
                       )}
@@ -194,6 +212,16 @@ export function CalendarView({
                       <p className="font-semibold text-[var(--scu-text)] text-xs">{c.code}</p>
                       {c.title && <p className="text-[10px] text-neutral-500">{c.title}</p>}
                       <p className="text-[10px] text-neutral-400">{c.professor}</p>
+                      {shouldShowInstructorRating(c.instructorRating ?? null) && c.instructorRating && (
+                        <InstructorRatingLine
+                          section={c.instructorRating}
+                          showInstructor={false}
+                          className="mt-0.5"
+                        />
+                      )}
+                      {c.reason && (
+                        <p className="mt-1 text-[10px] leading-snug text-neutral-600">{c.reason}</p>
+                      )}
                       <p className="mt-1 text-[10px] text-amber-600 italic">Time not yet posted</p>
                     </div>
                     {(onCourseClick || onRemoveCourse) && (

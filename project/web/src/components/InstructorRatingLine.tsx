@@ -9,10 +9,10 @@ type RatingFields = Pick<
   | "instructor_rating_source"
 >;
 
-function StarIcon() {
+function StarIcon({ onDark = false }: { onDark?: boolean }) {
   return (
     <svg
-      className="h-3 w-3 shrink-0 text-amber-500"
+      className={`h-3 w-3 shrink-0 ${onDark ? "text-amber-200" : "text-amber-500"}`}
       viewBox="0 0 20 20"
       fill="currentColor"
       aria-hidden
@@ -35,19 +35,27 @@ export function InstructorRatingLine({
   section,
   showInstructor = true,
   className = "",
+  variant = "default",
 }: {
   section: RatingFields;
   showInstructor?: boolean;
   className?: string;
+  /** ``onDark`` for calendar course blocks (bronco-red background). */
+  variant?: "default" | "onDark";
 }) {
   const rating = section.instructor_rating;
   const difficulty = section.instructor_difficulty;
   const wta = section.instructor_wta_pct;
   const name = section.instructor_display;
+  const onDark = variant === "onDark";
+  const muted = onDark ? "text-white/65" : "text-neutral-400";
+  const body = onDark ? "text-white/85" : "text-neutral-600";
+  const strong = onDark ? "text-white" : "text-neutral-800";
+  const dot = onDark ? "text-white/40" : "text-neutral-300";
 
   if (rating == null && difficulty == null) {
     return (
-      <p className={`text-[11px] text-neutral-400 ${className}`.trim()}>
+      <p className={`text-[11px] ${muted} ${className}`.trim()}>
         No Rate My Professor rating
         {showInstructor && name ? ` · ${name}` : ""}
       </p>
@@ -56,41 +64,41 @@ export function InstructorRatingLine({
 
   return (
     <p
-      className={`flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-neutral-600 ${className}`.trim()}
+      className={`flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] ${body} ${className}`.trim()}
       title="Ratings from Rate My Professor"
     >
       {rating != null && (
-        <span className="inline-flex items-center gap-0.5 font-medium text-neutral-800">
-          <StarIcon />
+        <span className={`inline-flex items-center gap-0.5 font-medium ${strong}`}>
+          <StarIcon onDark={onDark} />
           <span>{rating.toFixed(1)}</span>
-          <span className="font-normal text-neutral-500">quality</span>
+          <span className={`font-normal ${muted}`}>quality</span>
         </span>
       )}
       {rating != null && difficulty != null && (
-        <span className="text-neutral-300" aria-hidden>
+        <span className={dot} aria-hidden>
           ·
         </span>
       )}
       {difficulty != null && (
         <span>
-          <span className="font-medium text-neutral-800">{difficulty.toFixed(1)}</span>
-          <span className="text-neutral-500"> difficulty</span>
+          <span className={`font-medium ${strong}`}>{difficulty.toFixed(1)}</span>
+          <span className={muted}> difficulty</span>
         </span>
       )}
       {wta != null && (
         <>
-          <span className="text-neutral-300" aria-hidden>
+          <span className={dot} aria-hidden>
             ·
           </span>
-          <span className="text-neutral-500">{Math.round(wta)}% would take again</span>
+          <span className={muted}>{Math.round(wta)}% would take again</span>
         </>
       )}
       {showInstructor && name && (
         <>
-          <span className="text-neutral-300" aria-hidden>
+          <span className={dot} aria-hidden>
             ·
           </span>
-          <span className="truncate text-neutral-500" title={name}>
+          <span className={`truncate ${muted}`} title={name}>
             {name}
           </span>
         </>

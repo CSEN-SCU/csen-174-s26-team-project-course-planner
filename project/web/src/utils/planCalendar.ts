@@ -1,3 +1,7 @@
+import {
+  instructorRatingFromRecommended,
+  reasonFromRecommended,
+} from "../lib/recommendedCourseDisplay";
 import type { CourseBlock, WeekdayIndex } from "../types";
 import { CALENDAR_SPAN_MINUTES } from "../types";
 
@@ -11,7 +15,10 @@ function hashStr(s: string): number {
   return Math.abs(h);
 }
 
-function professorLabel(item: Record<string, unknown>): string {
+function professorLabel(
+  item: Record<string, unknown>,
+  chosenSection?: ScheduleSection | null,
+): string {
   const bp = item.best_professor;
   if (typeof bp === "string" && bp.trim()) return bp.trim();
   const si = item.scheduled_instructors;
@@ -23,6 +30,10 @@ function professorLabel(item: Record<string, unknown>): string {
     const n = (profs[0] as { name?: string }).name;
     if (typeof n === "string" && n.trim()) return n.trim();
   }
+  const fromSection = chosenSection?.instructors?.[0];
+  if (typeof fromSection === "string" && fromSection.trim()) {
+    return fromSection.trim();
+  }
   return "TBA";
 }
 
@@ -32,6 +43,11 @@ export type ScheduleSection = {
   meeting_start_min: number | null;
   meeting_end_min: number | null;
   instructors: string[];
+  instructor_display?: string | null;
+  instructor_rating?: number | null;
+  instructor_difficulty?: number | null;
+  instructor_wta_pct?: number | null;
+  instructor_rating_source?: string | null;
 };
 
 export type TbdCourse = {
@@ -40,6 +56,8 @@ export type TbdCourse = {
   title?: string;
   professor: string;
   index: number;
+  reason?: string;
+  instructorRating?: CourseBlock["instructorRating"];
   /** Present when the course has no section with a posted time. */
   allSections?: ScheduleSection[];
 };
@@ -102,6 +120,11 @@ function resolveBackendSection(
   return null;
 }
 
+type BlockMeta = {
+  reason?: string;
+  instructorRating?: CourseBlock["instructorRating"];
+};
+
 function placeSectionOnCalendar(
   sec: ScheduleSection,
   idBase: string,
@@ -110,6 +133,7 @@ function placeSectionOnCalendar(
   professor: string,
   claim: (day: number, start: number, end: number) => void,
   blocks: CourseBlock[],
+  meta: BlockMeta = {},
 ) {
   const start = sec.meeting_start_min as number;
   const end = sec.meeting_end_min as number;
@@ -123,6 +147,8 @@ function placeSectionOnCalendar(
       code,
       title,
       professor,
+      reason: meta.reason,
+      instructorRating: meta.instructorRating,
     });
   });
 }
@@ -178,7 +204,17 @@ export function recommendedToCalendarBlocks(
       typeof item.title === "string" && item.title.trim()
         ? item.title.trim()
         : undefined;
-    const professor = professorLabel(item);
+    const reason = reasonFromRecommended(item);
+    const allSectionsEarly = Array.isArray(item.all_sections)
+      ? (item.all_sections as ScheduleSection[])
+      : undefined;
+
+    const blockMetaForChosen = (chosen: ScheduleSection | null): BlockMeta => ({
+      reason,
+      instructorRating: instructorRatingFromRecommended(item, chosen),
+    });
+
+    let professor = professorLabel(item);
 
     // Manually placed course (user clicked a slot)
     if (
@@ -199,22 +235,41 @@ export function recommendedToCalendarBlocks(
         code,
         title,
         professor,
+        reason,
+        instructorRating: instructorRatingFromRecommended(item, null),
       });
       return;
     }
 
-    const allSections = Array.isArray(item.all_sections)
-      ? (item.all_sections as ScheduleSection[])
-      : undefined;
+    const allSections = allSectionsEarly;
 
     // --- Path A: all_sections data present ---
     if (allSections && allSections.length > 0) {
       const backendChosen = resolveBackendSection(item, allSections);
       const chosen = backendChosen ?? pickBestSection(allSections);
       if (chosen) {
-        placeSectionOnCalendar(chosen, idBase, code, title, professor, claim, blocks);
+        professor = professorLabel(item, chosen);
+        placeSectionOnCalendar(
+          chosen,
+          idBase,
+          code,
+          title,
+          professor,
+          claim,
+          blocks,
+          blockMetaForChosen(chosen),
+        );
       } else {
-        tbd.push({ id: idBase, code, title, professor, index: i, allSections });
+        tbd.push({
+          id: idBase,
+          code,
+          title,
+          professor,
+          index: i,
+          reason,
+          instructorRating: instructorRatingFromRecommended(item, null),
+          allSections,
+        });
       }
       return;
     }
@@ -239,6 +294,8 @@ export function recommendedToCalendarBlocks(
           code,
           title,
           professor,
+          reason,
+          instructorRating: instructorRatingFromRecommended(item, null),
           slotAnchored: true,
           actualTimeLabel:
             typeof item._actualTimeLabel === "string" ? item._actualTimeLabel : undefined,
@@ -268,13 +325,23 @@ export function recommendedToCalendarBlocks(
           code,
           title,
           professor,
+          reason,
+          instructorRating: instructorRatingFromRecommended(item, null),
         });
       });
       return;
     }
 
     // --- Path C: no time data at all — TBD ---
-    tbd.push({ id: idBase, code, title, professor, index: i });
+    tbd.push({
+      id: idBase,
+      code,
+      title,
+      professor,
+      index: i,
+      reason,
+      instructorRating: instructorRatingFromRecommended(item, null),
+    });
 
     void hashStr; // suppress dead-code lint (used in removed hash-based path)
   });

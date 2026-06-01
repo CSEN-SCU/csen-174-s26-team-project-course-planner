@@ -10,6 +10,15 @@ export interface ChatSession {
   dateLabel: string;
 }
 
+/** Instructor RMP fields attached from a recommended plan row (see planCalendar). */
+export type CourseBlockInstructorRating = {
+  instructor_rating?: number | null;
+  instructor_difficulty?: number | null;
+  instructor_wta_pct?: number | null;
+  instructor_display?: string | null;
+  instructor_rating_source?: string | null;
+};
+
 export interface CourseBlock {
   id: string;
   dayIndex: WeekdayIndex;
@@ -20,6 +29,10 @@ export interface CourseBlock {
   code: string;
   title?: string;
   professor: string;
+  /** Planner explanation (from ``recommended[].reason``). */
+  reason?: string;
+  /** RMP / professor-agent rating for the displayed section. */
+  instructorRating?: CourseBlockInstructorRating | null;
   /** Shown when the block was placed from a calendar slot pick */
   slotAnchored?: boolean;
   /** Real catalog meeting time when slotAnchored */

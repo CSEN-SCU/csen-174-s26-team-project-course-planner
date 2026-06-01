@@ -34,6 +34,7 @@ describe("recommendedToCalendarBlocks backend section choice", () => {
     expect(blocks.length).toBeGreaterThan(0);
     expect(blocks.every((b) => b.startOffsetMin === 300)).toBe(true);
     expect(blocks.some((b) => b.startOffsetMin === 150)).toBe(false);
+    expect(blocks[0]?.professor).toBe("Late");
   });
 
   it("reads section number from section.section_number", () => {
