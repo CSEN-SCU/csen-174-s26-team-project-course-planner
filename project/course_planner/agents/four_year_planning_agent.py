@@ -280,6 +280,7 @@ def run_four_year_plan_agent(
     # without requiring the full runtime dependency set (openpyxl, google-genai, etc.).
     from agents.gemini_client import get_genai_client
     from agents.planning_agent import (
+        ENGLISH_ONLY_USER_OUTPUT_RULE,
         _normalize_open_req_text,
         _resolve_item_codes,
         _resolve_open_requirement,
@@ -450,8 +451,8 @@ RULES:
 10. Use only the term names from the NEXT TERMS list above.
 11. graduation_term = the last term in your plan.
 12. total_remaining_units must be the sum of `units` across all courses you output.
-13. advice: 1-3 sentence overview of the plan strategy (max 400 chars).
-14. reason per course: ≤60 chars, explain why it belongs in that quarter.
+13. advice: 1-3 sentence overview of the plan strategy in English (max 400 chars).
+14. reason per course: ≤60 chars in English, explain why it belongs in that quarter.
 15. category field MUST identify which requirement the course satisfies.
     For courses pulled from the open-Core candidate list, use the SPECIFIC
     requirement name, e.g.:
@@ -472,7 +473,8 @@ Output JSON matching the schema exactly.
         response_schema=FOUR_YEAR_PLAN_SCHEMA,
         system_instruction=(
             "You are an SCU graduation planner. "
-            "Output a complete multi-quarter plan covering ALL remaining requirements. "
+            + ENGLISH_ONLY_USER_OUTPUT_RULE
+            + "Output a complete multi-quarter plan covering ALL remaining requirements. "
             "Never omit a course. Never exceed 20 units per quarter. "
             "Output only valid JSON matching the schema — no extra text."
         ),

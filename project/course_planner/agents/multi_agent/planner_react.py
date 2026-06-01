@@ -28,7 +28,7 @@ from typing import Any
 from google.genai import types
 
 from agents.gemini_client import get_genai_client
-from agents.planning_agent import UNTRUSTED_INPUT_SYSTEM_RULES
+from agents.planning_agent import ENGLISH_ONLY_USER_OUTPUT_RULE, UNTRUSTED_INPUT_SYSTEM_RULES
 from agents.multi_agent.tools import (
     tool_get_lab_partner,
     tool_get_open_req_candidates,
@@ -104,6 +104,7 @@ _TOOL_DISPATCH = {
 _SYSTEM = (
     "You are the Planner agent in a multi-agent course planner. "
     + UNTRUSTED_INPUT_SYSTEM_RULES
+    + ENGLISH_ONLY_USER_OUTPUT_RULE
     + "Before you finalize, USE THE TOOLS to (a) confirm each course you pick is in the "
     "next-term schedule, (b) resolve open Core/GE requirements to real "
     "courses, and (c) attach the lab co-requisite for any STEM lecture. "

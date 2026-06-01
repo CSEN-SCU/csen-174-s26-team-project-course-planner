@@ -256,6 +256,7 @@ def _llm_compaction_summary(batch: list[dict[str, Any]]) -> Optional[str]:
     """Return a short merged paragraph when Gemini is available; else None."""
     try:
         from agents.gemini_client import get_genai_client
+        from agents.planning_agent import ENGLISH_ONLY_USER_OUTPUT_RULE
 
         client = get_genai_client(purpose="memory compaction")
     except Exception:
@@ -274,7 +275,17 @@ def _llm_compaction_summary(batch: list[dict[str, Any]]) -> Optional[str]:
         f"{bullet}"
     )
     try:
-        response = client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
+        from google.genai import types
+
+        config = types.GenerateContentConfig(
+            system_instruction=(
+                "You merge course-planner memory notes for one student.\n"
+                + ENGLISH_ONLY_USER_OUTPUT_RULE
+            ),
+        )
+        response = client.models.generate_content(
+            model=GEMINI_MODEL, contents=prompt, config=config
+        )
         text = (getattr(response, "text", None) or "").strip()
         if not text:
             return None

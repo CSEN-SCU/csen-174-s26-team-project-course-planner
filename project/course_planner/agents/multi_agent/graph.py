@@ -263,6 +263,8 @@ def planner_node(state: PlanningState) -> dict[str, Any]:
         return {"candidate_plan": recs}
 
     # Single-shot fallback.
+    from agents.planning_agent import ENGLISH_ONLY_USER_OUTPUT_RULE
+
     client = get_genai_client(purpose="multi-agent planner")
     model = os.environ.get("GEMINI_MODEL", DEFAULT_MODEL)
     from google.genai import types
@@ -273,6 +275,11 @@ def planner_node(state: PlanningState) -> dict[str, Any]:
         config=types.GenerateContentConfig(
             max_output_tokens=8192,
             response_mime_type="application/json",
+            system_instruction=(
+                "You are an SCU course planning assistant.\n"
+                + ENGLISH_ONLY_USER_OUTPUT_RULE
+                + "Output only valid JSON matching the requested plan shape."
+            ),
         ),
     )
     text = (resp.text or "").strip()

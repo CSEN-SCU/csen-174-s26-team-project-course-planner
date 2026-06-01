@@ -40,6 +40,7 @@ from google.genai import types
 from agents.gemini_client import get_genai_client
 from agents.planning_agent import (
     DEFAULT_MODEL,
+    ENGLISH_ONLY_USER_OUTPUT_RULE,
     PLANNING_SCHEMA,
     UNTRUSTED_INPUT_SYSTEM_RULES,
     WEEKDAY_CODE_LEGEND,
@@ -158,6 +159,7 @@ def _selection_system_instruction() -> str:
         "and their major's bulletin requirements, YOU decide which courses "
         "the student should take next term and explain why.\n"
         + UNTRUSTED_INPUT_SYSTEM_RULES
+        + ENGLISH_ONLY_USER_OUTPUT_RULE
         + "HARD RULES you must follow:\n"
         "- Recommend ONLY courses that appear in the offered-courses lists in "
         "the prompt. Copy each code exactly (e.g. CSEN, not CSEE). Never "
