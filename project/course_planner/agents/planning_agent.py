@@ -2106,7 +2106,8 @@ def _slot_suggestion_empty_message(
     labels = ", ".join(open_req_key_to_label.values())[:120]
     if has_educational_enrichment_gap(missing_details):
         return (
-            "No Core courses at this time slot fill your remaining requirements."
+            "No applicable courses were found for this time slot. "
+            "Please choose another time slot and try again."
         )
     if labels:
         return (

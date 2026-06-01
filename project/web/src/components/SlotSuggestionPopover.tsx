@@ -12,6 +12,7 @@ export type SlotSuggestionPopoverProps = {
   /** Requirement labels already satisfied by slot-added courses (e.g. Social Justice). */
   satisfied_covers?: string[];
   onAddCourse: (course: Record<string, unknown>) => void;
+  onBrowseAllCourses: () => void;
   onClose: () => void;
   /** Viewport coordinates of the click that opened the popover */
   client_x: number;
@@ -38,6 +39,7 @@ export function SlotSuggestionPopover({
   excluded_courses,
   satisfied_covers = [],
   onAddCourse,
+  onBrowseAllCourses,
   onClose,
   client_x,
   client_y,
@@ -45,10 +47,7 @@ export function SlotSuggestionPopover({
   const [candidates, setCandidates] = useState<CourseSuggestion[]>([]);
   const [emptyMessage, setEmptyMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Codes shown so-far (excluded on Show-more requests)
-  const [shownCodes, setShownCodes] = useState<string[]>(excluded_courses);
 
   const popoverRef = useRef<HTMLDivElement>(null);
   const { top, left } = clampPosition(client_x, client_y);
@@ -79,7 +78,6 @@ export function SlotSuggestionPopover({
       .then((res) => {
         setCandidates(res.candidates);
         setEmptyMessage(res.message ?? null);
-        setShownCodes([...excluded_courses, ...res.candidates.map((c) => c.course)]);
       })
       .catch((err) => {
         setError(err instanceof Error ? err.message : "Failed to load suggestions");
@@ -104,24 +102,6 @@ export function SlotSuggestionPopover({
       covers: candidate.covers,
     });
     onClose();
-  };
-
-  const handleShowMore = () => {
-    setLoadingMore(true);
-    suggestCoursesForSlot({
-      day_index,
-      start_min,
-      end_min,
-      missing_details,
-      exclude_codes: shownCodes,
-    })
-      .then((res) => {
-        if (res.candidates.length === 0) return;
-        setCandidates((prev) => [...prev, ...res.candidates]);
-        setShownCodes((prev) => [...prev, ...res.candidates.map((c) => c.course)]);
-      })
-      .catch(() => {/* silent — best effort */})
-      .finally(() => setLoadingMore(false));
   };
 
   const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -196,14 +176,14 @@ export function SlotSuggestionPopover({
             />
           ))}
 
-        {/* View all courses at this slot */}
+        {/* Browse full catalog filtered to this slot */}
         {!loading && !error && hasAny && (
           <button
-            onClick={handleShowMore}
-            disabled={loadingMore}
-            className="w-full py-2 text-xs font-semibold text-[var(--scu-red)] hover:bg-red-50 rounded-lg transition disabled:opacity-50"
+            type="button"
+            onClick={onBrowseAllCourses}
+            className="w-full py-2 text-xs font-semibold text-[var(--scu-red)] hover:bg-red-50 rounded-lg transition"
           >
-            {loadingMore ? "Loading…" : "View All Courses"}
+            View All Courses
           </button>
         )}
       </div>

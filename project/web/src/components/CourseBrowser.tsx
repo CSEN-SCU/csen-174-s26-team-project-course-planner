@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   searchCatalogSections,
   type CatalogMeetingTimeSlot,
@@ -91,6 +91,7 @@ export function CourseBrowser({
     meeting_times: CatalogMeetingTimeSlot[];
   } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [hasFetched, setHasFetched] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [slotFilterActive, setSlotFilterActive] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -139,17 +140,19 @@ export function CourseBrowser({
       setSections([]);
       setTotal(0);
     } finally {
+      setHasFetched(true);
       setLoading(false);
     }
   }, [open, query, subjects, days, meetingTimes, tags, tagsMatchAll, slotParams, sort]);
 
   useEffect(() => {
     if (!open) return;
+    setLoading(true);
     const t = window.setTimeout(() => void fetchSections(), 300);
     return () => window.clearTimeout(t);
   }, [open, fetchSections]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (open && !wasOpenRef.current) {
       setQuery("");
       setSubjects([]);
@@ -164,6 +167,9 @@ export function CourseBrowser({
       setOpenTags(true);
       setOpenSubjects(true);
       setSort("default");
+      setHasFetched(false);
+      setLoading(true);
+      setError(null);
     }
     wasOpenRef.current = open;
   }, [open, context.mode]);
@@ -198,6 +204,9 @@ export function CourseBrowser({
   const meetingTimeOptions =
     facets?.meeting_times?.length ? facets.meeting_times : DEFAULT_TIME_WINDOWS;
 
+  const showLoading = loading || !hasFetched;
+  const showEmpty = hasFetched && !loading && !error && sections.length === 0;
+
   const handleAdd = (sec: CatalogSection) => {
     const additions: CatalogSection[] = [sec];
     if (sec.lab_partner) {
@@ -223,15 +232,20 @@ export function CourseBrowser({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-2 sm:p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="course-browser-title"
+      role="presentation"
+      onClick={onClose}
     >
-      <div className="flex h-[min(92vh,820px)] w-full max-w-6xl flex-col overflow-hidden rounded-lg bg-white shadow-xl ring-1 ring-neutral-200">
+      <div
+        className="flex h-[min(92vh,820px)] w-full max-w-6xl flex-col overflow-hidden rounded-lg bg-white shadow-xl ring-1 ring-neutral-200"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="course-browser-title"
+        onClick={(e) => e.stopPropagation()}
+      >
         <header className="flex shrink-0 items-start justify-between gap-3 border-b border-neutral-200 px-5 py-3">
           <div>
             <h2 id="course-browser-title" className="text-lg font-semibold text-[var(--scu-text)]">
-              Browse courses
+              Browse Courses
             </h2>
             {context.mode === "slot" && slotFilterActive && (
               <p className="mt-1 text-sm text-[var(--scu-red)]">
@@ -449,7 +463,7 @@ export function CourseBrowser({
               </div>
             </div>
             <div className="relative min-h-0 flex-1 overflow-auto">
-              {loading && (
+              {showLoading && (
                 <div
                   className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-white"
                   role="status"
@@ -464,10 +478,10 @@ export function CourseBrowser({
                 </div>
               )}
               {error && <p className="p-4 text-sm text-red-600">{error}</p>}
-              {!loading && !error && sections.length === 0 && (
+              {showEmpty && (
                 <p className="p-4 text-sm text-neutral-400">No matching sections. Try clearing filters.</p>
               )}
-              {!loading && !error && sections.length > 0 && (
+              {!showLoading && !error && sections.length > 0 && (
                 <ul className="divide-y divide-neutral-100">
                   {sections.map((sec) => {
                     const rowId = `${sec.course}-${sec.section}`;
@@ -573,7 +587,9 @@ export function CourseBrowser({
               )}
             </div>
             <footer className="shrink-0 border-t border-neutral-100 px-4 py-2 text-xs text-neutral-500">
-              Showing {sections.length} of {total} sections
+              {showLoading
+                ? "Loading sections…"
+                : `Showing ${sections.length} of ${total} sections`}
             </footer>
           </div>
         </div>

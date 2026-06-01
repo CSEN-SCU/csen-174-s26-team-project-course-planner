@@ -18,7 +18,7 @@ export function SignOutLoadingPage() {
         className="h-8 w-8 animate-spin rounded-full border-4 border-[var(--scu-red)] border-t-transparent"
         aria-hidden
       />
-      <p className="text-sm text-neutral-500">Signing out…</p>
+      <p className="text-sm text-neutral-500">Signing Out…</p>
     </div>
   );
 }

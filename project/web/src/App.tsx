@@ -38,7 +38,7 @@ const PROGRESS_LOADED_TEXT =
 const NEW_PLAN_AI_WITH_PROGRESS_TEXT =
   "Started a new plan. Your Academic Progress is already loaded, so tell me your preferences for next quarter.";
 const NEW_PLAN_MANUAL_TEXT =
-  "Started a new plan. Use Browse courses to search the catalog, or click a time slot on the calendar.";
+  "Started a new plan. Use Browse Courses to search the catalog, or click a time slot on the calendar.";
 const INTRO_SEEN_KEY_PREFIX = "scu_planner_intro_seen:";
 
 export type AppProps = {
@@ -1020,7 +1020,7 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
                   onClick={() => openCourseBrowser({ mode: "open" })}
                   className="flex items-center gap-1 rounded-md border border-[var(--scu-red)] px-2.5 py-1 text-xs font-semibold text-[var(--scu-red)] transition hover:bg-red-50"
                 >
-                  Browse courses
+                  Browse Courses
                 </button>
               </div>
             ) : (
@@ -1090,6 +1090,17 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
                 excluded_courses={effectiveCodes}
                 satisfied_covers={satisfiedCoverLabels}
                 onAddCourse={handleAddFromSlotSuggestion}
+                onBrowseAllCourses={() => {
+                  const d = slotPopoverData;
+                  setSlotPopoverOpen(false);
+                  openCourseBrowser({
+                    mode: "slot",
+                    dayIndex: d.dayIndex,
+                    startMin: d.startMin,
+                    endMin: d.endMin,
+                    label: slotTimeLabel(d.dayIndex, d.startMin, d.endMin),
+                  });
+                }}
                 onClose={() => setSlotPopoverOpen(false)}
                 client_x={slotPopoverData.clientX}
                 client_y={slotPopoverData.clientY}

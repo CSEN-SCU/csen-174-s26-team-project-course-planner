@@ -27,7 +27,7 @@ vi.mock("../../web/src/components/ChatPanel", () => ({
     <div data-testid="chat-panel">
       {onSignOut ? (
         <button type="button" onClick={onSignOut}>
-          Sign out
+          Sign Out
         </button>
       ) : null}
     </div>
