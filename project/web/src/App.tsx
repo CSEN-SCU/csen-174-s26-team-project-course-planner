@@ -30,7 +30,7 @@ import { DeleteScheduleConfirmModal } from "./components/DeleteScheduleConfirmMo
 import { PlannerColumnHeader } from "./components/PlannerColumnHeader";
 
 const WELCOME_TEXT =
-  "Upload your Academic Progress Report or describe your preferences to get started.";
+  "Upload your Academic Progress Report to get started.";
 const NEW_PLAN_AI_TEXT =
   "Started a new plan. Upload your Academic Progress Report (.xlsx) if you have not yet, then describe your preferences for next quarter.";
 const PROGRESS_LOADED_TEXT =

@@ -170,7 +170,7 @@ describe("App.handleNewPlan state reset (RT#4)", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("latest-message")).toHaveTextContent(
-        "Upload your Academic Progress Report or describe your preferences to get started."
+        "Upload your Academic Progress Report to get started.",
       );
     });
   });
@@ -191,7 +191,7 @@ describe("App.handleNewPlan state reset (RT#4)", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("latest-message")).toHaveTextContent(
-        "Started a new plan. Upload your Academic Progress file (.xlsx) if you have not yet, then describe your preferences for next quarter.",
+        "Started a new plan. Upload your Academic Progress Report (.xlsx) if you have not yet, then describe your preferences for next quarter.",
       );
     });
   });
@@ -264,7 +264,7 @@ describe("App.handleNewPlan state reset (RT#4)", () => {
     await waitFor(() => {
       expect(screen.getByTestId("file-uploaded")).toHaveTextContent("true");
       expect(screen.getByTestId("latest-message")).toHaveTextContent(
-        "Your Academic Progress is already loaded. Tell me what kind of schedule you want for next quarter.",
+        "Your Academic Progress Report is already loaded. Tell me what kind of schedule you want for next quarter.",
       );
     });
   });
@@ -448,7 +448,7 @@ describe("App.handleNewPlan state reset (RT#4)", () => {
     await waitFor(() => {
       expect(screen.getByTestId("messages-count")).toHaveTextContent("1");
       expect(screen.getByTestId("latest-message")).toHaveTextContent(
-        "Started a new plan. Upload your Academic Progress file (.xlsx) if you have not yet, then describe your preferences for next quarter.",
+        "Started a new plan. Upload your Academic Progress Report (.xlsx) if you have not yet, then describe your preferences for next quarter.",
       );
     });
   });
