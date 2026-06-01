@@ -135,7 +135,7 @@ def test_default_plan_ignores_major_kwarg_for_engine_without_support(client, mon
     """Confirmed major should not crash older constrained planner signatures."""
     monkeypatch.setattr(plan_router, "_MULTI_AGENT_DEFAULT", False)
     monkeypatch.setattr(plan_router, "_PLAN_ENGINE", "constrained_v2")
-    monkeypatch.setattr(plan_router, "run_professor_agent", lambda recs: recs)
+    monkeypatch.setattr(plan_router, "run_professor_agent", lambda recs, **kw: recs)
 
     def _old_constrained_planner(
         missing_details,

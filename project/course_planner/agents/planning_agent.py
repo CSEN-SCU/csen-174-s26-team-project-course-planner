@@ -257,6 +257,8 @@ _ALLOWED_REC_ITEM_KEYS = {
     "meeting_days",
     "meeting_start_min",
     "meeting_end_min",
+    # Section number chosen by Python (v2 / llm_select); safe — never from LLM.
+    "_chosen_section",
 }
 
 
