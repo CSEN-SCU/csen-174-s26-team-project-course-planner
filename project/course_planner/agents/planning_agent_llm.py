@@ -1,28 +1,17 @@
 """LLM-driven planner (engine: ``llm_select``).
 
-The third planning engine, alongside :func:`run_planning_agent` (legacy)
-and :func:`run_constrained_planner` (constrained_v2). Here the **Gemini
-model makes the actual course-selection decision**: it is handed
+This is the production course-selection engine. The **Gemini model makes the
+actual course-selection decision**: it is handed
 
   1. the student's remaining requirements (gap analysis from the Academic
      Progress report),
   2. the full list of courses actually offered next quarter, and
   3. the major's bulletin requirements markdown (``data/majors/<id>.md``),
 
-and asked to choose which courses to take next term and explain *why*.
-The model returns the chosen courses + reasons, which the website renders
-in the middle course view exactly like the other engines.
-
-How this differs from the existing two engines:
-
-  - **legacy** lets the LLM pick courses but only surfaces the
-    requirement-matched offered courses in its prompt;
-  - **constrained_v2** never lets the LLM emit course codes at all — a
-    deterministic Python solver decides and the LLM only writes prose;
-  - **llm_select** (this engine) deliberately gives the model the *whole*
-    offered catalog plus the bulletin and lets it make the selection,
-    then Python applies the same hard-rule post-processing so the model's
-    freedom can't violate SCU domain rules or hallucinate codes:
+and asked to choose which courses to take next term and explain *why*. The
+model returns the chosen courses + reasons, then Python applies hard-rule
+post-processing so the model's freedom can't violate SCU domain rules or
+hallucinate codes:
       * R1 lab/lecture pairing (``_pair_lab_corequirements``);
       * hallucinated / not-offered codes are dropped
         (``_filter_to_schedule``);
@@ -34,9 +23,8 @@ How this differs from the existing two engines:
       * course titles and units are always taken from the schedule xlsx,
         never trusted from the LLM (AGENTS.md "Course titles" rule).
 
-Selected with ``PLAN_ENGINE=llm`` (router) or ``--engine llm`` (evals).
-Public entry point: :func:`run_llm_planner` — identical I/O contract to
-``run_planning_agent`` so the FastAPI router can swap it behind the flag.
+Eval with ``python -m evals.run_eval --engine llm``.
+Public entry point: :func:`run_llm_planner`.
 """
 
 from __future__ import annotations
@@ -287,9 +275,8 @@ def run_llm_planner(
 ) -> dict[str, Any]:
     """LLM-driven planner: Gemini selects next-quarter courses.
 
-    Drop-in replacement for ``run_planning_agent`` / ``run_constrained_planner``
-    (same input + output contract). The model makes the selection from the
-    offered catalog; Python enforces the hard SCU rules afterward and stamps
+    The model makes the selection from the offered catalog; Python enforces the
+    hard SCU rules afterward and stamps
     ``meta.validation.engine = "llm_select"``.
     """
     request_id = str(uuid.uuid4())

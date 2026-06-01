@@ -5,7 +5,7 @@ entrypoint main.py calls. It:
 
 1. Retrieves up to ``MEMORY_TOP_K`` per-user memory snippets relevant to
    the current preference + gap query.
-2. Calls ``run_planning_agent`` with those snippets injected into the
+2. Calls ``run_llm_planner`` with those snippets injected into the
    prompt prefix (the planning agent enforces a char budget so the
    prompt never balloons).
 3. After a successful plan, writes a compact summary back to memory so
@@ -24,7 +24,7 @@ import re
 from typing import Any
 
 from agents import memory_agent
-from agents.planning_agent import run_planning_agent
+from agents.planning_agent_llm import run_llm_planner
 
 MEMORY_TOP_K = int(os.environ.get("MEMORY_TOP_K", "4"))
 
@@ -134,7 +134,7 @@ def plan_for_user(
 
     memory_snippets = _retrieve_snippets(int(user_id), query)
 
-    plan = run_planning_agent(
+    plan = run_llm_planner(
         missing_details=missing_details,
         user_preference=user_preference,
         memory_snippets=memory_snippets,

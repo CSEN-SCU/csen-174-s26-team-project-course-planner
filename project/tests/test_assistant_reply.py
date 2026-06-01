@@ -98,10 +98,10 @@ def test_no_previous_plan_uses_initial_summary_instruction(monkeypatch):
 
 
 def test_orchestrator_forwards_previous_plan(monkeypatch, alice):
-    """The UI's most-recent plan must reach the planning agent."""
+    """The UI's most-recent plan must reach the LLM planner."""
     captured_kwargs: dict = {}
 
-    def fake_run_planning_agent(**kwargs):
+    def fake_run_llm_planner(**kwargs):
         captured_kwargs.update(kwargs)
         return {
             "recommended": [],
@@ -110,7 +110,7 @@ def test_orchestrator_forwards_previous_plan(monkeypatch, alice):
             "assistant_reply": "no change",
         }
 
-    monkeypatch.setattr(orchestrator, "run_planning_agent", fake_run_planning_agent)
+    monkeypatch.setattr(orchestrator, "run_llm_planner", fake_run_llm_planner)
 
     previous = {
         "recommended": [{"course": "CSEN 194", "category": "Senior Design", "units": 4, "reason": "kickoff"}],

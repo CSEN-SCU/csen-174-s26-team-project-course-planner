@@ -65,9 +65,9 @@ export async function uploadTranscript(file: File, userId?: string) {
 
 /**
  * Set VITE_USE_PLAN_V2=1 to route the plan request through the LangGraph
- * multi-agent engine (POST /api/plan/v2) instead of the legacy single-shot
- * planner (POST /api/plan).  Both endpoints return the same response shape so
- * the rest of the UI requires no changes.
+ * multi-agent endpoint (POST /api/plan/v2) instead of the production LLM
+ * course-selection planner (POST /api/plan). Both endpoints return the same
+ * response shape so the rest of the UI requires no changes.
  */
 const _USE_PLAN_V2 = (import.meta.env.VITE_USE_PLAN_V2 as string | undefined) === "1";
 

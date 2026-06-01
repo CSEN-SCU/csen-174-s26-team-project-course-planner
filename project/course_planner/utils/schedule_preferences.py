@@ -256,10 +256,22 @@ def pick_best_section_dict(
     if not sections:
         return None
 
+    def _section_conflict(a: Any, b: Any) -> bool:
+        if (
+            a.meeting_start_min is None
+            or b.meeting_start_min is None
+            or a.meeting_end_min is None
+            or b.meeting_end_min is None
+        ):
+            return False
+        shared = set(a.meeting_days) & set(b.meeting_days)
+        if not shared:
+            return False
+        return a.meeting_start_min < b.meeting_end_min and b.meeting_start_min < a.meeting_end_min
+
     def _conflicts(sec: dict[str, Any]) -> bool:
         if not conflict_with:
             return False
-        from agents.schedule_selector import _section_conflict
 
         class _Wrap:
             def __init__(self, d: dict[str, Any]):

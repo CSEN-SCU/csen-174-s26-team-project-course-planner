@@ -88,10 +88,8 @@ re-validated against the live schedule index.
 
 ## 2. LangGraph multi-agent system — `agents/multi_agent/` (BUILT)
 
-A second planning engine alongside `run_planning_agent`. **The full A→E
-track is DONE and wired to HTTP** at `POST /api/plan/v2`. Legacy
-`/api/plan` stays the default; set `MULTI_AGENT_PLAN=1` to make it
-delegate to the multi-agent engine.
+An experimental planning engine is wired to HTTP at `POST /api/plan/v2`.
+Production `/api/plan` uses the LLM course-selection planner.
 
 ```
 START → planner → verifier ─[issues & passes<3]→ planner (loop)
@@ -137,16 +135,17 @@ Files:
 
 `project/course_planner/evals/`: 7 deterministic scorers (no LLM-judge) —
 `no_hallucination`, `no_time_conflicts`, `labs_paired`, `unit_cap`,
-`titles_correct`, `open_req_coverage`, `no_injection_leak`. Run an A/B:
+`titles_correct`, `open_req_coverage`, `no_injection_leak`. Run the active
+planner eval:
 ```bash
-cd project/course_planner && python -m evals.run_eval --engine both
+cd project/course_planner && python -m evals.run_eval --engine llm
 ```
 Tests: `test_eval_scorers.py` (25, offline).
 
 ### 2.3 Still open
 
-- **Frontend on `/api/plan/v2`**: the web app still calls legacy `/api/plan`;
-  the multi-agent engine is backend-only / opt-in via `MULTI_AGENT_PLAN=1`.
+- **Frontend on `/api/plan/v2`**: the web app still calls `/api/plan`; the
+  multi-agent engine is available only through explicit `/api/plan/v2` routing.
 
 ---
 

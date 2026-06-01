@@ -2,8 +2,8 @@
 
 Each scorer takes a plan (the ``{recommended, total_units, advice, ...}``
 dict returned by an engine) plus context, and returns a ``ScoreResult``.
-They encode the AGENTS.md rules so we can measure how well an engine
-(legacy single-shot vs LangGraph multi-agent) actually satisfies them.
+They encode the AGENTS.md rules so we can measure how well the active planner
+actually satisfies them.
 
 Scorers are pure + deterministic — no LLM, no network — so they run in CI
 and are themselves unit-tested. The eval *runner* (run_eval.py) calls a
@@ -94,13 +94,11 @@ def _section_slot(rec: dict) -> tuple[set[int], int, int] | None:
 def score_no_time_conflicts(plan: dict, *, schedule_index: dict) -> ScoreResult:
     """No two recommended courses may overlap on a shared weekday.
 
-    constrained_v2 does section-level selection, so two courses can be in
-    the same default time block yet be scheduled into different,
-    non-overlapping sections. We therefore prefer the meeting window of the
-    section the engine ACTUALLY chose (``recommended[i].section``) and only
-    fall back to the schedule_index default block for engines (legacy) that
-    don't attach a section. Using the default block for v2 caused false-
-    positive conflicts in the fuzz sweep.
+    Some planners attach a chosen section, so two courses can be in the same
+    default time block yet be scheduled into different, non-overlapping
+    sections. Prefer the meeting window of the section the engine actually
+    chose (``recommended[i].section``), and fall back to the schedule_index
+    default block when no section is attached.
     """
     recs = plan.get("recommended") or []
     codes = _codes(plan)
@@ -245,10 +243,9 @@ def score_open_req_coverage(
 def score_units_correct(plan: dict, *, units_index: dict) -> ScoreResult:
     """Units must match the schedule xlsx canonical values.
 
-    Mirrors ``score_titles_correct``: closes the gap where the legacy
-    engine could ship a plan with wrong unit counts when a code was
-    missing from the units index. With constrained_v2 these are sourced
-    deterministically from xlsx, so this scorer should be 100% on v2.
+    Mirrors ``score_titles_correct``: closes the gap where the model could ship
+    a plan with wrong unit counts. The active planner should source units from
+    xlsx during post-processing.
     """
     recs = plan.get("recommended") or []
     checked = 0
@@ -277,9 +274,6 @@ def score_units_correct(plan: dict, *, units_index: dict) -> ScoreResult:
 def score_section_validity(plan: dict, *, all_sections: dict) -> ScoreResult:
     """When the engine attached a ``section`` block, that section must
     actually exist in the schedule xlsx's sections table.
-
-    No-ops for the legacy engine (no section block) so it can't lower
-    its score; only constrained_v2 is held to this contract.
     """
     recs = plan.get("recommended") or []
     rows_with_section = [r for r in recs if isinstance(r.get("section"), dict)]

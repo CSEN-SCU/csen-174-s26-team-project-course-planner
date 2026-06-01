@@ -20,10 +20,6 @@ services:
     startCommand: cd project/api && uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/health
     envVars:
-      # Closed-world deterministic planner (see AGENTS.md). Flip to "legacy"
-      # to roll back the engine without a code change.
-      - key: PLAN_ENGINE
-        value: llm
       # Public origin of the Vercel frontend — used for CORS + OAuth redirects.
       # Set this to your real Vercel URL after the first frontend deploy.
       - key: FRONTEND_BASE_URL

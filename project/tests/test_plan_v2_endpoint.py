@@ -7,7 +7,6 @@ Gemini / xlsx I/O happens.
 Covers:
   - POST /api/plan/v2 runs the multi-agent engine and shapes the response
   - conversational + no-transcript guards still apply on v2
-  - legacy POST /api/plan delegates to multi-agent when MULTI_AGENT_PLAN=1
   - HITL: /v2/review returns a draft, /v2/resume finalizes it
   - validation: review/resume require a thread_id
 """
@@ -115,40 +114,12 @@ def test_v2_agent_failure_returns_502(client, monkeypatch):
     assert r.status_code == 502
 
 
-# ── legacy delegation flag ───────────────────────────────────────────────────
+# ── default endpoint ─────────────────────────────────────────────────────────
 
 
-def test_legacy_plan_delegates_when_flag_enabled(client, monkeypatch):
-    monkeypatch.setattr(plan_router, "_MULTI_AGENT_DEFAULT", True)
-    import agents.multi_agent as ma
-    monkeypatch.setattr(ma, "run_multi_agent_plan", lambda *a, **k: dict(_FAKE_PLAN))
-
-    r = client.post("/api/plan", json={
-        "missing_details": [{"course": "CSEN 122"}],
-        "user_preference": "plan",
-    })
-    assert r.status_code == 200
-    assert r.json()["engine"] == "multi_agent"  # came through the multi-agent path
-
-
-def test_default_plan_ignores_major_kwarg_for_engine_without_support(client, monkeypatch):
-    """Confirmed major should not crash older constrained planner signatures."""
-    monkeypatch.setattr(plan_router, "_MULTI_AGENT_DEFAULT", False)
-    monkeypatch.setattr(plan_router, "_PLAN_ENGINE", "constrained_v2")
+def test_default_plan_uses_llm_selection_engine(client, monkeypatch):
     monkeypatch.setattr(plan_router, "run_professor_agent", lambda recs, **kw: recs)
-
-    def _old_constrained_planner(
-        missing_details,
-        user_preference,
-        *,
-        memory_snippets=None,
-        previous_plan=None,
-        parsed_rows=None,
-        completed_course_codes=None,
-    ):
-        return dict(_FAKE_PLAN)
-
-    monkeypatch.setattr(plan_router, "run_constrained_planner", _old_constrained_planner)
+    monkeypatch.setattr(plan_router, "run_llm_planner", lambda *a, **k: dict(_FAKE_PLAN))
 
     r = client.post("/api/plan", json={
         "missing_details": [{"course": "CSEN 122"}],

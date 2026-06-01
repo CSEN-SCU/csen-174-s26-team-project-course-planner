@@ -2,9 +2,7 @@
 
 Usage (from project/course_planner/):
 
-    python -m evals.run_eval --engine legacy
-    python -m evals.run_eval --engine multi_agent
-    python -m evals.run_eval --engine both          # A/B compare
+    python -m evals.run_eval --engine llm
 
 This DOES call the real Gemini model (set GEMINI_API_KEY). Use a small
 scenario set; each scenario is one or more LLM round-trips. The scorers
@@ -35,30 +33,6 @@ def _empty_plan(engine_label: str) -> dict[str, Any]:
     }
 
 
-def _legacy_engine(scenario) -> dict[str, Any]:
-    from agents.planning_agent import run_planning_agent
-
-    if not scenario.missing_details:
-        return _empty_plan("legacy")
-    return run_planning_agent(scenario.missing_details, scenario.user_preference)
-
-
-def _multi_agent_engine(scenario) -> dict[str, Any]:
-    from agents.multi_agent import run_multi_agent_plan
-
-    if not scenario.missing_details:
-        return _empty_plan("multi_agent")
-    return run_multi_agent_plan(scenario.missing_details, scenario.user_preference)
-
-
-def _constrained_v2_engine(scenario) -> dict[str, Any]:
-    from agents.planning_agent_v2 import run_constrained_planner
-
-    if not scenario.missing_details:
-        return _empty_plan("constrained_v2")
-    return run_constrained_planner(scenario.missing_details, scenario.user_preference)
-
-
 def _llm_engine(scenario) -> dict[str, Any]:
     from agents.planning_agent_llm import run_llm_planner
 
@@ -68,9 +42,6 @@ def _llm_engine(scenario) -> dict[str, Any]:
 
 
 ENGINES: dict[str, Callable] = {
-    "legacy": _legacy_engine,
-    "multi_agent": _multi_agent_engine,
-    "constrained_v2": _constrained_v2_engine,
     "llm": _llm_engine,
 }
 
@@ -118,18 +89,13 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Course-plan quality eval")
     ap.add_argument(
         "--engine",
-        choices=["legacy", "multi_agent", "constrained_v2", "llm", "all", "both"],
-        default="constrained_v2",
+        choices=["llm"],
+        default="llm",
     )
     ap.add_argument("--json", action="store_true", help="emit JSON instead of a table")
     args = ap.parse_args(argv)
 
-    if args.engine == "all":
-        engines = ["legacy", "multi_agent", "constrained_v2", "llm"]
-    elif args.engine == "both":
-        engines = ["legacy", "constrained_v2"]
-    else:
-        engines = [args.engine]
+    engines = [args.engine]
     reports = [run_engine(e) for e in engines]
 
     if args.json:

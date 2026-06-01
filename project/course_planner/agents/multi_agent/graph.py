@@ -21,9 +21,9 @@ This module deliberately keeps the LLM-driven nodes thin: each is a single
 prompt call to ``planning_agent`` helpers (where reusable) or to Gemini via
 the existing client. The graph is the *coordination* layer.
 
-This is a parallel implementation — the existing ``run_planning_agent`` keeps
-working unchanged. Plug this into a new endpoint (e.g. ``/api/plan/v2``) or
-behind a feature flag when ready.
+This is an experimental parallel implementation exposed through the explicit
+``/api/plan/v2`` endpoint. Production ``/api/plan`` uses the LLM
+course-selection planner.
 """
 
 from __future__ import annotations
@@ -623,7 +623,7 @@ def get_plan_state(*, thread_id: str, checkpointer: Any) -> dict[str, Any]:
     }
 
 
-# ── Entry point analogous to ``run_planning_agent`` ─────────────────────────
+# ── Entry point for the explicit /api/plan/v2 endpoint ──────────────────────
 
 
 def run_multi_agent_plan(
@@ -635,8 +635,7 @@ def run_multi_agent_plan(
     thread_id: str | None = None,
     checkpointer: Any = None,
 ) -> dict[str, Any]:
-    """Public entry point. Mirrors ``run_planning_agent`` so the FastAPI
-    route can swap behind a flag.
+    """Public entry point for the FastAPI /api/plan/v2 route.
 
     Runs to completion (no human-in-the-loop interrupt). Pass a
     ``checkpointer`` + ``thread_id`` to persist intermediate state so a

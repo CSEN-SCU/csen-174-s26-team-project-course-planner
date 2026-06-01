@@ -323,12 +323,8 @@ def _enrich_one_course(
     category = course.get("category")
     scheduled_names = scheduled_instructors_for_course(course_code, schedule_index)
 
-    # Attach real meeting times when available from the schedule xlsx —
-    # BUT only when the upstream engine didn't already set them. The
-    # constrained_v2 planner mirrors its chosen section's times to the
-    # top-level fields (see agents/planning_agent_v2.py::_materialize),
-    # and ``meeting_times_for_course`` just picks the first section
-    # with a posted time, which can disagree with the v2 selection.
+    # Attach real meeting times when available from the schedule xlsx, but only
+    # when the upstream planner did not already choose a section.
     if "meeting_days" not in enriched:
         all_secs = all_sections_for_course(course_code, sections_index)
         from utils.schedule_preferences import pick_best_section_dict

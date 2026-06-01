@@ -109,7 +109,6 @@ npm run dev          # opens http://localhost:5173
 | `SCU_PLANNER_COOKIE_KEY` | **Production:** signing key for auth cookies. Dev uses a placeholder if unset |
 | `COURSE_PLANNER_DB` | Optional absolute path to SQLite DB (tests set this to a temp file) |
 | `MEMORY_TOP_K`, `MEMORY_INJECT_CHAR_BUDGET`, `MEMORY_EMBED_MODEL` | Optional tuning for memory retrieval / prompt size |
-| `MULTI_AGENT_PLAN` | `1` makes legacy `/api/plan` delegate to the LangGraph multi-agent engine (default off) |
 | `PLANNER_REACT` | `0` disables the Planner's ReAct tool-calling loop (single-shot fallback; default on) |
 
 Do **not** commit `.env` or `project/course_planner/data/`.
@@ -133,12 +132,12 @@ For subjects like **CSEN / COEN / PHYS / CHEM / ELEN / BIOL**, a course and its 
 
 ## Multi-agent planner (LangGraph)
 
-> **Experimental** — runs alongside the default engine; opt-in via `/api/plan/v2`.
+> **Experimental** — available only through explicit `/api/plan/v2` endpoints.
 
-The default `/api/plan` is a single Gemini call with post-processing. A second
+The default `/api/plan` uses the LLM course-selection planner with post-processing. A second
 engine in [`project/course_planner/agents/multi_agent/`](project/course_planner/agents/multi_agent/)
 re-implements planning as a **LangGraph `StateGraph`** where three roles
-review each other. It runs at `POST /api/plan/v2` (legacy stays default).
+review each other. It runs at `POST /api/plan/v2`.
 
 ```
 START → Planner → Verifier ──[issues & retries<2]→ Planner      (feedback loop)
@@ -179,9 +178,6 @@ the model via native Gemini function-calling: `search_schedule`,
 | `POST /api/plan/v2/review` | Run up to the commit step and return a **draft** for human approval (needs `thread_id`) |
 | `POST /api/plan/v2/resume` | Approve a reviewed draft: resume from the checkpoint and finalize |
 
-Set `MULTI_AGENT_PLAN=1` to make the **legacy** `POST /api/plan` transparently
-delegate to the multi-agent engine (zero frontend change).
-
 ### Design notes
 
 - **Verifier is code, not an LLM** — the rules (no conflicts, lab pairing, Core
@@ -201,8 +197,7 @@ scenarios derived from a real transcript:
 
 ```bash
 cd project/course_planner
-python -m evals.run_eval --engine both          # legacy vs multi_agent A/B
-python -m evals.run_eval --engine multi_agent --json
+python -m evals.run_eval --engine llm
 ```
 
 The LLM produces the plan; the scorers judge it deterministically.

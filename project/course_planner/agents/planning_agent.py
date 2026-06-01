@@ -251,8 +251,7 @@ _ALLOWED_REC_ITEM_KEYS = {
     "units",
     "reason",
     "alternatives",
-    # Fields produced by the constrained_v2 engine. Safe to surface
-    # because they come from Python (xlsx + solver), never the LLM.
+    # Section fields are safe to surface when produced by Python from xlsx.
     "section",
     "meeting_days",
     "meeting_start_min",
@@ -2009,9 +2008,8 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
 
     eff_model = resolved_model or model
     # ``offered_keys`` is the set of (subject, number) tuples the LLM was
-    # explicitly told it may pick from; it doubles as the candidate-pool size
-    # for the legacy engine. We expose it so eval dashboards can correlate
-    # rejection rate with pool size.
+    # explicitly told it may pick from; expose it so eval dashboards can
+    # correlate rejection rate with pool size.
     candidate_count = len(offered_keys) if isinstance(offered_keys, set) else 0
     parsed["meta"] = {
         "provider": "gemini",

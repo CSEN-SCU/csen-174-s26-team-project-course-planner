@@ -1,8 +1,7 @@
 """PR1 instrumentation: ``meta.validation`` audit on every plan response.
 
-Locks the production audit shape so the eval dashboard and any future
-A/B comparison between the legacy engine and ``constrained_v2`` can
-reliably compute hallucination, repair, and giveup rates.
+Locks the validation audit helpers so the eval dashboard can reliably compute
+hallucination, repair, and giveup rates.
 
 Contract:
   - Every successful ``run_planning_agent`` response carries
