@@ -22,6 +22,8 @@ import pytest
 from agents import orchestrator, planning_agent
 from auth import users_db
 
+from _llm_planner_stubs import patch_llm_planner
+
 
 def _stub_client(captured_prompts: list[str], reply: dict):
     class _Models:
@@ -161,7 +163,19 @@ def test_reduce_units_followup_prompt_isolates_current_ask(monkeypatch, alice):
         "advice": "ok",
         "assistant_reply": "Yes, removed: CSEN 122. Plan now has CSEN 194, ECEN 153, PHIL 11, ENGL 181 — total_units=16, under your 20-unit cap.",
     }
-    monkeypatch.setattr(planning_agent, "get_genai_client", lambda **_kw: _stub_client(captured, reply))
+    patch_llm_planner(
+        monkeypatch,
+        captured,
+        reply,
+        extra_codes=(
+            "CSEN 194",
+            "ECEN 153",
+            "CSEN 122",
+            "PHIL 11",
+            "ENGL 181",
+            "ENGR 111",
+        ),
+    )
 
     previous_plan = {
         "recommended": [

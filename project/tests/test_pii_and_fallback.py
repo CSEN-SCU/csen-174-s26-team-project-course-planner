@@ -24,6 +24,8 @@ import pytest
 from agents import memory_agent, orchestrator, planning_agent
 from auth import users_db
 
+from _llm_planner_stubs import patch_llm_planner
+
 _API_DIR = Path(__file__).resolve().parents[1] / "api"
 
 
@@ -37,19 +39,13 @@ def _load_api_main(monkeypatch, tmp_path):
 
 
 def _stub_planning(monkeypatch, captured: list[str]):
-    """Stub run_planning_agent's HTTP path for prompt assertions."""
-    import json
-    from types import SimpleNamespace
-
-    class _Models:
-        def generate_content(self, model, contents, config):
-            captured.append(contents)
-            return SimpleNamespace(text=json.dumps({"recommended": [], "total_units": 0, "advice": "x"}))
-
-    class _Client:
-        models = _Models()
-
-    monkeypatch.setattr(planning_agent, "get_genai_client", lambda **_kw: _Client())
+    """Stub orchestrator's LLM planner path for prompt assertions."""
+    patch_llm_planner(
+        monkeypatch,
+        captured,
+        {"recommended": [], "total_units": 0, "advice": "x"},
+        extra_codes=("COEN 174",),
+    )
 
 
 @pytest.fixture()

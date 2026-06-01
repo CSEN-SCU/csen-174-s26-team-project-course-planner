@@ -15,26 +15,13 @@ relies on the deterministic hash-based fallback embedder.
 from __future__ import annotations
 
 import re
-from types import SimpleNamespace
 
 import pytest
 
 from agents import memory_agent, orchestrator, planning_agent
 from auth import users_db
 
-
-def _stub_client(captured_prompts: list[str], reply: dict):
-    import json as _json
-
-    class _StubModels:
-        def generate_content(self, model, contents, config):  # noqa: D401
-            captured_prompts.append(contents)
-            return SimpleNamespace(text=_json.dumps(reply))
-
-    class _StubClient:
-        models = _StubModels()
-
-    return _StubClient()
+from _llm_planner_stubs import patch_llm_planner
 
 
 @pytest.fixture()
@@ -54,9 +41,8 @@ def reply():
     }
 
 
-def _patch_client(monkeypatch, captured_prompts, reply):
-    stub = _stub_client(captured_prompts, reply)
-    monkeypatch.setattr(planning_agent, "get_genai_client", lambda **_kw: stub)
+def _patch_client(monkeypatch, captured_prompts, reply, *, extra_codes=()):
+    patch_llm_planner(monkeypatch, captured_prompts, reply, extra_codes=extra_codes)
 
 
 _MEMORY_BLOCK_RE = re.compile(
@@ -71,19 +57,6 @@ def _extract_memory_block(prompt: str) -> str:
     return match.group(1)
 
 
-def _fake_schedule_index(*codes: str) -> dict:
-    index: dict = {}
-    for code in codes:
-        subj, num = code.split()
-        index[(subj, num)] = {
-            "instructors": [],
-            "meeting_days": [],
-            "meeting_start_min": None,
-            "meeting_end_min": None,
-        }
-    return index
-
-
 def test_inject_retrieved_snippets_into_prompt_prefix(monkeypatch, alice, reply):
     memory_agent.write(alice, "preference", "Alice prefers no classes before 9am, quality over difficulty")
     memory_agent.write(alice, "plan_outcome", "Last quarter Alice took COEN 146 with prof X, total_units=12")
@@ -96,13 +69,9 @@ def test_inject_retrieved_snippets_into_prompt_prefix(monkeypatch, alice, reply)
         "total_units": 4,
         "advice": "Take core first.",
     }
-    _patch_client(monkeypatch, captured, single_course_reply)
-    monkeypatch.setattr(
-        planning_agent,
-        "load_schedule_section_index",
-        lambda: _fake_schedule_index("COEN 174"),
+    _patch_client(
+        monkeypatch, captured, single_course_reply, extra_codes=("COEN 174",)
     )
-    monkeypatch.setattr(planning_agent, "load_category_course_index", lambda: {})
 
     out = orchestrator.plan_for_user(
         alice,
@@ -114,7 +83,9 @@ def test_inject_retrieved_snippets_into_prompt_prefix(monkeypatch, alice, reply)
     assert len(captured) == 1
     prompt = captured[0]
     assert "BACKGROUND CONTEXT" in prompt
-    assert prompt.index("BACKGROUND CONTEXT") < prompt.index("STUDENT REQUIREMENTS")
+    assert prompt.index("BACKGROUND CONTEXT") < prompt.index(
+        "STUDENT'S REMAINING REQUIREMENTS"
+    )
     assert "Alice prefers no classes" in prompt or "Last quarter Alice took" in prompt
 
 
@@ -125,11 +96,9 @@ def test_prompt_prefix_respects_char_budget(monkeypatch, alice, reply):
         memory_agent.write(alice, "preference", f"{i}: {medium}")
 
     captured: list[str] = []
-    _patch_client(monkeypatch, captured, reply)
-    # Use empty schedule so the schedule block does not appear between the
-    # memory block and "STUDENT REQUIREMENTS" and inflate the measurement.
-    monkeypatch.setattr(planning_agent, "load_schedule_section_index", lambda: {})
-    monkeypatch.setattr(planning_agent, "load_category_course_index", lambda: {})
+    _patch_client(
+        monkeypatch, captured, reply, extra_codes=("COEN 174",)
+    )
 
     orchestrator.plan_for_user(
         alice,
@@ -167,10 +136,9 @@ def test_oversized_single_snippet_drops_block_gracefully(monkeypatch, alice, rep
 
 def test_no_injection_block_when_no_memory(monkeypatch, alice, reply):
     captured: list[str] = []
-    _patch_client(monkeypatch, captured, reply)
-    # Empty schedule so the schedule block does not appear in the prompt.
-    monkeypatch.setattr(planning_agent, "load_schedule_section_index", lambda: {})
-    monkeypatch.setattr(planning_agent, "load_category_course_index", lambda: {})
+    _patch_client(
+        monkeypatch, captured, reply, extra_codes=("COEN 174",)
+    )
 
     orchestrator.plan_for_user(
         alice,
@@ -182,7 +150,7 @@ def test_no_injection_block_when_no_memory(monkeypatch, alice, reply):
     assert "BACKGROUND CONTEXT" not in prompt, (
         "Prompt must not include an empty memory header when retrieval is empty"
     )
-    assert "=== STUDENT REQUIREMENTS" in prompt
+    assert "STUDENT'S REMAINING REQUIREMENTS" in prompt
     assert not prompt.lstrip().startswith("=== BACKGROUND CONTEXT")
 
 
@@ -195,13 +163,9 @@ def test_plan_for_user_writes_back_summary(monkeypatch, alice, reply):
         "total_units": 4,
         "advice": "Take core first.",
     }
-    _patch_client(monkeypatch, captured, single_course_reply)
-    monkeypatch.setattr(
-        planning_agent,
-        "load_schedule_section_index",
-        lambda: _fake_schedule_index("COEN 174"),
+    _patch_client(
+        monkeypatch, captured, single_course_reply, extra_codes=("COEN 174",)
     )
-    monkeypatch.setattr(planning_agent, "load_category_course_index", lambda: {})
 
     before = len(memory_agent.list_for_user(alice))
 
