@@ -87,12 +87,15 @@ from utils.scu_course_schedule_xlsx import (
     course_title_for,
     course_units_for,
     list_offered_courses,
+    load_all_course_sections,
     load_category_course_index,
     load_course_titles_index,
     load_course_units_index,
     load_schedule_section_index,
     planned_section_keys,
+    all_sections_for_course,
 )
+from utils.schedule_preferences import pick_best_section_dict
 
 log = logging.getLogger(__name__)
 
@@ -127,6 +130,38 @@ def _canonicalize_titles_units(
     return out
 
 
+def _apply_section_selection(
+    recommended: list[dict[str, Any]],
+    user_preference: str,
+    *,
+    all_sections: dict[tuple[str, str], list[dict[str, Any]]] | None = None,
+) -> list[dict[str, Any]]:
+    """Stamp meeting times + ``_chosen_section`` from preference-aware pick."""
+    sections_index = all_sections if all_sections is not None else load_all_course_sections()
+    if not sections_index:
+        return recommended
+
+    out: list[dict[str, Any]] = []
+    for item in recommended:
+        if not isinstance(item, dict):
+            continue
+        row = dict(item)
+        code = _normalize_code(row.get("course"))
+        if not code:
+            out.append(row)
+            continue
+        secs = all_sections_for_course(code, sections_index)
+        chosen = pick_best_section_dict(secs, user_preference or "")
+        if chosen:
+            row["meeting_days"] = list(chosen.get("meeting_days") or [])
+            row["meeting_start_min"] = chosen.get("meeting_start_min")
+            row["meeting_end_min"] = chosen.get("meeting_end_min")
+            if chosen.get("section") is not None:
+                row["_chosen_section"] = int(chosen["section"])
+        out.append(row)
+    return out
+
+
 def _selection_system_instruction() -> str:
     return (
         "You are an SCU course planning advisor. Given a student's remaining "
@@ -142,8 +177,10 @@ def _selection_system_instruction() -> str:
         "- Prefer courses that close remaining requirements; among those, "
         "prefer ones that satisfy multiple requirements at once.\n"
         "- Respect schedule preferences using the meeting days/times shown in "
-        "the FULL LIST OF COURSES OFFERED NEXT QUARTER block (e.g. minimize "
-        "or avoid a weekday).\n"
+        "the FULL LIST OF COURSES OFFERED NEXT QUARTER block — each course "
+        "lists every section option. When multiple sections exist, recommend "
+        "the course but explain which section time fits the student's "
+        "constraints (e.g. avoid MWF 10:30).\n"
         "- Respect the prerequisite ordering described in the bulletin: do "
         "not recommend a course whose prerequisites the student has not met.\n"
         "- Target 12-16 units; never exceed 20 unless the student asks.\n"
@@ -294,7 +331,10 @@ def run_llm_planner(
 
     # The full list of available courses next quarter.
     offered = list_offered_courses()
-    catalog_block = build_offered_catalog_block(offered, requirement_codes)
+    all_sections = load_all_course_sections()
+    catalog_block = build_offered_catalog_block(
+        offered, requirement_codes, all_sections=all_sections
+    )
 
     memory_block = _build_memory_block(memory_snippets)
     prev_block = _summarize_previous_plan(previous_plan)
@@ -370,6 +410,9 @@ def run_llm_planner(
         recommended, dropped_for_cap = _enforce_unit_cap(recommended, unit_cap_user)
 
     recommended = _enrich_recommended_units(recommended, units_lookup)
+    recommended = _apply_section_selection(
+        recommended, user_preference or "", all_sections=all_sections
+    )
     total_units = _recompute_total_units(recommended)
 
     parsed["recommended"] = recommended

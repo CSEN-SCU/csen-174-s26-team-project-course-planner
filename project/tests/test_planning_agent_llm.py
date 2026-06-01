@@ -79,6 +79,7 @@ def _patch(monkeypatch, *, payload, offered=None):
     monkeypatch.setattr(llm, "load_course_titles_index", lambda: titles)
     monkeypatch.setattr(llm, "load_course_units_index", lambda: units)
     monkeypatch.setattr(llm, "list_offered_courses", lambda: offered)
+    monkeypatch.setattr(llm, "load_all_course_sections", lambda: {})
 
     # Keep the major-bulletin block hermetic (no disk read of data/majors).
     import utils.major_requirements as mr
@@ -215,6 +216,45 @@ def test_raises_without_any_data(monkeypatch):
     _patch(monkeypatch, payload={"recommended": [], "total_units": 0, "advice": "", "assistant_reply": ""})
     with pytest.raises(ValueError):
         llm.run_llm_planner([], "")
+
+
+def test_llm_stamps_section_matching_schedule_preference(monkeypatch):
+    all_secs = {
+        ("CSEN", "174"): [
+            {
+                "section": 1,
+                "meeting_days": [0, 2, 4],
+                "meeting_start_min": 150,
+                "meeting_end_min": 225,
+                "instructors": ["Early"],
+            },
+            {
+                "section": 2,
+                "meeting_days": [0, 2, 4],
+                "meeting_start_min": 300,
+                "meeting_end_min": 375,
+                "instructors": ["Late"],
+            },
+        ],
+    }
+    _patch(
+        monkeypatch,
+        payload={
+            "recommended": [_rec("CSEN 174", units=4)],
+            "total_units": 4,
+            "advice": "a",
+            "assistant_reply": "b",
+        },
+    )
+    monkeypatch.setattr(llm, "load_all_course_sections", lambda: all_secs)
+
+    out = llm.run_llm_planner(
+        [{"course": "CSEN 174", "category": "Major"}],
+        "I do not want a MWF class at 10:30",
+    )
+    row = out["recommended"][0]
+    assert row["_chosen_section"] == 2
+    assert row["meeting_start_min"] == 300
 
 
 def test_prompt_includes_full_offered_catalog_with_schedule(monkeypatch):

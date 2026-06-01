@@ -221,6 +221,25 @@ def test_selector_honors_no_morning_preference():
     assert sec.section_number == 2
 
 
+def test_selector_avoids_explicit_mwf_1030_even_with_better_rated_morning_section():
+    """User says no MWF at 10:30 — pick the 1pm section even if morning has
+    a higher-rated instructor."""
+    csen = _cand(
+        0, "CSEN 174", 4, ["Major: CSEN 174"],
+        [
+            _sec(1, [0, 2, 4], 150, 225, rating=4.8),   # M/W/F 10:30
+            _sec(2, [0, 2, 4], 300, 375, rating=4.0),  # M/W/F 1:00 PM
+        ],
+    )
+    result = select_schedule(
+        [csen],
+        must_cover=["Major: CSEN 174"],
+        user_preference="I do not want a MWF class at 10:30",
+        unit_min=4, unit_max=4, hard_max=4,
+    )
+    assert result.chosen_sections[csen.id].section_number == 2
+
+
 # ── R7 locked codes ─────────────────────────────────────────────────────────
 
 

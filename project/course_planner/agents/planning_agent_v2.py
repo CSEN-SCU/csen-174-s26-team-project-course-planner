@@ -149,6 +149,7 @@ def _materialize(result: SelectionResult) -> list[dict[str, Any]]:
             row["meeting_days"] = list(sec.meeting_days)
             row["meeting_start_min"] = sec.meeting_start_min
             row["meeting_end_min"] = sec.meeting_end_min
+            row["_chosen_section"] = sec.section_number
         out.append(row)
     return out
 
@@ -184,16 +185,31 @@ def _call_llm_for_prose(
     if not api_key:
         return deterministic_reply, deterministic_advice
 
-    plan_summary = [
-        {
-            "code": c.course_code,
-            "title": c.title,
-            "units": c.units,
-            "covers": list(c.categories_satisfied),
-            "instructor": (chosen_sections.get(c.id).instructor if chosen_sections.get(c.id) else None),
-        }
-        for c in selected
-    ]
+    plan_summary = []
+    for c in selected:
+        sec = chosen_sections.get(c.id)
+        schedule_label = None
+        if sec is not None and sec.meeting_start_min is not None:
+            from utils.scu_course_schedule_xlsx import format_offered_course_meeting_label
+
+            schedule_label = format_offered_course_meeting_label(
+                {
+                    "meeting_days": list(sec.meeting_days),
+                    "meeting_start_min": sec.meeting_start_min,
+                    "meeting_end_min": sec.meeting_end_min,
+                }
+            )
+        plan_summary.append(
+            {
+                "code": c.course_code,
+                "title": c.title,
+                "units": c.units,
+                "covers": list(c.categories_satisfied),
+                "instructor": sec.instructor if sec else None,
+                "section_number": sec.section_number if sec else None,
+                "schedule": schedule_label,
+            }
+        )
 
     safe_pref = _sanitize_user_text(user_preference or "")
     mem_block = _build_memory_block(memory_snippets)
@@ -219,7 +235,9 @@ def _call_llm_for_prose(
         f"{followup_instr}"
         "Write ``assistant_reply`` (≤280 characters, first person, friendly, must "
         "reference ONLY the course codes in PLAN, must quote the exact total_units) "
-        "and ``advice`` (≤300 characters). Do NOT add or rename courses. "
+        "and ``advice`` (≤300 characters). When PLAN includes a ``schedule`` for a "
+        "course, mention that meeting time if the student asked about timing. "
+        "Do NOT add or rename courses. "
         "Output only JSON matching the schema."
     )
 
@@ -236,7 +254,9 @@ def _call_llm_for_prose(
                 system_instruction=(
                     "You write SCU course-planning prose for a plan that has "
                     "already been finalized. You MUST NOT add, remove, or rename "
-                    "courses. Reference only codes that appear in PLAN.\n"
+                    "courses. Reference only codes that appear in PLAN. Each PLAN "
+                    "row includes the chosen section's meeting schedule — use those "
+                    "times when the student asked about schedule preferences.\n"
                     + UNTRUSTED_INPUT_SYSTEM_RULES
                 ),
             ),

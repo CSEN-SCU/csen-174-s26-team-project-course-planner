@@ -32,7 +32,6 @@ pre-selected and fills the remaining unit budget around them.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from typing import Iterable
 
@@ -55,15 +54,7 @@ def _coverage_weight(label: str) -> float:
 def _major_label_count(categories: Iterable[str]) -> int:
     return sum(1 for cat in categories if cat.startswith("Major: "))
 
-_NO_MORNING_RE = re.compile(
-    r"no\s+(?:early|morning)|after\s+10|after\s+9|nothing\s+(?:early|before)",
-    re.IGNORECASE,
-)
-_PREFER_AFTERNOON_RE = re.compile(
-    r"prefer\s+afternoon|afternoon\s+(?:classes|only)",
-    re.IGNORECASE,
-)
-_LIGHT_LOAD_RE = re.compile(r"light\s+(?:load|quarter)|easy\s+quarter", re.IGNORECASE)
+from utils.schedule_preferences import preference_score_for_section
 
 
 @dataclass
@@ -92,22 +83,9 @@ def _section_conflict(a: SectionOption, b: SectionOption) -> bool:
 
 
 def _preference_score(section: SectionOption, pref: str) -> float:
-    """Soft scoring for natural-language preferences. Small numbers so
-    hard coverage always dominates."""
-    score = 0.0
-    if section.meeting_start_min is None:
-        return score
-    if _NO_MORNING_RE.search(pref) and section.meeting_start_min < 60:
-        # Calendar offsets are minutes-from-8AM; 60 = 9AM.
-        score -= 1.0
-    if _PREFER_AFTERNOON_RE.search(pref) and section.meeting_start_min < 240:
-        # 240 = noon offset
-        score -= 0.5
-    if _LIGHT_LOAD_RE.search(pref):
-        diff = section.instructor_difficulty
-        if diff is not None and diff > 3.5:
-            score -= 0.5
-    return score
+    """Soft scoring for natural-language preferences. Large penalties for
+    explicitly avoided day/time slots so schedule prefs can beat ratings."""
+    return preference_score_for_section(section, pref)
 
 
 def _best_nonconflicting_section(

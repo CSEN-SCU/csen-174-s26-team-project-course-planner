@@ -200,6 +200,7 @@ def test_v2_mirrors_meeting_times_to_top_level(monkeypatch):
     # And the rich section block
     assert row["section"]["section_number"] in (1, 2)
     assert row["meeting_start_min"] == row["section"]["meeting_start_min"]
+    assert row["_chosen_section"] == row["section"]["section_number"]
 
 
 # ── lab pairing (R1) ─────────────────────────────────────────────────────────

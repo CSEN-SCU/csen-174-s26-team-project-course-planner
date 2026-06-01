@@ -49,12 +49,91 @@ export type CalendarResult = {
   tbd: TbdCourse[];
 };
 
+function isValidSection(s: ScheduleSection): boolean {
+  return (
+    s.meeting_days.length > 0 &&
+    typeof s.meeting_start_min === "number" &&
+    typeof s.meeting_end_min === "number" &&
+    (s.meeting_start_min as number) < (s.meeting_end_min as number)
+  );
+}
+
+function sameMeetingDays(a: number[], b: number[]): boolean {
+  if (a.length !== b.length) return false;
+  const sa = [...a].sort((x, y) => x - y);
+  const sb = [...b].sort((x, y) => x - y);
+  return sa.every((d, i) => d === sb[i]);
+}
+
+/** Section number stamped by the backend planner (v2 / llm_select). */
+export function chosenSectionNumber(item: Record<string, unknown>): number | undefined {
+  if (typeof item._chosen_section === "number") return item._chosen_section;
+  if (typeof item._section === "number") return item._section;
+  const sec = item.section;
+  if (sec && typeof sec === "object") {
+    const n = (sec as { section_number?: unknown }).section_number;
+    if (typeof n === "number") return n;
+  }
+  return undefined;
+}
+
+function resolveBackendSection(
+  item: Record<string, unknown>,
+  allSections: ScheduleSection[],
+): ScheduleSection | null {
+  const num = chosenSectionNumber(item);
+  if (num != null) {
+    const match = allSections.find((s) => s.section === num);
+    if (match && isValidSection(match)) return match;
+  }
+  const days = item.meeting_days;
+  const start = item.meeting_start_min;
+  const end = item.meeting_end_min;
+  if (Array.isArray(days) && typeof start === "number" && typeof end === "number") {
+    const match = allSections.find(
+      (s) =>
+        isValidSection(s) &&
+        s.meeting_start_min === start &&
+        s.meeting_end_min === end &&
+        sameMeetingDays(s.meeting_days, days as number[]),
+    );
+    if (match) return match;
+  }
+  return null;
+}
+
+function placeSectionOnCalendar(
+  sec: ScheduleSection,
+  idBase: string,
+  code: string,
+  title: string | undefined,
+  professor: string,
+  claim: (day: number, start: number, end: number) => void,
+  blocks: CourseBlock[],
+) {
+  const start = sec.meeting_start_min as number;
+  const end = sec.meeting_end_min as number;
+  sec.meeting_days.forEach((dayIdx) => {
+    claim(dayIdx, start, end);
+    blocks.push({
+      id: `${idBase}-d${dayIdx}`,
+      dayIndex: dayIdx as WeekdayIndex,
+      startOffsetMin: start,
+      endOffsetMin: end,
+      code,
+      title,
+      professor,
+    });
+  });
+}
+
 /**
  * Convert backend recommended items into calendar blocks.
  *
- * - Courses with a single confirmed section → placed directly on the grid.
- * - Courses with multiple sections → best non-conflicting section is auto-picked
- *   and placed on the grid. TBD panel is NOT shown for these.
+ * - Backend-stamped section (_chosen_section / top-level meeting times) wins
+ *   over auto-picking the first non-conflicting section.
+ * - Courses with multiple sections and no backend choice → first
+ *   non-conflicting section.
  * - Courses with NO section time data → surfaced in TBD panel only.
  */
 export function recommendedToCalendarBlocks(
@@ -129,27 +208,12 @@ export function recommendedToCalendarBlocks(
       : undefined;
 
     // --- Path A: all_sections data present ---
-    // Auto-pick the best non-conflicting section and place it on the calendar.
-    // Only goes to TBD if every section is missing a posted time.
     if (allSections && allSections.length > 0) {
-      const chosen = pickBestSection(allSections);
+      const backendChosen = resolveBackendSection(item, allSections);
+      const chosen = backendChosen ?? pickBestSection(allSections);
       if (chosen) {
-        const start = chosen.meeting_start_min as number;
-        const end = chosen.meeting_end_min as number;
-        chosen.meeting_days.forEach((dayIdx) => {
-          claim(dayIdx, start, end);
-          blocks.push({
-            id: `${idBase}-d${dayIdx}`,
-            dayIndex: dayIdx as WeekdayIndex,
-            startOffsetMin: start,
-            endOffsetMin: end,
-            code,
-            title,
-            professor,
-          });
-        });
+        placeSectionOnCalendar(chosen, idBase, code, title, professor, claim, blocks);
       } else {
-        // All sections have no posted time — send to TBD
         tbd.push({ id: idBase, code, title, professor, index: i, allSections });
       }
       return;

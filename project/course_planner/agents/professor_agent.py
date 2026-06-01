@@ -307,7 +307,13 @@ def _professors_strictly_from_schedule(
     return out
 
 
-def _enrich_one_course(course: dict, *, schedule_index: dict, sections_index: dict) -> dict:
+def _enrich_one_course(
+    course: dict,
+    *,
+    schedule_index: dict,
+    sections_index: dict,
+    user_preference: str = "",
+) -> dict:
     """One course: own client + paginated search + top professors by rating within the department."""
     enriched = dict(course)
     enriched["professors"] = []
@@ -324,11 +330,22 @@ def _enrich_one_course(course: dict, *, schedule_index: dict, sections_index: di
     # and ``meeting_times_for_course`` just picks the first section
     # with a posted time, which can disagree with the v2 selection.
     if "meeting_days" not in enriched:
-        times = meeting_times_for_course(course_code, schedule_index)
-        if times:
-            enriched["meeting_days"] = times["meeting_days"]
-            enriched["meeting_start_min"] = times["meeting_start_min"]
-            enriched["meeting_end_min"] = times["meeting_end_min"]
+        all_secs = all_sections_for_course(course_code, sections_index)
+        from utils.schedule_preferences import pick_best_section_dict
+
+        chosen = pick_best_section_dict(all_secs, user_preference)
+        if chosen:
+            enriched["meeting_days"] = list(chosen.get("meeting_days") or [])
+            enriched["meeting_start_min"] = chosen.get("meeting_start_min")
+            enriched["meeting_end_min"] = chosen.get("meeting_end_min")
+            if chosen.get("section") is not None:
+                enriched["_chosen_section"] = int(chosen["section"])
+        else:
+            times = meeting_times_for_course(course_code, schedule_index)
+            if times:
+                enriched["meeting_days"] = times["meeting_days"]
+                enriched["meeting_start_min"] = times["meeting_start_min"]
+                enriched["meeting_end_min"] = times["meeting_end_min"]
 
     # Attach all available sections so the UI can show section choices
     all_secs = all_sections_for_course(course_code, sections_index)
@@ -436,7 +453,11 @@ def _enrich_one_course(course: dict, *, schedule_index: dict, sections_index: di
     return enriched
 
 
-def run_professor_agent(recommended_courses: list[dict]) -> list[dict]:
+def run_professor_agent(
+    recommended_courses: list[dict],
+    *,
+    user_preference: str = "",
+) -> list[dict]:
     """
     Input: recommended list from planning_agent.
     Output: per-course professor enrichment in the same order as input.
@@ -463,11 +484,22 @@ def run_professor_agent(recommended_courses: list[dict]) -> list[dict]:
             if scheduled:
                 enriched["scheduled_instructors"] = scheduled
             if "meeting_days" not in enriched:
-                times = meeting_times_for_course(code, schedule_index)
-                if times:
-                    enriched["meeting_days"] = times["meeting_days"]
-                    enriched["meeting_start_min"] = times["meeting_start_min"]
-                    enriched["meeting_end_min"] = times["meeting_end_min"]
+                all_secs = all_sections_for_course(code, sections_index)
+                from utils.schedule_preferences import pick_best_section_dict
+
+                chosen = pick_best_section_dict(all_secs, user_preference)
+                if chosen:
+                    enriched["meeting_days"] = list(chosen.get("meeting_days") or [])
+                    enriched["meeting_start_min"] = chosen.get("meeting_start_min")
+                    enriched["meeting_end_min"] = chosen.get("meeting_end_min")
+                    if chosen.get("section") is not None:
+                        enriched["_chosen_section"] = int(chosen["section"])
+                else:
+                    times = meeting_times_for_course(code, schedule_index)
+                    if times:
+                        enriched["meeting_days"] = times["meeting_days"]
+                        enriched["meeting_start_min"] = times["meeting_start_min"]
+                        enriched["meeting_end_min"] = times["meeting_end_min"]
             all_secs = all_sections_for_course(code, sections_index)
             if all_secs:
                 enriched["all_sections"] = all_secs
@@ -477,7 +509,12 @@ def run_professor_agent(recommended_courses: list[dict]) -> list[dict]:
     with ThreadPoolExecutor(max_workers=workers) as executor:
         return list(
             executor.map(
-                partial(_enrich_one_course, schedule_index=schedule_index, sections_index=sections_index),
+                partial(
+                    _enrich_one_course,
+                    schedule_index=schedule_index,
+                    sections_index=sections_index,
+                    user_preference=user_preference,
+                ),
                 recommended_courses,
             )
         )

@@ -266,7 +266,7 @@ def create_plan(body: PlanRequest, request: Request) -> dict[str, Any]:
         recs = []
 
     try:
-        enriched = run_professor_agent(recs)
+        enriched = run_professor_agent(recs, user_preference=body.user_preference or "")
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

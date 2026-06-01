@@ -28,11 +28,13 @@ from utils.enrichment_resolver import (
     wants_advanced_chinese_only,
 )
 from utils.scu_course_schedule_xlsx import (
+    all_sections_for_course,
     course_title_for,
     course_units_for,
     detect_time_conflicts,
     format_offered_course_meeting_label,
     list_offered_courses,
+    load_all_course_sections,
     load_category_course_index,
     load_core_integrations_course_set,
     load_course_titles_index,
@@ -1375,18 +1377,20 @@ def build_offered_catalog_block(
     requirement_codes: set[str],
     *,
     max_courses: int | None = None,
+    all_sections: dict[tuple[str, str], list[dict[str, Any]]] | None = None,
 ) -> str:
     """Prompt block listing every course offered next quarter.
 
-    Each line includes title, units, and the representative section's meeting
-    days/times so the model can honor schedule preferences (e.g. avoid
-    Tuesdays). Courses that satisfy a remaining requirement are listed first
-    and marked with ★.
+    Each course lists **all** section day/time options when the schedule
+    index is available so the model can honor specific time preferences.
+    Courses that satisfy a remaining requirement are listed first and
+    marked with ★.
     """
     if not offered:
         return ""
 
     cap = max_courses if max_courses is not None else OFFERED_CATALOG_MAX
+    sections_index = all_sections if all_sections is not None else load_all_course_sections()
 
     relevant: list[dict[str, Any]] = []
     others: list[dict[str, Any]] = []
@@ -1405,19 +1409,27 @@ def build_offered_catalog_block(
         "CHARACTER-FOR-CHARACTER — never invent, abbreviate, or substitute a "
         "code. Courses marked ★ satisfy one of the student's remaining "
         "requirements — strongly prefer those.",
-        "Each line shows the representative section schedule as "
-        "days + time (M=Mon, T=Tue, W=Wed, Th=Thu, F=Fri). When the student "
-        "asks to avoid or minimize a weekday, prefer courses whose schedule "
-        "does not include that day.",
+        "Each course shows every section option as days + time "
+        "(M=Mon, T=Tue, W=Wed, Th=Thu, F=Fri). When the student asks to "
+        "avoid a specific day or time, prefer a section (or a different "
+        "course) that fits their constraint.",
     ]
     for c in ordered:
         code = c.get("course", "?")
         title = c.get("title") or ""
         units = c.get("units")
         unit_str = f"{units}u" if units not in (None, "", "?") else "see catalog"
-        schedule = format_offered_course_meeting_label(c)
         star = " ★" if " ".join(str(code).split()).upper() in requirement_codes else ""
-        lines.append(f"  {code} — {title} ({unit_str}; {schedule}){star}")
+        secs = all_sections_for_course(str(code), sections_index) if sections_index else []
+        if len(secs) <= 1:
+            schedule = format_offered_course_meeting_label(secs[0] if secs else c)
+            lines.append(f"  {code} — {title} ({unit_str}; {schedule}){star}")
+        else:
+            lines.append(f"  {code} — {title} ({unit_str}){star}")
+            for sec in secs:
+                sched = format_offered_course_meeting_label(sec)
+                sec_num = sec.get("section", "?")
+                lines.append(f"    • sec {sec_num}: {sched}")
     if truncated:
         lines.append(
             f"  … (catalog truncated to {cap} courses; the "
@@ -1650,7 +1662,9 @@ def run_planning_agent(
     )
     requirement_codes = {f"{subj} {num}".upper() for (subj, num) in offered_keys}
     catalog_block = build_offered_catalog_block(
-        list_offered_courses(), requirement_codes
+        list_offered_courses(),
+        requirement_codes,
+        all_sections=load_all_course_sections(),
     )
 
     memory_block = _build_memory_block(memory_snippets)
