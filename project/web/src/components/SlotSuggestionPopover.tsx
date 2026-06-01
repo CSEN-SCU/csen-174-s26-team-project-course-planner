@@ -196,14 +196,14 @@ export function SlotSuggestionPopover({
             />
           ))}
 
-        {/* Show more */}
+        {/* View all courses at this slot */}
         {!loading && !error && hasAny && (
           <button
             onClick={handleShowMore}
             disabled={loadingMore}
             className="w-full py-2 text-xs font-semibold text-[var(--scu-red)] hover:bg-red-50 rounded-lg transition disabled:opacity-50"
           >
-            {loadingMore ? "Loading…" : "Show more ↓"}
+            {loadingMore ? "Loading…" : "View All Courses"}
           </button>
         )}
       </div>

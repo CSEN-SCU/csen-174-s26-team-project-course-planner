@@ -129,11 +129,7 @@ def _reconcile_followup_edit(
     if not isinstance(prev, list) or not prev:
         return deduped
 
-    from utils.enrichment_resolver import implicit_removal_codes_for_followup
-
-    named = _named_removal_codes(user_preference) | implicit_removal_codes_for_followup(
-        user_preference, previous_plan
-    )
+    named = _named_removal_codes(user_preference)
     present = {_normalize_code(r.get("course")) for r in deduped if isinstance(r, dict)}
 
     # 2) Restore previous courses the model dropped without authorization.

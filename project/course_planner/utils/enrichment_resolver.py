@@ -2,8 +2,8 @@
 
 Unlike Core/GE open requirements (Course Tags in the schedule xlsx), enrichment
 for COEN/CSE-style programs is typically "three courses in the same department"
-(e.g. three CHIN courses). Students describe direction in natural language
-("中文", "Chinese") rather than a specific catalog code.
+(e.g. three HIST courses). Students describe direction in natural language or by
+naming a department prefix rather than a specific catalog code.
 
 This module is deterministic (no LLM). Planning and slot-suggestion endpoints
 call it to list next-term candidates.
@@ -16,18 +16,8 @@ from typing import Any
 
 EDUCATIONAL_ENRICHMENT_MARKER = "educational enrichment"
 
-# Title substrings that indicate a Chinese-language / China-studies course when
-# the department prefix alone is not enough.
-_CHINESE_TITLE_HINTS = (
-    "chinese",
-    "china",
-    "sino",
-    "mandarin",
-    "cantonese",
-    "中文",
-    "汉语",
-    "国语",
-)
+# Departments the pipeline must never auto-select for Educational Enrichment.
+_BLOCKED_ENRICHMENT_SUBJECTS = frozenset({"CHIN"})
 
 _COURSE_CODE_RE = re.compile(r"^([A-Z]{2,8})\s+(\d+[A-Z]?)$", re.IGNORECASE)
 
@@ -50,7 +40,7 @@ def has_educational_enrichment_gap(missing_details: list[dict[str, Any]] | None)
 
 
 def infer_enrichment_subjects(user_preference: str) -> list[str]:
-    """Infer department prefix(es) from free-form text (e.g. 中文 → CHIN)."""
+    """Infer department prefix(es) from free-form text (e.g. HIST → HIST)."""
     text = (user_preference or "").strip()
     if not text:
         return []
@@ -64,23 +54,13 @@ def infer_enrichment_subjects(user_preference: str) -> list[str]:
             out.append(subj)
             seen.add(subj)
 
-    if (
-        any(tok in text for tok in ("中文", "汉语", "国语", "中国人", "华裔"))
-        or "CHINESE" in u
-    ):
-        if "CHIN" not in seen:
-            out.insert(0, "CHIN")
-            seen.add("CHIN")
-
-    return out[:3]
+    return [s for s in out[:3] if s not in _BLOCKED_ENRICHMENT_SUBJECTS]
 
 
 def enrichment_track_label(subjects: list[str]) -> str:
     """Human-facing label for the active enrichment direction."""
     if not subjects:
         return ""
-    if subjects == ["CHIN"] or (len(subjects) == 1 and subjects[0] == "CHIN"):
-        return "Chinese (CHIN)"
     return " / ".join(subjects)
 
 
@@ -96,26 +76,14 @@ def course_matches_enrichment_track(
     title: str | None,
     subjects: list[str],
 ) -> bool:
-    """True if *course_code* fits the enrichment direction.
-
-    For CHIN track: prefix CHIN **or** title contains Chinese-related keywords.
-    For other explicit subjects: match department prefix only.
-    """
+    """True if *course_code* fits the enrichment direction (department prefix)."""
     if not subjects:
         return False
     parts = _split_course_code(course_code)
     if not parts:
         return False
     subj, _num = parts
-    title_l = (title or "").lower()
-
-    for want in subjects:
-        if subj == want:
-            return True
-        if want == "CHIN":
-            if any(h in title_l for h in _CHINESE_TITLE_HINTS):
-                return True
-    return False
+    return subj in subjects
 
 
 def list_enrichment_course_codes(
@@ -159,92 +127,20 @@ def user_mentions_enrichment(user_preference: str) -> bool:
     return "充实" in text
 
 
-_ADVANCED_CHINESE_HINTS = (
-    "高阶",
-    "母语",
-    "native speaker",
-    "native chinese",
-    "中国人",
-    "华裔",
-    "advanced chinese",
-)
-
-
-def wants_advanced_chinese_only(user_preference: str) -> bool:
-    """True when the student says they cannot take low-level Chinese courses."""
-    text = (user_preference or "").strip()
-    if not text:
-        return False
-    lower = text.lower()
-    if any(h in text for h in ("高阶", "母语", "中国人", "华裔")):
-        return True
-    return any(h in lower for h in ("native speaker", "native chinese", "advanced chinese"))
-
-
-def is_low_level_chin_course(course_code: str) -> bool:
-    """Intro/elementary CHIN — typically inappropriate for native speakers."""
-    code = " ".join(str(course_code).split()).upper()
-    if not code.startswith("CHIN "):
-        return False
-    m = re.match(r"^CHIN\s+(\d+)([A-Z]?)$", code)
-    if not m:
-        return False
-    num = int(m.group(1))
-    # CHIN 1–2 and 11A-style lower division
-    return num <= 2 or num == 11
-
-
-def filter_enrichment_codes_for_preference(
-    codes: list[str],
-    user_preference: str,
-) -> list[str]:
-    if not wants_advanced_chinese_only(user_preference):
-        return codes
-    return [c for c in codes if not is_low_level_chin_course(c)]
-
-
-def implicit_removal_codes_for_followup(
-    user_preference: str,
-    previous_plan: dict[str, Any] | None,
-) -> set[str]:
-    """Courses to drop on follow-up without the student naming a code.
-
-    Native/advanced Chinese speakers cannot take CHIN 1-style courses; if one
-    is already on the plan, remove it when they say so in natural language.
-    """
-    if not wants_advanced_chinese_only(user_preference):
-        return set()
-    prev = (previous_plan or {}).get("recommended") or []
-    out: set[str] = set()
-    for row in prev:
-        if not isinstance(row, dict):
-            continue
-        code = " ".join(str(row.get("course") or "").split()).upper()
-        if code and is_low_level_chin_course(code):
-            out.add(code)
-    return out
-
-
 def should_show_slot_enrichment(
     user_preference: str,
     missing_details: list[dict[str, Any]] | None,
     *,
     plan_course_codes: list[str] | None = None,
 ) -> bool:
-    """Whether the slot popover should show the Enrichment section.
-
-    Still show after CHIN 1 is on the calendar — the transcript gap row may
-    disappear even though the student is still building a 3-course CHIN track.
-    """
+    """Whether the slot popover should show the Enrichment section."""
     if has_educational_enrichment_gap(missing_details):
         return True
     if user_mentions_enrichment(user_preference):
         return True
-    if infer_enrichment_subjects(user_preference):
+    subjects = infer_enrichment_subjects(user_preference)
+    if subjects:
         return True
-    for code in plan_course_codes or []:
-        if " ".join(str(code).split()).upper().startswith("CHIN "):
-            return True
     return False
 
 
@@ -317,9 +213,6 @@ def try_enrichment_followup_plan(
         subjects,
         titles_index,
         exclude_codes=list(existing_codes),
-    )
-    enrich_codes = filter_enrichment_codes_for_preference(
-        enrich_codes, user_preference
     )
 
     from utils.scu_course_schedule_xlsx import planned_section_keys
@@ -408,8 +301,6 @@ def try_enrichment_followup_plan(
 
 def resolve_enrichment_subjects_for_slot(
     user_preference: str,
-    *,
-    default_chinese_when_unspecified: bool = True,
 ) -> tuple[list[str], str, str | None]:
     """Pick subjects + UI labels for slot popover.
 
@@ -420,11 +311,8 @@ def resolve_enrichment_subjects_for_slot(
     if subjects:
         return subjects, enrichment_track_label(subjects), None
 
-    if default_chinese_when_unspecified:
-        return (
-            ["CHIN"],
-            "Chinese (CHIN)",
-            "Describe your enrichment track in chat (e.g. art, history); below defaults to the Chinese series.",
-        )
-
-    return [], "", "Describe your enrichment track in chat (e.g. Chinese)."
+    return (
+        [],
+        "",
+        "Describe your enrichment track in chat (e.g. art, history, HIST).",
+    )

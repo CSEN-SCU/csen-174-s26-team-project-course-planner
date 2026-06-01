@@ -21,11 +21,8 @@ from utils.academic_progress_helpers import (
 from utils.enrichment_resolver import (
     EDUCATIONAL_ENRICHMENT_MARKER as _EDUCATIONAL_ENRICHMENT_MARKER,
     has_educational_enrichment_gap,
-    implicit_removal_codes_for_followup,
     infer_enrichment_subjects as _preferred_enrichment_subjects,
-    is_low_level_chin_course,
     try_enrichment_followup_plan,
-    wants_advanced_chinese_only,
 )
 from utils.scu_course_schedule_xlsx import (
     all_sections_for_course,
@@ -205,7 +202,7 @@ _RECIPE_CUE_PHRASES = (
 _FALLBACK_ADVICE = "Advice unavailable — please retry."
 _FALLBACK_ASSISTANT_REPLY = "Sorry, I could not generate a reply for this request. Please retry."
 _FALLBACK_CONVERSATIONAL_REPLY = (
-    "I can help with course planning questions once I have your transcript. "
+    "I can help with course planning questions once I have your Academic Progress Report. "
     "What would you like to know?"
 )
 
@@ -830,9 +827,7 @@ def _reconcile_followup_edit(
     if not prev:
         return deduped
 
-    named = _named_removal_codes(user_preference) | implicit_removal_codes_for_followup(
-        user_preference, previous_plan
-    )
+    named = _named_removal_codes(user_preference)
     present = {_normalize_code(r.get("course")) for r in deduped}
 
     # 2. Preserve previous courses the LLM dropped without authorization.
@@ -1100,14 +1095,7 @@ def _sync_followup_assistant_reply(
     total = int(parsed.get("total_units") or _recompute_total_units(recs))
 
     parts: list[str] = []
-    if wants_advanced_chinese_only(user_preference) and any(
-        is_low_level_chin_course(c) for c in removed
-    ):
-        parts.append(
-            "Yes — I removed beginner Chinese (CHIN 1-level) because you need "
-            "advanced Chinese as a native speaker."
-        )
-    elif removed:
+    if removed:
         parts.append(f"I removed {', '.join(removed)}.")
     elif added:
         parts.append("Yes — I updated your plan.")
@@ -1233,7 +1221,7 @@ def _resolve_open_requirement(
     candidates = [c for c in candidates if any(k in schedule_index for k in planned_section_keys(c))]
 
     # Educational Enrichment: two cases
-    # 1) Department-scoped enrichment (e.g. "take 3 CHIN courses"): use the
+    # 1) Department-scoped enrichment (e.g. "take 3 HIST courses"): use the
     #    student's stated department preference to source candidates directly
     #    from the next-term schedule.
     # 2) Otherwise fall back to the existing R4 scoping using Core Integrations tags.
@@ -2118,9 +2106,7 @@ def _slot_suggestion_empty_message(
     labels = ", ".join(open_req_key_to_label.values())[:120]
     if has_educational_enrichment_gap(missing_details):
         return (
-            "No Core courses at this time slot fill your remaining requirements. "
-            "If you need Educational Enrichment, see the Enrichment picks section below, "
-            "or describe your track in chat (e.g. Chinese). You can also try another time slot."
+            "No Core courses at this time slot fill your remaining requirements."
         )
     if labels:
         return (
@@ -2128,7 +2114,7 @@ def _slot_suggestion_empty_message(
             "Try another slot, or tell chat which requirement to prioritize."
         )
     return (
-        "No courses at this time slot fill your remaining transcript requirements. "
+        "No courses at this time slot fill your remaining requirements. "
         "Try another time slot."
     )
 

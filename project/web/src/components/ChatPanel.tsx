@@ -223,7 +223,7 @@ export function ChatPanel({
         id: `a-${Date.now()}`,
         role: "assistant",
         content:
-          "No problem. I discarded the uploaded transcript and cleared your academic progress. Please upload your Academic Progress again to start over.",
+          "No problem. I discarded the uploaded Academic Progress Report and cleared your academic progress. Please upload your Academic Progress again to start over.",
       },
     ]);
   }, [pendingFile, resetUploadedTranscript, setMessages, onDiscardTranscript]);

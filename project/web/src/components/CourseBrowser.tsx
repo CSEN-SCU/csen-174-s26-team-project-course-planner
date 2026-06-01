@@ -448,8 +448,21 @@ export function CourseBrowser({
                 </p>
               </div>
             </div>
-            <div className="min-h-0 flex-1 overflow-auto">
-              {loading && <p className="p-4 text-sm text-neutral-400">Loading…</p>}
+            <div className="relative min-h-0 flex-1 overflow-auto">
+              {loading && (
+                <div
+                  className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-white"
+                  role="status"
+                  aria-live="polite"
+                  aria-busy="true"
+                >
+                  <p className="text-base font-semibold text-neutral-600">Loading…</p>
+                  <div
+                    className="h-10 w-10 animate-spin rounded-full border-4 border-[var(--scu-red)] border-t-transparent"
+                    aria-hidden
+                  />
+                </div>
+              )}
               {error && <p className="p-4 text-sm text-red-600">{error}</p>}
               {!loading && !error && sections.length === 0 && (
                 <p className="p-4 text-sm text-neutral-400">No matching sections. Try clearing filters.</p>

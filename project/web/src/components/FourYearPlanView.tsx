@@ -292,7 +292,7 @@ export function FourYearPlanView({
           <div className="flex flex-col items-center justify-center h-64 text-center">
             <p className="text-sm font-medium text-neutral-400">No Academic Progress file uploaded</p>
             <p className="mt-1 text-xs text-neutral-300">
-              Upload your Academic Progress file in the chat panel, then generate your 4-year plan.
+              Upload your Academic Progress file in the chat panel, then generate your Four-Year Plan.
             </p>
           </div>
         )}
@@ -308,7 +308,7 @@ export function FourYearPlanView({
               onClick={() => onGenerate("")}
               className="mt-4 rounded-md bg-[var(--scu-red)] px-5 py-2 text-sm font-semibold text-white shadow hover:bg-red-700 transition"
             >
-              Generate 4-Year Plan
+              Generate Four-Year Plan
             </button>
           </div>
         )}
@@ -333,11 +333,7 @@ export function FourYearPlanView({
             ))}
 
             <div className="rounded-lg border border-neutral-200 bg-white px-4 py-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-xs text-neutral-500">
-                  Planned courses not yet taken appear in <span className="font-bold">bold</span> in
-                  the spreadsheet.
-                </p>
+              <div className="flex flex-col items-center gap-3">
                 <button
                   type="button"
                   onClick={() => void handleExport()}
@@ -346,6 +342,10 @@ export function FourYearPlanView({
                 >
                   {isExporting ? "Exporting…" : "Export to Spreadsheet"}
                 </button>
+                <p className="text-center text-xs italic text-neutral-500">
+                  Please double check any generated Four Year Plan with your major requirmenets and course availability. Planned courses not yet taken appear in <span className="font-bold">bold</span> in
+                  the spreadsheet.
+                </p>
               </div>
             </div>
           </>

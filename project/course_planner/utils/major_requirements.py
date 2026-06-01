@@ -282,10 +282,10 @@ def detect_major_detailed(
     name = top["name"] if major_id else None
 
     if confidence == "high":
-        msg = f"We read your transcript as: {name} ({major_id}). Confirm or change below."
+        msg = f"We read your Academic Progress Report as: {name}. Confirm or change below."
     elif confidence == "low":
         msg = (
-            f"Your progress file might be {name} ({major_id}), but we're not sure. "
+            f"Your progress file might be {name}, but we're not sure. "
             "Please confirm or pick another major."
         )
     else:
