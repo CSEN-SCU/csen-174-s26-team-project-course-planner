@@ -42,6 +42,7 @@ from agents.planning_agent import (
     DEFAULT_MODEL,
     PLANNING_SCHEMA,
     UNTRUSTED_INPUT_SYSTEM_RULES,
+    WEEKDAY_CODE_LEGEND,
     _build_completed_block,
     _build_memory_block,
     _build_schedule_block,
@@ -164,7 +165,9 @@ def _selection_system_instruction() -> str:
         "- Never recommend a course listed under ALREADY COMPLETED.\n"
         "- Prefer courses that close remaining requirements; among those, "
         "prefer ones that satisfy multiple requirements at once.\n"
-        "- Respect schedule preferences using the meeting days/times shown in "
+        "- "
+        + WEEKDAY_CODE_LEGEND
+        + " Respect schedule preferences using the meeting days/times shown in "
         "the FULL LIST OF COURSES OFFERED NEXT QUARTER block — each course "
         "lists every section option. When multiple sections exist, recommend "
         "the course but explain which section time fits the student's "
