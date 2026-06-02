@@ -188,6 +188,12 @@ def _parse_json_from_response(text: str) -> dict[str, Any]:
 _TARGET_UNITS_PER_QUARTER = 14
 # Hard cap on per-quarter units (matches the prompt rule "never exceed 20").
 _HARD_UNIT_CAP_PER_QUARTER = 16
+# Course-count budget. A full-time SCU quarter is typically 3–4 courses; we
+# default to 4 and never schedule more than 5 in one quarter. This is the
+# decisive guard when Workday gap rows lack a `units` field (so the units
+# budget alone would collapse the plan into one over-stuffed quarter).
+_TARGET_COURSES_PER_QUARTER = 4
+_MAX_COURSES_PER_QUARTER = 5
 
 # Senior design sequence (CSEN/COEN 194, 195, 196 — with or without trailing L).
 _SENIOR_DESIGN_RE = re.compile(
@@ -209,6 +215,7 @@ def _has_senior_design(missing_details: list[dict]) -> bool:
 def _estimate_quarter_budget(
     *,
     total_units: int,
+    total_courses: int = 0,
     has_senior_design: bool,
 ) -> dict[str, int]:
     """Compute the minimum / target / max number of quarters for the plan.
@@ -216,16 +223,31 @@ def _estimate_quarter_budget(
     The LLM tends to spray a small number of courses across many quarters
     when given a 12-term window. We trim that window down to (target + 1)
     so it is forced to pack quarters near the 14-unit target.
+
+    The budget is driven by BOTH remaining units and remaining course count,
+    taking whichever needs more quarters. The course-count term is essential:
+    Workday gap rows frequently omit `units`, so a units-only budget would
+    underestimate to ~0 and collapse the whole plan into a single quarter
+    crammed with 10+ courses.
     """
     units = max(0, int(total_units or 0))
+    courses = max(0, int(total_courses or 0))
     # Absolute minimum quarters from the unit cap.
     min_quarters_units = max(1, math.ceil(units / _HARD_UNIT_CAP_PER_QUARTER)) if units > 0 else 1
     # Quarters needed to hit the 14-unit target.
     target_quarters_units = max(1, math.ceil(units / _TARGET_UNITS_PER_QUARTER)) if units > 0 else 1
+    # Minimum quarters from the 5-course-per-quarter hard cap.
+    min_quarters_courses = (
+        max(1, math.ceil(courses / _MAX_COURSES_PER_QUARTER)) if courses > 0 else 1
+    )
+    # Quarters needed to hit the 4-course-per-quarter target.
+    target_quarters_courses = (
+        max(1, math.ceil(courses / _TARGET_COURSES_PER_QUARTER)) if courses > 0 else 1
+    )
     # Senior Design forces three consecutive quarters at the end of the plan.
     floor = 3 if has_senior_design else 1
-    min_quarters = max(min_quarters_units, floor)
-    target_quarters = max(target_quarters_units, floor)
+    min_quarters = max(min_quarters_units, min_quarters_courses, floor)
+    target_quarters = max(target_quarters_units, target_quarters_courses, floor)
     # Allow one quarter of slack so prereq ordering isn't impossible, but
     # never give the LLM the full 12-term window when far fewer are needed.
     max_quarters = min(FOUR_YEAR_TERM_COUNT, max(target_quarters + 1, min_quarters))
@@ -234,6 +256,118 @@ def _estimate_quarter_budget(
         "target_quarters": target_quarters,
         "max_quarters": max_quarters,
     }
+
+
+def _term_after(term: str) -> str:
+    """Return the SCU quarter immediately after a "<Season> YYYY" term."""
+    parts = str(term).split()
+    if len(parts) != 2:
+        return term
+    season, year_s = parts[0].capitalize(), parts[1]
+    try:
+        year = int(year_s)
+    except ValueError:
+        return term
+    nxt = _QUARTER_NEXT.get(season)
+    if not nxt:
+        return term
+    if season == "Fall":  # Fall → Winter crosses the calendar year
+        year += 1
+    return f"{nxt} {year}"
+
+
+def _lab_base(code: str) -> str:
+    """Base code shared by a lecture and its lab (drops a trailing L)."""
+    c = (code or "").strip().upper()
+    return c[:-1] if c.endswith("L") else c
+
+
+def _group_courses_keeping_labs(courses: list[dict]) -> list[list[dict]]:
+    """Group a quarter's courses so a lecture + its lab move as one unit (R1)."""
+    by_base: "OrderedDict[str, list[dict]]" = OrderedDict()
+    for c in courses:
+        if not isinstance(c, dict):
+            continue
+        base = _lab_base(str(c.get("course") or ""))
+        by_base.setdefault(base, []).append(c)
+    return list(by_base.values())
+
+
+def _enforce_course_count_cap(
+    plan: dict[str, Any],
+    max_courses: int = _MAX_COURSES_PER_QUARTER,
+) -> dict[str, Any]:
+    """Guarantee no quarter exceeds ``max_courses`` by spilling overflow forward.
+
+    Courses are processed in their existing order so prerequisite sequencing is
+    preserved; a lecture and its lab always stay in the same quarter. When the
+    final quarter overflows we append new quarters (continuing the term
+    sequence). As an absolute last resort — only if we would exceed the 4-year
+    window — the remainder is left in the last quarter rather than dropped,
+    because dropping a required course is never acceptable.
+    """
+    quarters = plan.get("quarters") or []
+    if not isinstance(quarters, list) or not quarters:
+        return plan
+
+    def _split_groups(groups: list[list[dict]]) -> tuple[list[list[dict]], list[list[dict]]]:
+        kept: list[list[dict]] = []
+        overflow: list[list[dict]] = []
+        count = 0
+        full = False
+        for g in groups:
+            if not full and count + len(g) <= max_courses:
+                kept.append(g)
+                count += len(g)
+            else:
+                full = True
+                overflow.append(g)
+        return kept, overflow
+
+    def _build_quarter(term: str, groups: list[list[dict]]) -> dict[str, Any]:
+        flat = [c for g in groups for c in g]
+        return {
+            "term": term,
+            "courses": flat,
+            "total_units": sum(int(c.get("units") or 0) for c in flat if isinstance(c, dict)),
+        }
+
+    new_quarters: list[dict[str, Any]] = []
+    carry: list[list[dict]] = []
+    for q in quarters:
+        if not isinstance(q, dict):
+            continue
+        groups = carry + _group_courses_keeping_labs(q.get("courses") or [])
+        kept, carry = _split_groups(groups)
+        nq = dict(q)
+        rebuilt = _build_quarter(str(q.get("term") or ""), kept)
+        nq["courses"] = rebuilt["courses"]
+        nq["total_units"] = rebuilt["total_units"]
+        new_quarters.append(nq)
+
+    while carry:
+        if len(new_quarters) >= FOUR_YEAR_TERM_COUNT:
+            # No room left in the 4-year window: keep the courses rather than
+            # drop them, accepting a slightly over-full final quarter.
+            leftover = [c for g in carry for c in g]
+            target = new_quarters[-1]
+            target["courses"] = list(target.get("courses") or []) + leftover
+            target["total_units"] = sum(
+                int(c.get("units") or 0) for c in target["courses"] if isinstance(c, dict)
+            )
+            carry = []
+            break
+        last_term = new_quarters[-1]["term"] if new_quarters else plan.get("graduation_term") or ""
+        next_term = _term_after(str(last_term))
+        kept, carry = _split_groups(carry)
+        new_quarters.append(_build_quarter(next_term, kept))
+
+    plan["quarters"] = new_quarters
+    if new_quarters:
+        plan["graduation_term"] = str(
+            new_quarters[-1].get("term") or plan.get("graduation_term") or ""
+        )
+    return plan
 
 
 def _drop_empty_quarters(plan: dict[str, Any]) -> dict[str, Any]:
@@ -285,7 +419,10 @@ def run_four_year_plan_agent(
         _resolve_item_codes,
         _resolve_open_requirement,
     )
-    from utils.academic_progress_helpers import extract_completed_course_codes
+    from utils.academic_progress_helpers import (
+        enrich_missing_details,
+        extract_completed_course_codes,
+    )
     from utils.major_requirements import (
         build_major_advisor_block,
         enforce_senior_design_in_final_quarters,
@@ -310,19 +447,28 @@ def run_four_year_plan_agent(
 
     start_q, start_year = _next_starting_term()
 
+    # Workday gap rows frequently omit `units`. Enrich a copy (lecture/lab
+    # defaults + transcript lookups) so the unit budget below isn't computed
+    # from a near-zero total that would collapse the plan into one quarter.
+    enriched_details = enrich_missing_details(missing_details, parsed_rows)
     total_units = sum(
         int(item.get("units") or 0)
-        for item in missing_details
+        for item in enriched_details
         if isinstance(item.get("units"), (int, float, str))
     )
+    total_courses = len(missing_details)
 
-    # Trim the candidate term list to a tight budget derived from remaining
-    # units. Giving the model 12 terms when only ~3 are needed leads it to
-    # spread courses one-per-quarter across many years. We give it (target+1)
-    # terms instead so it is forced to pack near 14 units/quarter.
+    # Trim the candidate term list to a tight budget derived from BOTH the
+    # remaining units and the remaining course count. Giving the model 12
+    # terms when only ~3 are needed leads it to spread courses one-per-quarter
+    # across many years; conversely, a units-only budget collapses to one
+    # over-stuffed quarter when units are missing. We give it (target+1) terms
+    # so it packs near 14 units / 4 courses per quarter.
     has_senior_design = _has_senior_design(missing_details)
     budget = _estimate_quarter_budget(
-        total_units=total_units, has_senior_design=has_senior_design
+        total_units=total_units,
+        total_courses=total_courses,
+        has_senior_design=has_senior_design,
     )
     term_list = _generate_term_sequence(
         start_q, start_year, budget["max_quarters"]
@@ -413,9 +559,14 @@ PLAN-LENGTH BUDGET (HARD):
 - Remaining work:       {total_units} units across {len(missing_details)} requirements.
 - Use AT MOST           {budget['max_quarters']} quarters total.
 - Target                {budget['target_quarters']} quarters at ~14 units each.
+- Per quarter:          schedule 3–4 courses (4 is the default full-time load);
+                        NEVER more than {_MAX_COURSES_PER_QUARTER} courses in any quarter.
 - Senior design present? {"YES" if has_senior_design else "no"} (forces 3 consecutive quarters).
 - Picking more quarters than {budget['max_quarters']} is a critical failure —
   you MUST pack courses into fewer quarters instead of spreading them out.
+- Putting more than {_MAX_COURSES_PER_QUARTER} courses in one quarter is ALSO a
+  critical failure — add a quarter instead of overloading one. A lecture and
+  its lab (e.g. CSEN 20 + CSEN 20L) together count as one of those courses.
 
 REMAINING REQUIREMENTS ({len(missing_details)} courses, {total_units} total units):
 {json.dumps(missing_details, ensure_ascii=False, indent=2)}
@@ -432,13 +583,17 @@ RULES:
    then covers multiple open requirements.
 3. Never emit placeholder names like "Core - RTC 3", "Open Elective", or
    "Educational Enrichment" — use a real course code.
-4. Target 12–16 units per quarter; never exceed 20. Quarters with only 1
-   course are NOT acceptable unless there is literally nothing else left
-   to schedule in that quarter (e.g. the last quarter has a single lab
-   pair). When in doubt, pack more courses into a quarter, not fewer.
-4b. Use the MINIMUM number of quarters possible. NEVER include empty
-    quarters. Never spread N courses across more than ⌈N/2⌉ quarters
-    unless prereqs or term-offering rules force it.
+4. Target 12–16 units per quarter; never exceed 20. Aim for 3–4 courses per
+   quarter (4 is the default full-time load) and NEVER more than
+   {_MAX_COURSES_PER_QUARTER}. Quarters with only 1 course are NOT acceptable
+   unless there is literally nothing else left to schedule in that quarter
+   (e.g. the last quarter has a single lab pair). Balance the load across
+   quarters rather than front-loading one quarter.
+4b. Use the MINIMUM number of quarters possible WITHOUT exceeding
+    {_MAX_COURSES_PER_QUARTER} courses (or 16 units) in any single quarter.
+    NEVER include empty quarters. Never spread N courses across more than
+    N quarters; aim for about ⌈N/4⌉ quarters unless prereqs or term-offering
+    rules force more.
 5. Respect typical prerequisites: introductory/numbered-lower courses before advanced ones.
 6. Group lecture + lab pairs (e.g. CSEN 194 + CSEN 194L) in the SAME quarter.
 7. CSEN/COEN/ECEN 194 / 195 / 196 are a 3-quarter Senior Design sequence for
@@ -656,6 +811,12 @@ Output JSON matching the schema exactly.
                 quarter["total_units"] = sum(
                     int(c.get("units") or 0) for c in (quarter.get("courses") or [])
                 )
+
+    # Enforce the per-quarter course cap deterministically: spill any
+    # overflow forward so no quarter holds more than 5 courses, regardless of
+    # what the model returned. Runs before Senior Design pinning so that the
+    # final-three-quarter placement has the last word on the tail of the plan.
+    parsed = _enforce_course_count_cap(parsed)
 
     # Pin Senior Design to final three quarters for engineering majors.
     major_id = detected_major or resolve_major_id(
