@@ -218,10 +218,21 @@ def _paginate_collect_matches(
 def _prof_to_dict(p: Any) -> dict[str, Any]:
     wta = getattr(p, "percent_take_again", None)
     wta_str = f"{round(float(wta))}%" if wta is not None else "N/A"
+    # RMP returns overall_rating=0.0 (not None) for professors with no reviews.
+    # Surfacing that as a real "0.0★" rating is misleading, so treat a
+    # zero-review profile as "rating unavailable" — the UI then shows
+    # "No Rate My Professor rating" instead of a fake 0.0.
+    num_ratings = getattr(p, "num_ratings", None)
+    rating = p.overall_rating
+    difficulty = p.level_of_difficulty
+    if not num_ratings:  # 0 or None → no real reviews
+        rating = None
+        difficulty = None
+        wta_str = "N/A"
     return {
         "name": p.name,
-        "rating": p.overall_rating,
-        "difficulty": p.level_of_difficulty,
+        "rating": rating,
+        "difficulty": difficulty,
         "would_take_again": wta_str,
     }
 

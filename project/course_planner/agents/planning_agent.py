@@ -767,6 +767,52 @@ def _summarize_previous_plan(previous_plan: dict | None) -> str:
     )
 
 
+# A code is only authorized for removal when the message expresses removal /
+# swap intent. A bare mention or question ("那 THTR 189 呢", "ECEN 153 looks
+# hard") names nothing — otherwise a question silently deletes the course.
+_REMOVAL_INTENT_RE = re.compile(
+    r"\breplace\b|\bswap\b|\bswitch\b|\bdrop\b|\bremove\b|\bdelete\b|"
+    r"\bget\s+rid\b|\btake\s+out\b|\binstead\s+of\b|\brather\s+than\b|"
+    r"换|替|去掉|去除|删|不要|改成|拿掉",
+    re.IGNORECASE,
+)
+
+# Markers that signal the student is ASKING about the plan, not editing it.
+_QUESTION_MARKER_RE = re.compile(
+    r"[?？]|呢|吗|为什么|为何|为啥|怎么|怎样|如何|什么|哪|"
+    r"\bwhy\b|\bwhat\b|\bhow\b|\bwhich\b|\bexplain\b|\btell\s+me\b",
+    re.IGNORECASE,
+)
+
+# Any verb that expresses a plan edit (add OR remove OR swap OR resize).
+_EDIT_INTENT_RE = re.compile(
+    r"\badd\b|\binclude\b|\bremove\b|\bdrop\b|\breplace\b|\bswap\b|"
+    r"\bswitch\b|\bdelete\b|\bchange\b|\binstead\b|\bget\s+rid\b|"
+    r"\btake\s+out\b|\bmore\b|\bfewer\b|\bless\b|\blighter\b|\bheavier\b|"
+    r"加|删|去掉|去除|换|替|改|减|增|拿掉|不要|多加|少",
+    re.IGNORECASE,
+)
+
+
+def _is_pure_question_followup(user_preference: str) -> bool:
+    """True when a follow-up only ASKS about the plan (no edit intent).
+
+    Such a turn must NOT mutate the plan — the model just answers in chat.
+    Any explicit edit verb (add / drop / replace / "more", and the CJK
+    equivalents) un-freezes the turn, so "can you add a Chinese class?" still
+    edits. A bare question ("那 THTR 189 呢", "why CSEN 122?") freezes; the
+    student adds explicitly on a later turn.
+    """
+    text = (user_preference or "").strip()
+    if not text:
+        return False
+    if not _QUESTION_MARKER_RE.search(text):
+        return False
+    if _EDIT_INTENT_RE.search(text):
+        return False
+    return True
+
+
 def _named_removal_codes(user_preference: str) -> set[str]:
     """Course codes the student explicitly named in a follow-up edit.
 
@@ -775,7 +821,12 @@ def _named_removal_codes(user_preference: str) -> set[str]:
     spaces + case) plus their lab partners and CSEN↔COEN / ECEN↔ELEN
     aliases, so a deterministic reconcile knows which courses the user
     actually authorized removing.
+
+    Returns an empty set when the message expresses no removal/swap intent —
+    a bare mention or question never authorizes a removal.
     """
+    if not _REMOVAL_INTENT_RE.search(user_preference or ""):
+        return set()
     text = (user_preference or "").upper()
     named: set[str] = set()
     # No trailing \b: CJK text (e.g. "ECEN153换成…") counts as word chars in
@@ -836,6 +887,12 @@ def _reconcile_followup_edit(
     prev = previous_plan.get("recommended") or []
     if not prev:
         return deduped
+
+    # FREEZE: a pure question ("那 THTR 189 呢", "why CSEN 122?") must not
+    # mutate the plan — the LLM only answers in chat. Return CURRENT STATE
+    # unchanged so a question can never silently drop or swap a course.
+    if _is_pure_question_followup(user_preference):
+        return [r for r in prev if isinstance(r, dict)]
 
     named = _named_removal_codes(user_preference)
     present = {_normalize_code(r.get("course")) for r in deduped}

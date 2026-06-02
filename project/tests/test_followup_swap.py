@@ -11,6 +11,7 @@ the deterministic reconcile that:
 from __future__ import annotations
 
 from agents.planning_agent import (
+    _is_pure_question_followup,
     _named_removal_codes,
     _reconcile_followup_edit,
 )
@@ -43,6 +44,55 @@ def test_named_removal_includes_lab_partner_and_alias():
 
 def test_named_removal_empty_when_no_codes():
     assert _named_removal_codes("make it lighter please") == set()
+
+
+def test_named_removal_empty_for_bare_question():
+    """A question that merely mentions a code authorizes no removal.
+
+    Production bug: "那 thtr189 呢" (what about THTR 189?) was parsed as
+    "remove THTR 189" and the course was silently dropped.
+    """
+    assert _named_removal_codes("那 thtr189 呢") == set()
+    assert _named_removal_codes("why did you pick CSEN 122?") == set()
+    assert _named_removal_codes("ECEN 153 looks hard") == set()
+
+
+def test_named_removal_still_extracts_with_intent():
+    """A real removal verb still extracts the named code (+lab+alias)."""
+    assert "ECEN 153" in _named_removal_codes("drop ECEN 153")
+    assert "ECEN 153" in _named_removal_codes("ecen153换成 chinese")
+    assert "THTR 189" in _named_removal_codes("remove thtr189")
+
+
+# ── _is_pure_question_followup ───────────────────────────────────────────────
+
+
+def test_pure_question_detected():
+    assert _is_pure_question_followup("那 thtr189 呢")
+    assert _is_pure_question_followup("为什么选 CSEN 122？")
+    assert _is_pure_question_followup("why these courses?")
+
+
+def test_edit_request_is_not_pure_question():
+    """A question that also asks to edit is NOT frozen."""
+    assert not _is_pure_question_followup("why not drop ECEN 153?")
+    assert not _is_pure_question_followup("can you add a lighter class?")
+
+
+def test_explicit_add_question_is_not_frozen():
+    """A question with an explicit add verb still edits the plan."""
+    assert not _is_pure_question_followup("can you add a chinese class?")
+    assert not _is_pure_question_followup("能不能加一节中文课？")
+
+
+def test_bare_enrichment_question_freezes():
+    """'Any Chinese courses I could take?' (no add verb) freezes; the student
+    adds explicitly on a later turn — safer R7 default."""
+    assert _is_pure_question_followup("any chinese courses I could take?")
+
+
+def test_statement_without_question_is_not_pure_question():
+    assert not _is_pure_question_followup("make it lighter please")
 
 
 # ── _reconcile_followup_edit ─────────────────────────────────────────────────
@@ -116,3 +166,36 @@ def test_named_removal_respected_even_if_llm_kept_it():
     assert "ECEN 153L" not in codes
     # but unrelated dropped courses are still restored
     assert "CSEN 194" in codes
+
+
+def test_pure_question_freezes_plan():
+    """The production bug: "那 thtr189 呢" must NOT remove THTR 189.
+
+    Even if the LLM mangles the list (drops THTR 189, adds ENGR 111), the
+    pure-question freeze returns CURRENT STATE unchanged.
+    """
+    prev = {
+        "recommended": [
+            _rec("ECEN 153", 4), _rec("ECEN 153L", 1),
+            _rec("GNSX 154A", 5), _rec("THTR 189", 5),
+        ],
+        "total_units": 15,
+    }
+    # LLM wrongly removed THTR 189 and added ENGR 111.
+    llm_out = [_rec("ECEN 153", 4), _rec("ECEN 153L", 1),
+               _rec("GNSX 154A", 5), _rec("ENGR 111", 3)]
+    out = _reconcile_followup_edit(llm_out, prev, "那 thtr189 呢")
+    codes = {r["course"] for r in out}
+    assert codes == {"ECEN 153", "ECEN 153L", "GNSX 154A", "THTR 189"}
+    assert "ENGR 111" not in codes  # not added on a question
+    assert "THTR 189" in codes      # not removed on a question
+
+
+def test_edit_question_still_edits():
+    """A question with edit intent ('why not drop ECEN 153?') still removes it."""
+    llm_out = [_rec("CSEN 122"), _rec("CSEN 122L", 1), _rec("CSEN 194", 4),
+               _rec("CSEN 194L", 1), _rec("ENGL 181")]
+    out = _reconcile_followup_edit(llm_out, _PREV, "why not drop ECEN 153?")
+    codes = {r["course"] for r in out}
+    assert "ECEN 153" not in codes
+    assert "ECEN 153L" not in codes
