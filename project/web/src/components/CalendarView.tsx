@@ -222,7 +222,6 @@ export function CalendarView({
                       {c.reason && (
                         <p className="mt-1 text-[10px] leading-snug text-neutral-600">{c.reason}</p>
                       )}
-                      <p className="mt-1 text-[10px] text-amber-600 italic">Time not yet posted</p>
                     </div>
                     {(onCourseClick || onRemoveCourse) && (
                       <button

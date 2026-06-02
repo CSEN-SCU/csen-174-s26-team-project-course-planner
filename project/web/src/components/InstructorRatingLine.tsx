@@ -71,7 +71,7 @@ export function InstructorRatingLine({
         <span className={`inline-flex items-center gap-0.5 font-medium ${strong}`}>
           <StarIcon onDark={onDark} />
           <span>{rating.toFixed(1)}</span>
-          <span className={`font-normal ${muted}`}>quality</span>
+          <span className={`font-normal ${muted}`}>Q</span>
         </span>
       )}
       {rating != null && difficulty != null && (
@@ -82,7 +82,7 @@ export function InstructorRatingLine({
       {difficulty != null && (
         <span>
           <span className={`font-medium ${strong}`}>{difficulty.toFixed(1)}</span>
-          <span className={muted}> difficulty</span>
+          <span className={muted}> D</span>
         </span>
       )}
       {wta != null && (

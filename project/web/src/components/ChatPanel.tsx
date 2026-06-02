@@ -591,7 +591,11 @@ export function ChatPanel({
       </div>
 
       {hasSavedTranscript && userId && (majorDetection || studentMajorId) && (
-        <div className="shrink-0 px-4 pb-3">
+        <div
+          className={`shrink-0 px-4 pb-3${
+            majorConfirmed && studentMajorId ? " border-t border-neutral-200 pt-3" : ""
+          }`}
+        >
           <div className="flex justify-start">
             <div className="max-w-[90%] rounded-lg bg-[var(--scu-gray)] px-3 py-2 text-sm leading-relaxed text-[var(--scu-text)] ring-1 ring-neutral-200">
               <MajorConfirmPanel

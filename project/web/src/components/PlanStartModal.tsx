@@ -11,14 +11,29 @@ export function PlanStartModal({ open, onManual, onAi, onClose }: PlanStartModal
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="plan-start-title"
+      role="presentation"
+      onClick={onClose}
     >
-      <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl ring-1 ring-neutral-200">
-        <h2 id="plan-start-title" className="text-lg font-semibold text-[var(--scu-text)]">
-          Start a new plan
-        </h2>
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="plan-start-title"
+        className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl ring-1 ring-neutral-200"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <h2 id="plan-start-title" className="text-lg font-semibold text-[var(--scu-text)]">
+            Start a new plan
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 rounded px-2 py-1 text-lg text-neutral-500 hover:bg-neutral-100"
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        </div>
         <p className="mt-2 text-sm text-neutral-600">
           How would you like to build your schedule for this quarter?
         </p>
@@ -45,7 +60,7 @@ export function PlanStartModal({ open, onManual, onAi, onClose }: PlanStartModal
             Cancel
           </button>
         </div>
-      </div>
+      </section>
     </div>
   );
 }
