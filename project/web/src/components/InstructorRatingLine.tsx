@@ -9,10 +9,10 @@ type RatingFields = Pick<
   | "instructor_rating_source"
 >;
 
-function StarIcon({ onDark = false }: { onDark?: boolean }) {
+function StarIcon({ accent = true }: { accent?: boolean }) {
   return (
     <svg
-      className={`h-3 w-3 shrink-0 ${onDark ? "text-amber-200" : "text-amber-500"}`}
+      className={`h-3 w-3 shrink-0 ${accent ? "text-amber-500" : "text-current"}`}
       viewBox="0 0 20 20"
       fill="currentColor"
       aria-hidden
@@ -36,12 +36,15 @@ export function InstructorRatingLine({
   showInstructor = true,
   className = "",
   variant = "default",
+  metricLabels = "abbrev",
 }: {
   section: RatingFields;
   showInstructor?: boolean;
   className?: string;
   /** ``onDark`` for calendar course blocks (bronco-red background). */
   variant?: "default" | "onDark";
+  /** ``full`` spells out Quality / Difficulty (main schedule); ``abbrev`` uses Q / D. */
+  metricLabels?: "abbrev" | "full";
 }) {
   const rating = section.instructor_rating;
   const difficulty = section.instructor_difficulty;
@@ -52,6 +55,8 @@ export function InstructorRatingLine({
   const body = onDark ? "text-white/85" : "text-neutral-600";
   const strong = onDark ? "text-white" : "text-neutral-800";
   const dot = onDark ? "text-white/40" : "text-neutral-300";
+  const qualityLabel = metricLabels === "full" ? "Quality" : "Q";
+  const difficultyLabel = metricLabels === "full" ? "Difficulty" : "D";
 
   if (rating == null && difficulty == null) {
     return (
@@ -69,9 +74,9 @@ export function InstructorRatingLine({
     >
       {rating != null && (
         <span className={`inline-flex items-center gap-0.5 font-medium ${strong}`}>
-          <StarIcon onDark={onDark} />
+          <StarIcon accent={metricLabels === "abbrev"} />
           <span>{rating.toFixed(1)}</span>
-          <span className={`font-normal ${muted}`}>Q</span>
+          <span className={`font-normal ${muted}`}>{qualityLabel}</span>
         </span>
       )}
       {rating != null && difficulty != null && (
@@ -82,7 +87,7 @@ export function InstructorRatingLine({
       {difficulty != null && (
         <span>
           <span className={`font-medium ${strong}`}>{difficulty.toFixed(1)}</span>
-          <span className={muted}> D</span>
+          <span className={muted}> {difficultyLabel}</span>
         </span>
       )}
       {wta != null && (

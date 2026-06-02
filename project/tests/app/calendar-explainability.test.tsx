@@ -29,9 +29,9 @@ describe("CalendarView explainability", () => {
     expect(screen.getAllByText("CSEN 174").length).toBeGreaterThan(0);
     expect(screen.getByText("Completes major elective")).toBeInTheDocument();
     expect(screen.getByText("4.5")).toBeInTheDocument();
-    expect(screen.getByText("Q", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("Quality", { exact: true })).toBeInTheDocument();
     expect(screen.getByText("3.0")).toBeInTheDocument();
-    expect(screen.getByText("D", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText("Difficulty", { exact: true })).toBeInTheDocument();
   });
 
   it("renders reason on TBD courses without meeting times", () => {

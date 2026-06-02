@@ -458,7 +458,7 @@ export function CourseBrowser({
                   </select>
                 </label>
                 <p className="text-[11px] text-neutral-500">
-                  Professor ratings from Rate My Professor
+                  Professor ratings provided by Rate My Professor
                 </p>
               </div>
             </div>

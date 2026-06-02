@@ -156,6 +156,7 @@ export function CalendarView({
                           section={c.instructorRating}
                           showInstructor={false}
                           variant="onDark"
+                          metricLabels="full"
                           className="!text-[9px] leading-tight"
                         />
                       )}
@@ -216,6 +217,7 @@ export function CalendarView({
                         <InstructorRatingLine
                           section={c.instructorRating}
                           showInstructor={false}
+                          metricLabels="full"
                           className="mt-0.5"
                         />
                       )}
