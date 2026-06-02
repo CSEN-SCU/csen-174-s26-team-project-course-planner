@@ -257,6 +257,115 @@ def test_llm_stamps_section_matching_schedule_preference(monkeypatch):
     assert row["meeting_start_min"] == 300
 
 
+def test_unit_floor_tops_up_below_minimum_plan(monkeypatch):
+    """The engine returns an 8-unit plan; the floor must bump it to >= 12.
+
+    This is the bug the user kept hitting: the LLM returns a thin plan and the
+    floor top-up (added in this engine, not just the legacy one) must fire.
+    """
+    _patch(
+        monkeypatch,
+        payload={
+            "recommended": [_rec("CSEN 174", units=4)],  # 4 units only
+            "total_units": 4,
+            "advice": "a",
+            "assistant_reply": "b",
+        },
+    )
+    out = llm.run_llm_planner(
+        [
+            {"course": "CSEN 174", "category": "Major"},
+            {"course": "MATH 53", "category": "Major"},
+            {"course": "CSEN 20", "category": "Major"},
+        ],
+        "give me a plan",
+    )
+    assert out["total_units"] >= 12
+    assert out["meta"]["validation"]["added_for_unit_floor"]
+
+
+def test_unit_floor_skipped_for_part_time_student(monkeypatch):
+    """Part-time students intentionally sit below the full-time minimum."""
+    _patch(
+        monkeypatch,
+        payload={
+            "recommended": [_rec("CSEN 174", units=4)],
+            "total_units": 4,
+            "advice": "a",
+            "assistant_reply": "b",
+        },
+    )
+    out = llm.run_llm_planner(
+        [
+            {"course": "CSEN 174", "category": "Major"},
+            {"course": "MATH 53", "category": "Major"},
+            {"course": "CSEN 20", "category": "Major"},
+        ],
+        "I'm a part-time student, keep it light",
+    )
+    assert out["total_units"] == 4
+    assert out["meta"]["validation"]["added_for_unit_floor"] == []
+
+
+def test_unit_floor_respects_named_cap(monkeypatch):
+    """The floor never pushes the plan above a student-stated cap."""
+    _patch(
+        monkeypatch,
+        payload={
+            "recommended": [_rec("CSEN 174", units=4)],
+            "total_units": 4,
+            "advice": "a",
+            "assistant_reply": "b",
+        },
+    )
+    out = llm.run_llm_planner(
+        [
+            {"course": "CSEN 174", "category": "Major"},
+            {"course": "MATH 53", "category": "Major"},
+        ],
+        "max 5 units please",
+    )
+    # 4 + 4 would exceed 5, so no fill is possible under the cap.
+    assert out["total_units"] <= 5
+
+
+def test_advice_phantom_course_is_scrubbed(monkeypatch):
+    """A course narrated in `advice` but absent from the plan is rewritten out."""
+    _patch(
+        monkeypatch,
+        payload={
+            "recommended": [_rec("CSEN 174", units=4)],
+            "total_units": 4,
+            "advice": "I recommend taking GREK 101 to round out your schedule.",
+            "assistant_reply": "b",
+        },
+    )
+    out = llm.run_llm_planner(
+        [{"course": "CSEN 174", "category": "Major"}],
+        "I'm a part-time student",  # part-time → no floor fill muddies the check
+    )
+    assert "GREK 101" not in out["advice"]
+
+
+def test_advice_deferral_guidance_is_preserved(monkeypatch):
+    """'Not offered / take it later' guidance about an off-plan course stays."""
+    advice = "Note: CSEN 195 is not offered next quarter; plan to take it later."
+    _patch(
+        monkeypatch,
+        payload={
+            "recommended": [_rec("CSEN 174", units=4)],
+            "total_units": 4,
+            "advice": advice,
+            "assistant_reply": "b",
+        },
+    )
+    out = llm.run_llm_planner(
+        [{"course": "CSEN 174", "category": "Major"}],
+        "I'm a part-time student",
+    )
+    assert out["advice"] == advice
+
+
 def test_prompt_includes_full_offered_catalog_with_schedule(monkeypatch):
     captured: list[str] = []
 

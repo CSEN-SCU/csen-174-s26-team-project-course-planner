@@ -41,6 +41,7 @@ from agents.gemini_client import get_genai_client
 from agents.planning_agent import (
     DEFAULT_MODEL,
     ENGLISH_ONLY_USER_OUTPUT_RULE,
+    MIN_FULL_TIME_UNITS,
     PLANNING_SCHEMA,
     UNTRUSTED_INPUT_SYSTEM_RULES,
     WEEKDAY_CODE_LEGEND,
@@ -49,12 +50,15 @@ from agents.planning_agent import (
     _build_schedule_block,
     build_offered_catalog_block,
     _candidate_models,
+    _collect_fill_candidates,
     _enforce_unit_cap,
     _enrich_recommended_units,
     _extract_unit_cap,
+    _fill_to_min_units,
     _filter_completed_recommendations,
     _filter_to_schedule,
     _is_code_in_schedule,
+    _is_part_time_student,
     _is_transient_capacity_error,
     _normalize_code,
     _pair_lab_corequirements,
@@ -62,6 +66,8 @@ from agents.planning_agent import (
     _prefer_lecture_over_standalone_lab,
     _reconcile_followup_edit,
     _recompute_total_units,
+    _resync_advice,
+    _resync_assistant_reply,
     _sanitize_model_output,
     _sanitize_user_text,
     _summarize_previous_plan,
@@ -401,6 +407,34 @@ def run_llm_planner(
     if unit_cap_user is not None:
         recommended, dropped_for_cap = _enforce_unit_cap(recommended, unit_cap_user)
 
+    # Deterministic unit-FLOOR enforcement: the LLM routinely returns an
+    # ~8-unit plan, below the full-time minimum, forcing the student to ask for
+    # "more courses". Top up with real next-term candidates until we reach
+    # MIN_FULL_TIME_UNITS — honoring any stated cap and time conflicts.
+    # Part-time students intentionally sit below the minimum, so skip them.
+    added_for_floor: list[str] = []
+    is_part_time = _is_part_time_student(user_preference or "")
+    if not is_part_time and _recompute_total_units(recommended) < MIN_FULL_TIME_UNITS:
+        fill_candidates = _collect_fill_candidates(
+            missing_details, schedule_index, category_index, user_preference or ""
+        )
+        recommended, added_for_floor = _fill_to_min_units(
+            recommended,
+            fill_candidates,
+            schedule_index,
+            units_index,
+            titles_index,
+            units_lookup,
+            completed_set,
+            MIN_FULL_TIME_UNITS,
+            unit_cap_user,
+        )
+        if added_for_floor:
+            # Re-pair labs for any newly added lecture/lab.
+            recommended = _pair_lab_corequirements(
+                recommended, missing_details, units_lookup
+            )
+
     recommended = _enrich_recommended_units(recommended, units_lookup)
     recommended = _apply_section_selection(
         recommended, user_preference or "", all_sections=all_sections
@@ -414,6 +448,15 @@ def run_llm_planner(
 
     if is_followup:
         _sync_followup_assistant_reply(parsed, previous_plan, user_preference or "")
+    else:
+        # Initial plans: resync the short reply when it disagrees with the
+        # final recommended list / total_units.
+        _resync_assistant_reply(parsed, user_preference or "")
+
+    # Scrub the long `advice` paragraph of phantom-course recommendations
+    # (courses narrated as picks that are not in `recommended`), preserving
+    # legitimate "not offered / take it later" deferral guidance.
+    _resync_advice(parsed)
 
     final_codes = {
         _normalize_code(r.get("course"))
@@ -442,6 +485,7 @@ def run_llm_planner(
             "rejected": rejected,
             "removed_completed": list(removed_completed),
             "dropped_for_unit_cap": list(dropped_for_cap),
+            "added_for_unit_floor": list(added_for_floor),
         },
     }
 
