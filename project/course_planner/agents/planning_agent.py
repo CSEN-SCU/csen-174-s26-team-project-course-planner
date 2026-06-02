@@ -925,6 +925,22 @@ def _extract_unit_cap(user_preference: str) -> int | None:
     return min(candidates)
 
 
+# Part-time students are intentionally below the 12-unit full-time minimum, so
+# the unit-floor top-up must NOT apply to them. Matches common English and
+# Chinese phrasings ("I'm a part-time student", "part time", "兼职", "非全职").
+_PART_TIME_RE = re.compile(
+    r"part[\s-]?time|兼职|非全职|半职",
+    re.IGNORECASE,
+)
+
+
+def _is_part_time_student(user_preference: str) -> bool:
+    """True when the student says they are part-time (floor does not apply)."""
+    if not user_preference:
+        return False
+    return bool(_PART_TIME_RE.search(user_preference))
+
+
 def _enforce_unit_cap(
     recommended: list[dict],
     cap: int | None,
@@ -1118,6 +1134,93 @@ def _sync_followup_assistant_reply(
     parsed["assistant_reply"] = " ".join(parts)[:480]
 
 
+# Sentences that legitimately mention an off-plan course (deferral guidance,
+# e.g. "CSEN 195 is not offered this quarter; plan to take it later") rather
+# than presenting it as a current recommendation.
+_DEFERRAL_CUE_RE = re.compile(
+    r"not\s+offered|not\s+available|isn't\s+offered|is\s+not\s+offered|"
+    r"unavailable|defer|later|future|next\s+(?:year|term|quarter)|"
+    r"when\s+it\s+becomes|becomes\s+available|can(?:not|'t)\s+take|"
+    r"plan\s+to\s+take|not\s+this\s+quarter|already\s+(?:in|on)\b|"
+    r"already\s+completed|you(?:'ve| have)\s+(?:taken|completed)",
+    re.IGNORECASE,
+)
+
+
+def _advice_has_phantom_recommendation(
+    advice: str, recommended_codes: set[str]
+) -> bool:
+    """True when ``advice`` presents a course NOT in the plan as a recommendation.
+
+    The long ``advice`` paragraph is free LLM text. The model sometimes narrates
+    courses it did not actually schedule ("I recommend taking CSEN 195…",
+    "ENGL 181 fits within your unit load") even though they are absent from
+    ``recommended`` — a confusing, inconsistent suggestion.
+
+    Legitimate "take it later / not offered / already in the plan" deferral
+    guidance is preserved: a sentence whose off-plan code sits next to a
+    deferral cue is allowed.
+    """
+    if not advice:
+        return False
+    for sentence in re.split(r"(?<=[.!?。！？])\s+", advice):
+        mentioned = {
+            f"{m.group(1).upper()} {m.group(2).upper()}"
+            for m in _REPLY_CODE_RE.finditer(sentence)
+        }
+        phantom = mentioned - recommended_codes
+        if not phantom:
+            continue
+        if _DEFERRAL_CUE_RE.search(sentence):
+            continue  # legitimate "take it later" guidance — keep it
+        return True
+    return False
+
+
+def _resync_advice(parsed: dict) -> None:
+    """Rewrite ``advice`` when it presents off-plan courses as recommendations.
+
+    Both reply-sync helpers only fix the short ``assistant_reply`` line; the
+    longer ``advice`` paragraph was never validated, so phantom-course
+    recommendations leaked through to the user. This scrubs ``advice`` while
+    preserving legitimate deferral guidance (see
+    :func:`_advice_has_phantom_recommendation`).
+    """
+    if not isinstance(parsed, dict):
+        return
+    recs = parsed.get("recommended") or []
+    if not isinstance(recs, list) or not recs:
+        return
+
+    final_codes: list[str] = []
+    for r in recs:
+        if not isinstance(r, dict):
+            continue
+        code = _normalize_code(r.get("course"))
+        if code and code not in final_codes:
+            final_codes.append(code)
+    final_set = set(final_codes)
+
+    advice = parsed.get("advice") or ""
+    if not isinstance(advice, str):
+        advice = str(advice)
+    if not _advice_has_phantom_recommendation(advice, final_set):
+        return
+
+    try:
+        total = int(parsed.get("total_units") or 0)
+    except (TypeError, ValueError):
+        total = 0
+    if total <= 0:
+        total = _recompute_total_units(recs)
+
+    course_list = ", ".join(final_codes) if final_codes else "the listed courses"
+    parsed["advice"] = (
+        f"This {total}-unit plan covers {course_list}. Every course here is on "
+        "your calendar; let me know if you'd like to swap, add, or drop any."
+    )[:300]
+
+
 def _resolve_item_codes(item: dict) -> list[str]:
     """Return the list of course codes to try for one missing_details item.
 
@@ -1261,6 +1364,120 @@ def _resolve_open_requirement(
 
     # R4c: Cap list length so the LLM sees only top options
     return candidates[:_OPEN_REQ_CANDIDATE_LIMIT]
+
+
+def _collect_fill_candidates(
+    missing_details: list[dict],
+    schedule_index: dict,
+    category_index: dict | None,
+    user_preference: str = "",
+) -> list[tuple[str, str]]:
+    """Ordered ``(code, label)`` candidates to fill a plan toward the unit floor.
+
+    Concrete required courses offered next term come first, then
+    open-requirement courses (already rating-sorted by
+    :func:`_resolve_open_requirement`). All candidates are confirmed offered
+    next term; the caller filters out already-present / completed / conflicting
+    courses.
+    """
+    seen: set[str] = set()
+    out: list[tuple[str, str]] = []
+
+    # 1. Concrete required courses offered next term.
+    for item in missing_details or []:
+        if not isinstance(item, dict):
+            continue
+        for code in _resolve_item_codes(item):
+            norm = _normalize_code(code)
+            if not norm or norm in seen:
+                continue
+            if not _is_code_in_schedule(code, schedule_index):
+                continue
+            seen.add(norm)
+            label = (item.get("category") or item.get("requirement") or "Required course")
+            out.append((code, str(label)))
+
+    # 2. Open-requirement courses (rating-sorted, capped per requirement).
+    if category_index:
+        for item in missing_details or []:
+            if not isinstance(item, dict) or _resolve_item_codes(item):
+                continue
+            req_text = (item.get("category") or item.get("requirement") or "")
+            if not req_text:
+                continue
+            label = _normalize_open_req_text(req_text) or req_text[:40]
+            for code in _resolve_open_requirement(
+                req_text, category_index, schedule_index, user_preference=user_preference
+            ):
+                norm = _normalize_code(code)
+                if norm and norm not in seen:
+                    seen.add(norm)
+                    out.append((code, label))
+    return out
+
+
+def _fill_to_min_units(
+    recommended: list[dict],
+    candidates: list[tuple[str, str]],
+    schedule_index: dict,
+    units_index: dict | None,
+    titles_index: dict | None,
+    units_lookup: dict[str, int] | None,
+    completed_set: set[str],
+    min_units: int,
+    cap: int | None,
+) -> tuple[list[dict], list[str]]:
+    """Add candidates until the plan reaches ``min_units`` (unit floor).
+
+    Only adds a course when it is not already present, not completed, and does
+    NOT time-conflict with any already-scheduled course. Never pushes the total
+    above ``cap`` when a cap is set. Returns ``(recommended, added_codes)``.
+    """
+    if not isinstance(recommended, list):
+        return recommended or [], []
+    present = {
+        _normalize_code(r.get("course"))
+        for r in recommended
+        if isinstance(r, dict)
+    }
+    total = _recompute_total_units(recommended)
+    added: list[str] = []
+    if total >= min_units:
+        return recommended, added
+
+    lookup = units_lookup or {}
+    for code, label in candidates:
+        if total >= min_units:
+            break
+        norm = _normalize_code(code)
+        if not norm or norm in present or norm in completed_set:
+            continue
+        # Time-conflict check against the courses already on the plan.
+        tentative = [r.get("course", "") for r in recommended if isinstance(r, dict)]
+        tentative.append(code)
+        conflicts = detect_time_conflicts(tentative, schedule_index)
+        new_idx = len(tentative) - 1
+        if any(b == new_idx for (_, b) in conflicts):
+            continue
+        units = course_units_for(code, units_index) if units_index else None
+        if units is None:
+            units = default_units_for_code(code, lookup)
+        if cap is not None and total + units > cap:
+            continue
+        recommended.append(
+            {
+                "course": code,
+                "title": (course_title_for(code, titles_index) if titles_index else None)
+                or code,
+                "category": str(label),
+                "units": units,
+                "reason": "Added to reach the 12-unit full-time minimum.",
+            }
+        )
+        present.add(norm)
+        added.append(code)
+        total += units
+    return recommended, added
 
 
 def _build_schedule_block(
@@ -2014,6 +2231,45 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
         if dropped_for_cap:
             parsed["total_units"] = _recompute_total_units(parsed["recommended"])
 
+    # ── Deterministic unit-floor enforcement ─────────────────────────────────
+    # The cap above is a ceiling; without a floor the LLM routinely returns an
+    # 8-unit plan, below the full-time minimum, forcing the student to ask for
+    # "more courses". Top the plan up with real next-term candidates (concrete
+    # requirements first, then rating-sorted open-requirement courses) until it
+    # reaches MIN_FULL_TIME_UNITS, honoring any stated cap and time conflicts.
+    # Part-time students intentionally sit below the full-time minimum, so the
+    # floor top-up must not apply to them.
+    added_for_floor: list[str] = []
+    is_part_time = _is_part_time_student(user_preference or "")
+    if (
+        not is_part_time
+        and _recompute_total_units(parsed.get("recommended") or [])
+        < MIN_FULL_TIME_UNITS
+    ):
+        fill_candidates = _collect_fill_candidates(
+            missing_details, schedule_index, category_index, user_preference or ""
+        )
+        parsed["recommended"], added_for_floor = _fill_to_min_units(
+            parsed.get("recommended") or [],
+            fill_candidates,
+            schedule_index,
+            units_index,
+            titles_index,
+            units_lookup,
+            completed_set,
+            MIN_FULL_TIME_UNITS,
+            unit_cap,
+        )
+        if added_for_floor:
+            # Re-pair labs for any newly added lecture/lab and recompute units.
+            parsed["recommended"] = _pair_lab_corequirements(
+                parsed["recommended"], missing_details, units_lookup=units_lookup
+            )
+            parsed["recommended"] = _enrich_recommended_units(
+                parsed["recommended"], units_lookup
+            )
+            parsed["total_units"] = _recompute_total_units(parsed["recommended"])
+
     eff_model = resolved_model or model
     # ``offered_keys`` is the set of (subject, number) tuples the LLM was
     # explicitly told it may pick from; expose it so eval dashboards can
@@ -2032,6 +2288,7 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
             "deferred_requirements": final_giveups,
             "removed_completed": list(removed_completed) if removed_completed else [],
             "dropped_for_unit_cap": list(dropped_for_cap) if dropped_for_cap else [],
+            "added_for_unit_floor": list(added_for_floor) if added_for_floor else [],
         },
     }
 
@@ -2063,7 +2320,7 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
                 ),
             }
         )
-    if tu < MIN_FULL_TIME_UNITS:
+    if tu < MIN_FULL_TIME_UNITS and not is_part_time:
         warnings.append(
             {
                 "code": "below_full_time_units",
@@ -2099,6 +2356,11 @@ Recommend a schedule for next term and output JSON (fields are constrained by th
         # Initial plans don't get the follow-up reconcile; resync any
         # assistant_reply that contradicts the final recommended list.
         _resync_assistant_reply(parsed, user_preference or "")
+
+    # The short reply is now consistent; also scrub the long ``advice``
+    # paragraph of phantom-course recommendations (Bug: advice was never
+    # validated against the final plan).
+    _resync_advice(parsed)
 
     return _sanitize_model_output(parsed)
 
