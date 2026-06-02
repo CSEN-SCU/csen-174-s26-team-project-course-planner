@@ -157,6 +157,8 @@ export function CalendarView({
                           showInstructor={false}
                           variant="onDark"
                           metricLabels="full"
+                          showWouldTakeAgain={false}
+                          starAccent={false}
                           className="!text-[9px] leading-tight"
                         />
                       )}
@@ -218,6 +220,8 @@ export function CalendarView({
                           section={c.instructorRating}
                           showInstructor={false}
                           metricLabels="full"
+                          showWouldTakeAgain={false}
+                          starAccent={false}
                           className="mt-0.5"
                         />
                       )}

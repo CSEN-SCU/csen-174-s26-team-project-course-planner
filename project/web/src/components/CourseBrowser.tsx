@@ -517,7 +517,7 @@ export function CourseBrowser({
                             {sec.title && (
                               <p className="mt-0.5 text-sm text-neutral-600">{sec.title}</p>
                             )}
-                            <InstructorRatingLine section={sec} className="mt-1" />
+                            <InstructorRatingLine section={sec} metricLabels="full" className="mt-1" />
                             {!expanded && sec.meeting_pattern && (
                               <p className="mt-0.5 truncate text-xs text-neutral-500">
                                 {sec.meeting_pattern}
@@ -558,7 +558,11 @@ export function CourseBrowser({
                                   {(sec.instructors ?? []).join(", ") || "TBA"}
                                 </dd>
                                 <dd className="mt-1">
-                                  <InstructorRatingLine section={sec} showInstructor={false} />
+                                  <InstructorRatingLine
+                                    section={sec}
+                                    showInstructor={false}
+                                    metricLabels="full"
+                                  />
                                 </dd>
                               </div>
                               <div>

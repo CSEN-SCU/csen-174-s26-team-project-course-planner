@@ -37,14 +37,19 @@ export function InstructorRatingLine({
   className = "",
   variant = "default",
   metricLabels = "abbrev",
+  showWouldTakeAgain = true,
+  starAccent = true,
 }: {
   section: RatingFields;
   showInstructor?: boolean;
   className?: string;
   /** ``onDark`` for calendar course blocks (bronco-red background). */
   variant?: "default" | "onDark";
-  /** ``full`` spells out Quality / Difficulty (main schedule); ``abbrev`` uses Q / D. */
+  /** ``full`` spells out Quality / Difficulty; ``abbrev`` uses Q / D. */
   metricLabels?: "abbrev" | "full";
+  showWouldTakeAgain?: boolean;
+  /** When false, star matches surrounding text color (schedule blocks). */
+  starAccent?: boolean;
 }) {
   const rating = section.instructor_rating;
   const difficulty = section.instructor_difficulty;
@@ -74,7 +79,7 @@ export function InstructorRatingLine({
     >
       {rating != null && (
         <span className={`inline-flex items-center gap-0.5 font-medium ${strong}`}>
-          <StarIcon accent={metricLabels === "abbrev"} />
+          <StarIcon accent={starAccent} />
           <span>{rating.toFixed(1)}</span>
           <span className={`font-normal ${muted}`}>{qualityLabel}</span>
         </span>
@@ -90,7 +95,7 @@ export function InstructorRatingLine({
           <span className={muted}> {difficultyLabel}</span>
         </span>
       )}
-      {wta != null && (
+      {wta != null && showWouldTakeAgain && (
         <>
           <span className={dot} aria-hidden>
             ·
