@@ -101,20 +101,76 @@ def _markdown_body_without_frontmatter(text: str) -> str:
     return text
 
 
+def _extract_senior_design_sections(body: str, sd_codes: list[str]) -> str:
+    """Per-course catalog blocks for SD codes + the trailing SD sequence note."""
+    chunks: list[str] = []
+    seen: set[str] = set()
+    for code in sd_codes:
+        if not code or code in seen:
+            continue
+        seen.add(code)
+        pat = re.compile(
+            rf"###\s+{re.escape(code)}\s+—[\s\S]*?(?=\n\s*---\s*\n|\n##\s|\Z)",
+            re.IGNORECASE,
+        )
+        m = pat.search(body)
+        if m:
+            chunks.append(m.group(0).strip())
+    sd_section = re.search(
+        r"##\s+Senior Design[\s\S]*?(?=\n##\s|\Z)",
+        body,
+        re.IGNORECASE,
+    )
+    if sd_section:
+        chunks.append(sd_section.group(0).strip())
+    return "\n\n---\n\n".join(chunks).strip()
+
+
 def load_major_markdown_excerpt(major_id: str, *, max_chars: int = _MARKDOWN_MAX_CHARS) -> str:
-    """Trimmed bulletin text for LLM prompts (requirements + prerequisite catalog)."""
+    """Trimmed bulletin text for LLM prompts (requirements + prerequisite catalog).
+
+    Senior-Design catalog entries and the trailing ``## Senior Design sequence``
+    note live at the bottom of long bulletins, so naive truncation drops them.
+    They are pinned to the tail of the excerpt so the LLM always sees the
+    final-year sequencing rule.
+    """
     raw = load_major_markdown(major_id)
     if not raw:
         return ""
     body = _markdown_body_without_frontmatter(raw)
-    # Prefer degree requirements + prerequisite sections; drop very long tail if needed.
+
+    spec = (load_major_catalog().get("majors") or {}).get(major_id) or {}
+    sd_codes = [
+        _normalize_code(str(c))
+        for c in (spec.get("senior_design_sequence") or [])
+    ]
+    sd_codes = [c for c in sd_codes if c]
+
     if len(body) <= max_chars:
         return body.strip()
+
     cut = body[:max_chars]
     last_hr = cut.rfind("\n---\n")
     if last_hr > max_chars // 2:
         cut = cut[:last_hr]
-    return cut.strip() + "\n\n(… bulletin excerpt truncated …)\n"
+
+    truncated = cut.strip() + "\n\n(… bulletin excerpt truncated …)\n"
+
+    pinned = _extract_senior_design_sections(body, sd_codes) if sd_codes else ""
+    if not pinned:
+        return truncated
+
+    missing_catalog = any(f"### {code} " not in cut for code in sd_codes)
+    missing_rule = "## Senior Design" not in cut
+    if not (missing_catalog or missing_rule):
+        return truncated
+
+    return (
+        truncated
+        + "\n--- Senior Design sections (always preserved) ---\n\n"
+        + pinned
+        + "\n"
+    )
 
 
 def _parse_prereq_codes_from_text(text: str) -> list[list[str]]:
