@@ -14,6 +14,7 @@ import {
   type MajorDetection,
 } from "../api/client";
 import { formatPlanCourseSummarySuffix } from "../lib/recommendedCourseDisplay";
+import { fetchSampleAcademicProgressFile } from "../lib/sampleAcademicProgress";
 import type { ParsedRow } from "../types";
 import { MajorConfirmPanel } from "./MajorConfirmPanel";
 import { PlannerColumnHeader } from "./PlannerColumnHeader";
@@ -63,6 +64,8 @@ export type ChatPanelProps = {
   onTranscriptUploaded?: (detection: MajorDetection | null) => void;
   /** Clears persisted transcript memory when the user discards a re-upload. */
   onDiscardTranscript?: () => void | Promise<void>;
+  /** Auto-load the bundled sample academic progress once (demo mode). */
+  autoLoadSample?: boolean;
 };
 
 function planSummaryText(plan: Record<string, unknown>): string {
@@ -141,6 +144,7 @@ export function ChatPanel({
   onRequestMajorChange,
   onTranscriptUploaded,
   onDiscardTranscript,
+  autoLoadSample = false,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -148,6 +152,7 @@ export function ChatPanel({
   const [voiceStatus, setVoiceStatus] = useState<"idle" | "recording" | "processing">("idle");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [transcriptDiscarded, setTranscriptDiscarded] = useState(false);
+  const [sampleLoading, setSampleLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -448,6 +453,32 @@ export function ChatPanel({
     [hasSavedTranscript, processFile, setMessages],
   );
 
+  const loadSampleFile = useCallback(async () => {
+    if (sampleLoading || inputLocked) return;
+    setSampleLoading(true);
+    try {
+      const file = await fetchSampleAcademicProgressFile();
+      handleFile(file);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setMessages((m) => [
+        ...m,
+        { id: `a-${Date.now()}`, role: "assistant", content: msg },
+      ]);
+    } finally {
+      setSampleLoading(false);
+    }
+  }, [sampleLoading, inputLocked, handleFile, setMessages]);
+
+  // Demo mode: load the bundled sample once when the panel mounts.
+  const autoLoadedRef = useRef(false);
+  useEffect(() => {
+    if (!autoLoadSample || autoLoadedRef.current) return;
+    if (hasSavedTranscript || pendingFile) return;
+    autoLoadedRef.current = true;
+    void loadSampleFile();
+  }, [autoLoadSample, hasSavedTranscript, pendingFile, loadSampleFile]);
+
   const onFilePick = useCallback(() => {
     if (inputLocked) return;
     fileInputRef.current?.click();
@@ -700,9 +731,20 @@ export function ChatPanel({
             </button>
           </div>
         </div>
-        <p className="mt-1.5 text-[10px] text-neutral-400">
-          {uploadHelperText}
-        </p>
+        <div className="mt-1.5 flex items-center justify-between gap-2">
+          <p className="text-[10px] text-neutral-400">{uploadHelperText}</p>
+          {!hasSavedTranscript && (
+            <button
+              type="button"
+              onClick={() => void loadSampleFile()}
+              disabled={inputLocked || sampleLoading}
+              className="shrink-0 text-[11px] font-semibold text-[var(--scu-red)] underline-offset-2 transition hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+              title="Load a sample Academic Progress file to try the planner"
+            >
+              {sampleLoading ? "Loading sample…" : "Try a sample file"}
+            </button>
+          )}
+        </div>
       </div>
     </aside>
   );

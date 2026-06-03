@@ -45,10 +45,12 @@ const INTRO_SEEN_KEY_PREFIX = "scu_planner_intro_seen:";
 export type AppProps = {
   userId: string;
   onSignOut: () => void;
-  onDeleteUserData: () => void;
+  onDeleteUserData?: () => void;
+  /** Guest demo: no persistence, auto-loads the bundled sample file. */
+  demoMode?: boolean;
 };
 
-export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
+export default function App({ userId, onSignOut, onDeleteUserData, demoMode = false }: AppProps) {
   const [missingDetails, setMissingDetails] = useState<unknown[]>([]);
   const [planResult, setPlanResult] = useState<Record<string, unknown> | null>(null);
   const [messages, setMessages] = useState<ChatUiMessage[]>([
@@ -120,8 +122,13 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
     title: string;
   } | null>(null);
 
+  // Persistence (saveMemory/deleteMemory) is already guarded by `if (userId)`
+  // at every call site, so the guest demo (userId === "") runs fully
+  // client-side without writing to the server.
+
   // Load academic progress + past plan snapshots for this user
   useEffect(() => {
+    if (!userId) return;
     void getMemory(userId)
       .then((r) => {
         const mems: Record<string, unknown>[] = Array.isArray(r.memories) ? r.memories : [];
@@ -212,6 +219,7 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
   }, [userId]);
 
   const clearTranscriptMemory = useCallback(async () => {
+    if (!userId) return;
     try {
       const r = await getMemory(userId);
       const mems: Record<string, unknown>[] = Array.isArray(r.memories) ? r.memories : [];
@@ -257,8 +265,12 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
   }, [fileUploaded, missingDetails, parsedRows, majorConfirmed, refreshMajorDetection]);
 
   useEffect(() => {
+    if (demoMode) {
+      setFirstLoginCarouselOpen(false);
+      return;
+    }
     setFirstLoginCarouselOpen(!hasSeenFirstLoginCarousel(userId));
-  }, [userId]);
+  }, [userId, demoMode]);
 
   // Base calendar data from current session or plan result
   const calendarRecommended = useMemo(() => {
@@ -1168,6 +1180,7 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
           }
         }}
         onDiscardTranscript={clearTranscriptMemory}
+        autoLoadSample={demoMode}
       />
       </div>
       <SiteFooter
