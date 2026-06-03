@@ -1,6 +1,4 @@
-[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-22041afd0340ce965d47ae6ef1cefeee28c7c493a6346c4f15d667ab976d596c.svg)](https://classroom.github.com/a/NfqHRKdw)
-
-# SCU Course Planner (CSEN 174)
+# SCU Course Planner
 
 ## Team
 
@@ -8,213 +6,98 @@
 
 ---
 
-## SCU Course Planner
+SCU Course Planner is a web app for Santa Clara University students. The website allows students to upload their Academic Progress Report in order to receive tailored course recommnedations to aid students in planning their upcoming schedules. Next, students can manually add and remove classes to refine their schedule and save it for future reference. SCU Course Planner also visually lays out academic progress in a Four-Year Plan table, where students can then receive tailored Four-Year Plan recommendations.
 
-A web app for Santa Clara University students. Manually export SCU **View My
-Academic Progress** from Workday as an Excel file, upload it, describe
-preferences in natural language, and get a **recommended next-quarter schedule**
-and **multi-quarter graduation plan** with **RateMyProfessor** enrichment and a
-**weekly calendar** preview (when **Find Course Sections** `.xlsx` is present).
-Per-user **long-term memory** (RAG) and **follow-up chat replies** support
-iterative planning across sessions.
+## Demo Link
 
-Two services compose the app:
+View a live demo of SCU Course Planner [Here](https://csen-174-s26-team-project-course-planner.onrender.com/)
 
-| Path | Stack | Role |
-|------|-------|------|
-| [`project/api/`](project/api/) | FastAPI + Python agents | REST API for auth, Academic Progress upload, plan generation, four-year plan, memory CRUD |
-| [`project/web/`](project/web/) | React + Vite + Tailwind | SPA: login + chat + calendar + 4-year grid |
-| [`project/course_planner/`](project/course_planner/) | Python package | Shared **agents**, **SQLite + sqlite-vec**, **auth/users_db**, and **xlsx parsers** used by the FastAPI service |
+## Run locally
 
-### Current implementation
-
-| Area | Module | What it does |
-|------|--------|----------------|
-| Auth | `project/api/routers/auth.py`, `project/course_planner/auth/users_db.py`, `auth/google_oauth.py` | Username/password (bcrypt + SQLite) plus Google OAuth |
-| Database | `project/course_planner/db/connection.py`, `db/migrate.py`, `db/schema.sql` | SQLite at `project/course_planner/data/app.db` (gitignored): `users`, `memory_items`, **sqlite-vec** `memory_vec` for embeddings |
-| Memory (RAG) | `project/course_planner/agents/memory_agent.py` | **Gemini `text-embedding-004`** (fallback hash vectors if no API key); `write` / `retrieve` / list / delete — **scoped by `user_id`** |
-| Orchestration | `project/course_planner/agents/orchestrator.py` | `plan_for_user`: retrieve memory → **planning_agent** → write summary; **PII redaction** on retrieved snippets before the LLM |
-| Planning | `project/course_planner/agents/planning_agent.py` | **Gemini** structured JSON: `recommended`, `total_units`, `advice`, **`assistant_reply`**. **Lecture+lab pairs** (e.g. CSEN 194 + CSEN 194L) when both appear in the gap; retries / fallback models; **`meta` / `warnings` / per-course `alternatives`**. Prompt-injection sanitiser on user text |
-| Four-year plan | `project/course_planner/agents/four_year_planning_agent.py` | Multi-quarter graduation grid; surfaces open Core/GE candidates via Course-Tags index; typed `EmptyPlanError` / `InconsistentPlanError` |
-| Requirement parsing | `project/course_planner/utils/academic_progress_xlsx.py` | Parses DegreeWorks export; builds `missing_details` and `parsed_rows` |
-| Professor ratings | `project/course_planner/agents/professor_agent.py` | RateMyProfessor GraphQL (parallel); aligns to Find Course instructors when possible |
-| Rate limiting | `project/api/middleware/rate_limit.py` | Per-IP, per-user, per-user-concurrency token bucket on `/api/plan`, `/api/four-year-plan` |
-| Calendar + 4-year UI | `project/web/src/components/CalendarView.tsx`, `FourYearPlanView.tsx` | Mon–Fri weekly grid plus 4-year graduation grid overlaying completed transcript history with AI recommendations |
-| **Multi-agent planner (LangGraph)** | `project/course_planner/agents/multi_agent/` | **Experimental** Planner ↔ Verifier ↔ InstructorSelector graph with tool-calling, parallel fan-out, checkpointing + human-in-the-loop. Exposed at `POST /api/plan/v2`. See [section below](#multi-agent-planner-langgraph) |
-| **Eval harness** | `project/course_planner/evals/` | Deterministic rule-based scorers (R1–R6 + injection safety) + A/B runner to compare engines |
-
-### Tests
-
-From `project/`:
-
-```bash
-cd project
-python3 -m pytest tests/
-```
-
-### Architecture (high level)
-
-```
-Manual Academic Progress export (.xlsx/.xlsm)
-        ↓
-Requirement Parser → missing_details + parsed_rows
-        ↓
-[FastAPI /api/plan or /api/four-year-plan]
-        ↓
-Orchestrator.plan_for_user  ←  SQLite memory (retrieve / write)
-        ↓
-Planning Agent (Gemini)     ←  preferences + gap + memory + previous_plan
-        ↓  (post-process: lab pairing, title override, conflict check)
-Professor Agent (RMP) → React frontend (calendar / 4-year grid)
-```
-
-### Prerequisites
-
-| Tool | Version | Notes |
-|------|---------|-------|
-| Python | **3.12** | matches CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)); backend + agents |
-| Node.js | **≥ 20.12** (CI uses 20.19) | frontend (Vite) |
-| npm | bundled with Node | installs frontend deps |
-
-A virtual environment is recommended for the backend
-(`python3 -m venv .venv && source .venv/bin/activate` before `pip install`).
-
-### Run locally
-
-Backend:
+**Backend**:
 
 ```bash
 cd project/api
 pip install -r requirements.txt -r ../course_planner/requirements.txt
-cp .env.example .env   # set GEMINI_API_KEY, GOOGLE_CLIENT_ID/SECRET, etc.
+cp .env.example .env   # Manually set variables within file with your own values
 uvicorn main:app --reload --port 8000 \
   --reload-dir . \
   --reload-dir ../course_planner
 ```
 
-Frontend:
+**Frontend**:
 
 ```bash
 cd project/web
 npm install
-npm run dev          # opens http://localhost:5173
+npm run dev          # http://localhost:5173
 ```
 
-### Environment variables
+Open **http://localhost:5173** in your browser (API at **http://localhost:8000**)
+
+
+## Project Architecture
+
+```
+Manual Academic Progress Report uploaded by user (.xlsx)
+        ↓
+Requirement Parser → parsed_rows + missing_details
+        ↓
+[FastAPI /api/plan or /api/four-year-plan]
+        ↓
+Orchestrator.plan_for_user  ←  SQLite memory (retrieve / write)
+        ↓
+Planning Agent (Gemini API)     ←  preferences + gap + memory + previous_plan
+        ↓  (post-process: lab pairing, title override, conflict check)
+Professor Agent (RMP) → React frontend (calendar / 4-year grid)
+```
+
+## Prerequisites
+
+| Tool | Version | Notes |
+|------|---------|-------|
+| Python | **3.12** | Matches GitHub CI, used for backend |
+| Node.js | **≥ 20.12** | Vite frontend |
+| npm | Bundled with Node | Installs frontend dependencies |
+| Gemini API Key | N/A | Used for Gemini API calls |
+| Google OAuth | 2.0 | Used for account login |
+
+A virtual environment is recommended for the backend
+(`python3 -m venv .venv && source .venv/bin/activate` before `pip install`).
+
+## Environment variables
+
+The following variables are stored and set in `.env`
 
 | Variable | Purpose |
 |----------|---------|
-| `GEMINI_API_KEY` or `GOOGLE_API_KEY` | Required for live planning + embeddings (without it, embeddings fall back to deterministic hashes; planning still needs a key for Gemini JSON output) |
-| `GEMINI_MODEL` | Optional override (default `gemini-2.5-flash`) |
+| `GEMINI_API_KEY` or `GOOGLE_API_KEY` | Used for Gemini API calls |
+| `GEMINI_MODEL` | Optional, overrides default `gemini-2.5-flash` |
 | `SCU_PLANNER_COOKIE_KEY` | **Production:** signing key for auth cookies. Dev uses a placeholder if unset |
 | `COURSE_PLANNER_DB` | Optional absolute path to SQLite DB (tests set this to a temp file) |
 | `MEMORY_TOP_K`, `MEMORY_INJECT_CHAR_BUDGET`, `MEMORY_EMBED_MODEL` | Optional tuning for memory retrieval / prompt size |
 | `PLANNER_REACT` | `0` disables the Planner's ReAct tool-calling loop (single-shot fallback; default on) |
 
-Do **not** commit `.env` or `project/course_planner/data/`.
+Do not commit `.env` files. Use `project/course_planner/.env.example` or `prototypes/<name>/.env.example` as templates.
 
-### Required local files (not in git)
+## Required Workday files
 
-Place these under `project/course_planner/` when you want full behavior (see `.gitignore`):
+Place these under `project/course_planner/` for full functionality when run locally.
 
 | File | Where to get it |
 |------|-----------------|
-| `View_My_Academic_Progress.xlsx` | SCU Workday → View My Academic Progress → Export |
 | `SCU_Find_Course_Sections.xlsx` | SCU Workday → Find Course Sections → Export |
 
 Without **Find Course Sections**, recommendations still render; calendar uses **Time TBD** for unmatched sections.
 
-### Lecture + lab pairs (SCU)
 
-For subjects like **CSEN / COEN / PHYS / CHEM / ELEN / BIOL**, a course and its **trailing-L** lab (e.g. **CSEN 194** and **CSEN 194L**) are treated as **same-quarter co-requirements** when **both** still appear in `missing_details`. The planner post-processes the model output so one half is not recommended without the other.
+## Paths in this repository
 
----
-
-## Multi-agent planner (LangGraph)
-
-> **Experimental** — available only through explicit `/api/plan/v2` endpoints.
-
-The default `/api/plan` uses the LLM course-selection planner with post-processing. A second
-engine in [`project/course_planner/agents/multi_agent/`](project/course_planner/agents/multi_agent/)
-re-implements planning as a **LangGraph `StateGraph`** where three roles
-review each other. It runs at `POST /api/plan/v2`.
-
-```
-START → Planner → Verifier ──[issues & retries<2]→ Planner      (feedback loop)
-                          ├──[clean]→ Send(InstructorSelector) × N ┐  (parallel)
-                          └──[no courses]──────────────────────────┤
-                                                                    ▼
-                                                                Assembler → END
-```
-
-### Roles (3 decision agents + 1 assembler)
-
-| Node | Type | Decision it makes |
-|------|------|-------------------|
-| **Planner** | LLM, **ReAct tool-calling** | Which tools to call (and when) before proposing courses |
-| **Verifier** | **deterministic** (no LLM) | Loop back to Planner / fan out / skip — after checking hallucination, time conflicts, missing labs, uncovered Core |
-| **InstructorSelector** | deterministic, **parallel** | Best-rated section per course + an instructor comparison table |
-| Assembler | deterministic | Merge the plan + instructor picks into the final response |
-
-### Tools the agents can call
-
-A registry of **9 deterministic tools** (`agents/multi_agent/tools.py`) wraps the
-existing schedule/category/title/ratings utilities. The Planner exposes three to
-the model via native Gemini function-calling: `search_schedule`,
-`get_open_req_candidates`, `get_lab_partner`.
-
-### LangGraph features used
-
-- **Conditional edges** — `verifier_router` 3-way routing (loop / fan-out / skip)
-- **`Send` API** — dynamic parallel fan-out: one `InstructorSelector` per course, merged via a state **reducer**
-- **Checkpointing** — `InMemorySaver` (dev) / `SqliteSaver` (durable; survives restart)
-- **`interrupt_before`** — human-in-the-loop: pause before committing a plan that drops a course
-
-### HTTP endpoints
-
-| Endpoint | Purpose |
-|----------|---------|
-| `POST /api/plan/v2` | Run the multi-agent engine end-to-end |
-| `POST /api/plan/v2/review` | Run up to the commit step and return a **draft** for human approval (needs `thread_id`) |
-| `POST /api/plan/v2/resume` | Approve a reviewed draft: resume from the checkpoint and finalize |
-
-### Design notes
-
-- **Verifier is code, not an LLM** — the rules (no conflicts, lab pairing, Core
-  coverage) are deterministic, so they're cheaper and reliable. The LLM is spent
-  only where creativity helps (the Planner).
-- **No `langchain-google-genai`** — native Gemini function-calling inside a
-  LangGraph node keeps the dependency footprint small.
-
-### Evaluation (`agents` quality)
-
-[`project/course_planner/evals/`](project/course_planner/evals/) scores a plan
-against the domain rules with **7 deterministic scorers** (`no_hallucination`,
-`no_time_conflicts`, `labs_paired`, `unit_cap`, `titles_correct`,
-`open_req_coverage`, `no_injection_leak`) — **no LLM-as-judge**, so scoring is
-reproducible and unit-tested (25 tests). The runner A/B-compares engines on
-scenarios derived from a real transcript:
-
-```bash
-cd project/course_planner
-python -m evals.run_eval --engine llm
-```
-
-The LLM produces the plan; the scorers judge it deterministically.
-
----
-
-## Other paths in this repository
-
-| Path | Purpose |
+| Path | Description |
 |------|---------|
-| [`product-vision.md`](product-vision.md) | Product vision + HMW |
-| [`problem_framing_canvas.md`](problem_framing_canvas.md) | Problem Framing Canvas |
-| [`architecture/architecture.md`](architecture/architecture.md) | C4 diagrams |
-| [`project/api/`](project/api/) | FastAPI service (auth, upload, plan, four-year-plan, memory) |
-| [`project/web/`](project/web/) | React + Vite frontend |
-| [`prototypes/`](prototypes/) | Teammate divergent prototypes |
+| [`docs`](docs) | Documentation of repo |
+| [`architecture`](architecture) | Architecture of SCU Course Planner |
+| [`project`](project) | SCU Course Planner software |
+| [`.cursor`](.cursor) | Contains skills used by Cursor |
+| [`.github`](.github) | Contains GitHub CI configuration |
 
-## Secrets
-
-Do not commit `.env` files. Use `project/course_planner/.env.example` or `prototypes/<name>/.env.example` as templates.
