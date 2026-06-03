@@ -8,6 +8,7 @@ from utils.major_requirements import (
     detect_major_detailed,
     enforce_senior_design_in_final_quarters,
     infer_academic_stage,
+    load_major_markdown_excerpt,
     next_senior_design_course,
     prerequisites_met,
     remaining_major_courses,
@@ -81,6 +82,19 @@ def test_remaining_major_courses_excludes_completed() -> None:
     remaining = remaining_major_courses("csen", completed, [])
     assert "CSEN 10" not in remaining
     assert "CSEN 194" in remaining
+
+
+def test_excerpt_pins_senior_design_sections_when_bulletin_truncated() -> None:
+    # CSEN bulletin is ~22KB; default excerpt cap is 10KB, so SD catalog
+    # entries and the trailing "## Senior Design sequence" rule live past the
+    # cut. They must still reach the LLM prompt.
+    text = load_major_markdown_excerpt("csen")
+    assert "(… bulletin excerpt truncated …)" in text
+    assert "### CSEN 194 —" in text
+    assert "### CSEN 195 —" in text
+    assert "### CSEN 196 —" in text
+    assert "## Senior Design sequence" in text
+    assert "one course per quarter in the final year" in text
 
 
 def test_enforce_senior_design_moves_to_last_three_quarters() -> None:
