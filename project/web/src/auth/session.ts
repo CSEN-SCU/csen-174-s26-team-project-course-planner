@@ -39,6 +39,11 @@ export function persistSessionToken(token: string | null): void {
   else sessionStorage.removeItem(SESSION_TOKEN_KEY);
 }
 
+// Prefix of the per-user "first-login onboarding carousel seen" flag in
+// localStorage (see App.tsx). Cleared on sign-out so the carousel reliably
+// reappears on the next sign-in for any user who has no saved data.
+const INTRO_SEEN_KEY_PREFIX = "scu_planner_intro_seen";
+
 /** Clear browser session (sign out). Does not touch server data by itself. */
 export function clearLocalSession(): void {
   if (typeof window === "undefined") return;
@@ -46,6 +51,16 @@ export function clearLocalSession(): void {
   sessionStorage.removeItem(LEGACY_USER_ID_KEY);
   sessionStorage.removeItem(SESSION_TOKEN_KEY);
   sessionStorage.removeItem(GOOGLE_OAUTH_PENDING_KEY);
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(INTRO_SEEN_KEY_PREFIX)) {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch {
+    /* ignore */
+  }
 }
 
 /** Handoff token present while returning from Google OAuth (before exchange). */

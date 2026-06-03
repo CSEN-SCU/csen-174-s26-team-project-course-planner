@@ -210,6 +210,18 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
               : prev,
           );
         }
+
+        // Onboarding carousel: show it whenever this user has NO saved data
+        // (brand-new account, or right after deleting their data and signing
+        // back in). The per-user "seen" flag only suppresses re-popping within
+        // the same browser session — it is cleared on sign-out / delete.
+        const hasUserData =
+          restoredAcademicProgress ||
+          loadedSnaps.length > 0 ||
+          majorItems.length > 0;
+        setFirstLoginCarouselOpen(
+          !hasUserData && !hasSeenFirstLoginCarousel(userId),
+        );
       })
       .catch(() => { /* ignore */ });
   }, [userId]);
@@ -259,9 +271,8 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
     }
   }, [fileUploaded, missingDetails, parsedRows, majorConfirmed, refreshMajorDetection]);
 
-  useEffect(() => {
-    setFirstLoginCarouselOpen(!hasSeenFirstLoginCarousel(userId));
-  }, [userId]);
+  // Note: the onboarding carousel is opened from the memory-load effect above,
+  // once we know whether this user has any saved data.
 
   // Base calendar data from current session or plan result
   const calendarRecommended = useMemo(() => {

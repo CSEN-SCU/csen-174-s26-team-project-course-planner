@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../../web/src/App";
+import { getMemory } from "../../web/src/api/client";
 
 vi.mock("../../web/src/api/client", () => ({
   getMemory: vi.fn(async () => ({ memories: [] })),
@@ -13,6 +14,8 @@ vi.mock("../../web/src/api/client", () => ({
   listCourses: vi.fn(async () => []),
   googleSignInUrl: vi.fn(() => ""),
 }));
+
+const mockedGetMemory = vi.mocked(getMemory);
 
 vi.mock("../../web/src/auth/session", () => ({
   clearLocalSession: vi.fn(),
@@ -45,6 +48,8 @@ vi.mock("../../web/src/components/DeleteUserDataConfirm", () => ({
 describe("first-login onboarding carousel", () => {
   beforeEach(() => {
     localStorage.clear();
+    mockedGetMemory.mockReset();
+    mockedGetMemory.mockResolvedValue({ memories: [] });
   });
 
   it("shows the intro overlay once for a new logged-in user and persists dismissal", async () => {
@@ -77,6 +82,25 @@ describe("first-login onboarding carousel", () => {
 
     unmount();
     render(<App userId="new-user" onSignOut={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+  });
+
+  it("does not show for a user who already has saved data", async () => {
+    mockedGetMemory.mockResolvedValue({
+      memories: [
+        {
+          id: 1,
+          kind: "academic_progress",
+          content: JSON.stringify([{ requirement: "Core", units: 4 }]),
+          created_at: "2026-01-01",
+        },
+      ],
+    });
+
+    render(<App userId="has-data-user" onSignOut={() => {}} />);
 
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
