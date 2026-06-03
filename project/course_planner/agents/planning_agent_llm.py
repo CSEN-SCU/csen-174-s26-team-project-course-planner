@@ -51,6 +51,7 @@ from agents.planning_agent import (
     build_offered_catalog_block,
     _candidate_models,
     _collect_fill_candidates,
+    _drop_time_conflicts,
     _enforce_unit_cap,
     _enrich_recommended_units,
     _extract_unit_cap,
@@ -401,6 +402,13 @@ def run_llm_planner(
             recommended, titles_index, units_index, units_lookup
         )
 
+    # Deterministic time-conflict enforcement: the LLM is asked to avoid
+    # overlapping sections but routinely returns them anyway, so drop any course
+    # that conflicts with one already kept (lab/lecture pairs drop together).
+    recommended, dropped_for_conflict = _drop_time_conflicts(
+        recommended, schedule_index
+    )
+
     # Deterministic unit-cap enforcement when the student named a cap.
     unit_cap_user = _extract_unit_cap(user_preference or "")
     dropped_for_cap: list[str] = []
@@ -484,6 +492,7 @@ def run_llm_planner(
             "selected_codes": sorted(final_codes),
             "rejected": rejected,
             "removed_completed": list(removed_completed),
+            "dropped_for_time_conflict": list(dropped_for_conflict),
             "dropped_for_unit_cap": list(dropped_for_cap),
             "added_for_unit_floor": list(added_for_floor),
         },
