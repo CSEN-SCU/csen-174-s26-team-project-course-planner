@@ -40,12 +40,15 @@ const NEW_PLAN_AI_WITH_PROGRESS_TEXT =
   "Started a new plan. Your Academic Progress Report is already loaded, so tell me your preferences for next quarter.";
 const NEW_PLAN_MANUAL_TEXT =
   "Started a new plan. Use Browse Courses to search the catalog, or click a time slot on the calendar.";
-const INTRO_SEEN_KEY_PREFIX = "scu_planner_intro_seen:";
+// Bump the version suffix whenever the onboarding carousel content changes so
+// returning users see the updated walkthrough once more. (v2 adds the
+// "try a sample report" guidance.)
+const INTRO_SEEN_KEY_PREFIX = "scu_planner_intro_seen:v2:";
 
 export type AppProps = {
   userId: string;
   onSignOut: () => void;
-  onDeleteUserData: () => void;
+  onDeleteUserData?: () => void;
 };
 
 export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
@@ -207,6 +210,18 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
               : prev,
           );
         }
+
+        // Onboarding carousel: show it whenever this user has NO saved data
+        // (brand-new account, or right after deleting their data and signing
+        // back in). The per-user "seen" flag only suppresses re-popping within
+        // the same browser session — it is cleared on sign-out / delete.
+        const hasUserData =
+          restoredAcademicProgress ||
+          loadedSnaps.length > 0 ||
+          majorItems.length > 0;
+        setFirstLoginCarouselOpen(
+          !hasUserData && !hasSeenFirstLoginCarousel(userId),
+        );
       })
       .catch(() => { /* ignore */ });
   }, [userId]);
@@ -256,9 +271,8 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
     }
   }, [fileUploaded, missingDetails, parsedRows, majorConfirmed, refreshMajorDetection]);
 
-  useEffect(() => {
-    setFirstLoginCarouselOpen(!hasSeenFirstLoginCarousel(userId));
-  }, [userId]);
+  // Note: the onboarding carousel is opened from the memory-load effect above,
+  // once we know whether this user has any saved data.
 
   // Base calendar data from current session or plan result
   const calendarRecommended = useMemo(() => {
