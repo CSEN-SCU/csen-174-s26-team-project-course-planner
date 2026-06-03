@@ -781,11 +781,17 @@ _QUESTION_MARKER_RE = re.compile(
 )
 
 # Any verb that expresses a plan edit (add OR remove OR swap OR resize).
+# NOTE: the bare CJK char ``少`` is intentionally NOT here — it would match
+# inside question words like ``多少`` ("how many") and ``少了`` ("is missing"),
+# wrongly turning an info question into an edit. We only treat ``少`` as an
+# edit verb when it is followed by a quantity (``少一门``/``少两节``); plain
+# "reduce my load" intent is already covered by ``减`` and the English verbs.
 _EDIT_INTENT_RE = re.compile(
     r"\badd\b|\binclude\b|\bremove\b|\bdrop\b|\breplace\b|\bswap\b|"
     r"\bswitch\b|\bdelete\b|\bchange\b|\binstead\b|\bget\s+rid\b|"
-    r"\btake\s+out\b|\bmore\b|\bfewer\b|\bless\b|\blighter\b|\bheavier\b|"
-    r"加|删|去掉|去除|换|替|改|减|增|拿掉|不要|多加|少",
+    r"\btake\s+out\b|\bmore\b|\bfewer\b|\bless\b|\breduce\b|\blower\b|\bcut\b|"
+    r"\blighter\b|\bheavier\b|"
+    r"加|删|去掉|去除|换|替|改|减|增|拿掉|不要|多加|少\s*[一二两三四五六七八九1-9]",
     re.IGNORECASE,
 )
 
