@@ -81,7 +81,7 @@ On successful login, fetch server state (`missing_details` snapshot, memory list
 
 ![Workday sync failed with missing Playwright dependency](img/sync_screenshot.png)
 
-**Severity:** Low (feature reliability; higher if users rely on sync instead of manual upload of sensitive files). *Not very serious as just simply not implemented yet.*
+**Severity:** Low (feature reliability; higher if users rely on sync instead of manual upload of sensitive files). *Not very serious as it is simply not implemented yet.*
 
 **Why it matters:**
 

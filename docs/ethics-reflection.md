@@ -2,7 +2,7 @@
 
 ## Product Statement
 
-For Undergraduate SCU Students who need help with course planner, the SCU Courser Planner is a web based course planner that uses their Academic Progress Report and course ratings to suggest the optional course to take. Unlike Workday or your advisor, our product automates course planning and eliminates the need to work around another person's schedule. SCU Course Planner is powered by LLM Comprehension API + Webapp front end.
+For Undergraduate SCU Students who need help with course planner, the SCU Course Planner is a web based course planner that uses their Academic Progress Report and course ratings to suggest the optional course to take. Unlike Workday or your advisor, our product automates course planning and eliminates the need to work around another person's schedule. SCU Course Planner is powered by LLM Comprehension API + Webapp front end.
 
 ## Stakeholders
 
@@ -18,7 +18,7 @@ Mitigation: Our product is explicitly designed to be a starting point for studen
 
 
 
-Harm 2: Some bias in either our own design or the LLM our API might cause certain professors, courses, or sections to be under or over recommended. This could harm professors as, if too many students apply and then ultimately drop out of their class, this could reflect poorly on them. Alternatively, if less students apply to their courses, this also would reflect poorly on the professor.
+Harm 2: Some bias in either our own design or the LLM our API might cause certain professors, courses, or sections to be under or over recommended. This could harm professors as, if too many students apply and then ultimately drop out of their class, this could reflect poorly on them. Alternatively, if fewer students apply to their courses, this also would reflect poorly on the professor.
 
 Principle: 1. Public
 

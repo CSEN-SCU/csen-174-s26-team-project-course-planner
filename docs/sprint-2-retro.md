@@ -15,11 +15,11 @@ In total that's roughly ten pushed commits, the complete A-through-E LangGraph t
 
 ## Red Team Response
 
-Our team received feedback that we had problems primarily with prompt injection and data privacy concerns. We decided to deal with these issues right away since they were easy to fix and so that they wouldn’t come up later. For the prompt injection we added more system instructions stating the purpose of the application and added to treat user prompts as an unprompted source. We implemented this in the backend to ensure that a malicious user can't modify the system instructions before the website. For data privacy concerns, we added a data disclosure page that can be seen by clicking on a link at the bottom of our home page. This explicitly states how user data is processed so that users can make the most informed decisions possible.
+Our team received feedback that we had problems primarily with prompt injection and data privacy concerns. We decided to deal with these issues right away since they were easy to fix and so that they wouldn’t come up later. For the prompt injection we added more system instructions stating the purpose of the application and added to treat user prompts as an untrusted source. We implemented this in the backend to ensure that a malicious user can't modify the system instructions before the website. For data privacy concerns, we added a data disclosure page that can be seen by clicking on a link at the bottom of our home page. This explicitly states how user data is processed so that users can make the most informed decisions possible.
 
-(https://github.com/CSEN-SCU/csen-174-s26-team-project-course-planner/pull/26)[https://github.com/CSEN-SCU/csen-174-s26-team-project-course-planner/pull/26]
+[PR 26](https://github.com/CSEN-SCU/csen-174-s26-team-project-course-planner/pull/26)
 
-(https://github.com/CSEN-SCU/csen-174-s26-team-project-course-planner/pull/27)[https://github.com/CSEN-SCU/csen-174-s26-team-project-course-planner/pull/26]
+[PR 27](https://github.com/CSEN-SCU/csen-174-s26-team-project-course-planner/pull/27)
 
 ## Sprint 3 Commitments:
 
@@ -27,12 +27,12 @@ Our team received feedback that we had problems primarily with prompt injection 
 
 For this, we want to add a guide for how to use our tool. Currently, we have a skeleton across the different pages found in the footer, but we would like this to be more cleanly integrated into the User Interface. We would like a unified guide to be accessed by clicking on a circle with a question mark in it that is by some corner of the site. 
 
-(https://github.com/CSEN-SCU/csen-174-s26-team-project-course-planner/issues/30)[https://github.com/CSEN-SCU/csen-174-s26-team-project-course-planner/issues/30]
+[Issue 30](https://github.com/CSEN-SCU/csen-174-s26-team-project-course-planner/issues/30)
 
 ### Commitment 2: Optimize homepage UI design 
 
 Right now the homepage when opening the website has a lot of empty white space. We plan to make this more visually appealing by adding larger text, pictures, and some links to guides or FAQs.
 
-(https://github.com/CSEN-SCU/csen-174-s26-team-project-course-planner/issues/31)[https://github.com/CSEN-SCU/csen-174-s26-team-project-course-planner/issues/31]
+[Issue 31](https://github.com/CSEN-SCU/csen-174-s26-team-project-course-planner/issues/31)
 
-We will also try to implement features that we are missing during this week since we have a lighter work load. We plan to take advantage of this by implementing any pending Kanban boards that we have along with any new features we think of. We will try to polish everything so that the following weeks we just have to make small changes and tweaks.
+We will also try to implement features that we are missing during this week since we have a lighter workload. We plan to take advantage of this by implementing any pending Kanban boards that we have along with any new features we think of. We will try to polish everything so that the following weeks we just have to make small changes and tweaks.
