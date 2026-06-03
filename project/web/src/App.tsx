@@ -40,17 +40,18 @@ const NEW_PLAN_AI_WITH_PROGRESS_TEXT =
   "Started a new plan. Your Academic Progress Report is already loaded, so tell me your preferences for next quarter.";
 const NEW_PLAN_MANUAL_TEXT =
   "Started a new plan. Use Browse Courses to search the catalog, or click a time slot on the calendar.";
-const INTRO_SEEN_KEY_PREFIX = "scu_planner_intro_seen:";
+// Bump the version suffix whenever the onboarding carousel content changes so
+// returning users see the updated walkthrough once more. (v2 adds the
+// "try a sample report" guidance.)
+const INTRO_SEEN_KEY_PREFIX = "scu_planner_intro_seen:v2:";
 
 export type AppProps = {
   userId: string;
   onSignOut: () => void;
   onDeleteUserData?: () => void;
-  /** Guest demo: no persistence, auto-loads the bundled sample file. */
-  demoMode?: boolean;
 };
 
-export default function App({ userId, onSignOut, onDeleteUserData, demoMode = false }: AppProps) {
+export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
   const [missingDetails, setMissingDetails] = useState<unknown[]>([]);
   const [planResult, setPlanResult] = useState<Record<string, unknown> | null>(null);
   const [messages, setMessages] = useState<ChatUiMessage[]>([
@@ -122,13 +123,8 @@ export default function App({ userId, onSignOut, onDeleteUserData, demoMode = fa
     title: string;
   } | null>(null);
 
-  // Persistence (saveMemory/deleteMemory) is already guarded by `if (userId)`
-  // at every call site, so the guest demo (userId === "") runs fully
-  // client-side without writing to the server.
-
   // Load academic progress + past plan snapshots for this user
   useEffect(() => {
-    if (!userId) return;
     void getMemory(userId)
       .then((r) => {
         const mems: Record<string, unknown>[] = Array.isArray(r.memories) ? r.memories : [];
@@ -219,7 +215,6 @@ export default function App({ userId, onSignOut, onDeleteUserData, demoMode = fa
   }, [userId]);
 
   const clearTranscriptMemory = useCallback(async () => {
-    if (!userId) return;
     try {
       const r = await getMemory(userId);
       const mems: Record<string, unknown>[] = Array.isArray(r.memories) ? r.memories : [];
@@ -265,12 +260,8 @@ export default function App({ userId, onSignOut, onDeleteUserData, demoMode = fa
   }, [fileUploaded, missingDetails, parsedRows, majorConfirmed, refreshMajorDetection]);
 
   useEffect(() => {
-    if (demoMode) {
-      setFirstLoginCarouselOpen(false);
-      return;
-    }
     setFirstLoginCarouselOpen(!hasSeenFirstLoginCarousel(userId));
-  }, [userId, demoMode]);
+  }, [userId]);
 
   // Base calendar data from current session or plan result
   const calendarRecommended = useMemo(() => {
@@ -1180,7 +1171,6 @@ export default function App({ userId, onSignOut, onDeleteUserData, demoMode = fa
           }
         }}
         onDiscardTranscript={clearTranscriptMemory}
-        autoLoadSample={demoMode}
       />
       </div>
       <SiteFooter

@@ -1,7 +1,6 @@
-# Sample academic progress (demo)
+# Sample academic progress
 
-The demo button on the login page and the "Try a sample file" button inside the
-planner both load the file:
+The "Try a sample file" button in the planner chat panel loads the file:
 
 ```
 project/web/public/samples/sample-academic-progress.xlsx
@@ -9,11 +8,11 @@ project/web/public/samples/sample-academic-progress.xlsx
 
 served at runtime from `/<base>/samples/sample-academic-progress.xlsx`.
 
-## Replace the placeholder
+## Replacing the file
 
-`sample-academic-progress.xlsx` in this folder is a **placeholder** and is not a
-valid Workday export yet. Replace it with a real SCU Workday "Academic Progress"
-export (`.xlsx`), keeping the **exact same file name**:
+`sample-academic-progress.xlsx` is a real SCU Workday "Academic Progress"
+export used as a demo. To swap it, drop in a different Workday `.xlsx` export
+and keep the **exact same file name**:
 
 ```
 sample-academic-progress.xlsx

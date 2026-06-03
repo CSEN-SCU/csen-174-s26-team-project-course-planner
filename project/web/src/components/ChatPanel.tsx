@@ -64,8 +64,6 @@ export type ChatPanelProps = {
   onTranscriptUploaded?: (detection: MajorDetection | null) => void;
   /** Clears persisted transcript memory when the user discards a re-upload. */
   onDiscardTranscript?: () => void | Promise<void>;
-  /** Auto-load the bundled sample academic progress once (demo mode). */
-  autoLoadSample?: boolean;
 };
 
 function planSummaryText(plan: Record<string, unknown>): string {
@@ -144,7 +142,6 @@ export function ChatPanel({
   onRequestMajorChange,
   onTranscriptUploaded,
   onDiscardTranscript,
-  autoLoadSample = false,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -469,15 +466,6 @@ export function ChatPanel({
       setSampleLoading(false);
     }
   }, [sampleLoading, inputLocked, handleFile, setMessages]);
-
-  // Demo mode: load the bundled sample once when the panel mounts.
-  const autoLoadedRef = useRef(false);
-  useEffect(() => {
-    if (!autoLoadSample || autoLoadedRef.current) return;
-    if (hasSavedTranscript || pendingFile) return;
-    autoLoadedRef.current = true;
-    void loadSampleFile();
-  }, [autoLoadSample, hasSavedTranscript, pendingFile, loadSampleFile]);
 
   const onFilePick = useCallback(() => {
     if (inputLocked) return;

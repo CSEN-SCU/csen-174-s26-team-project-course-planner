@@ -8,10 +8,9 @@ const TAGLINE =
 
 export type HomePageProps = {
   externalAuthError?: string | null;
-  onTryDemo?: () => void;
 };
 
-export function HomePage({ externalAuthError, onTryDemo }: HomePageProps) {
+export function HomePage({ externalAuthError }: HomePageProps) {
   const [deleteDataNotice, setDeleteDataNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -63,26 +62,6 @@ export function HomePage({ externalAuthError, onTryDemo }: HomePageProps) {
 
           <div className="flex flex-col items-center gap-4">
             <GoogleSignInButton />
-            {onTryDemo && (
-              <>
-                <div className="flex w-full max-w-xs items-center gap-3 text-[11px] uppercase tracking-wide text-neutral-400">
-                  <span className="h-px flex-1 bg-neutral-200" />
-                  or
-                  <span className="h-px flex-1 bg-neutral-200" />
-                </div>
-                <button
-                  type="button"
-                  onClick={onTryDemo}
-                  className="flex w-full max-w-xs items-center justify-center gap-2 rounded-lg border border-[var(--scu-red)] bg-white px-4 py-3 text-sm font-semibold text-[var(--scu-red)] shadow-sm transition hover:bg-red-50"
-                >
-                  Try a demo with sample data
-                </button>
-                <p className="max-w-xs text-xs text-neutral-400">
-                  Explore the planner with a sample Academic Progress file — no
-                  sign-in required. Nothing is saved.
-                </p>
-              </>
-            )}
           </div>
         </div>
       </main>

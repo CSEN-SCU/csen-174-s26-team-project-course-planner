@@ -84,7 +84,7 @@ describe("first-login onboarding carousel", () => {
   });
 
   it("shows again for a different user on the same browser", async () => {
-    localStorage.setItem("scu_planner_intro_seen:first-user", "true");
+    localStorage.setItem("scu_planner_intro_seen:v2:first-user", "true");
 
     render(<App userId="second-user" onSignOut={() => {}} />);
 
@@ -94,7 +94,7 @@ describe("first-login onboarding carousel", () => {
 
   it("shows a footer help button on the main app that reopens the carousel", async () => {
     const user = userEvent.setup();
-    localStorage.setItem("scu_planner_intro_seen:returning-user", "true");
+    localStorage.setItem("scu_planner_intro_seen:v2:returning-user", "true");
 
     render(<App userId="returning-user" onSignOut={() => {}} />);
 

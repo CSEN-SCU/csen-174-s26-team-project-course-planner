@@ -19,7 +19,6 @@ import { useDeleteUserDataModal } from "./hooks/useDeleteUserDataModal";
 
 export function Root() {
   const [route, setRoute] = useState(resolveClientRoute);
-  const [demoMode, setDemoMode] = useState(false);
   const { userId, googleAuthError, googleAuthPending, signOutPending, signOut } = useAuth();
   const { openDeleteModal, deleteModal } = useDeleteUserDataModal(userId);
 
@@ -28,14 +27,7 @@ export function Root() {
     route === ACADEMIC_PROGRESS_TUTORIAL_PATH ||
     route === COURSE_PLANNER_TUTORIAL_PATH;
 
-  // A real sign-in always supersedes the guest demo.
-  useEffect(() => {
-    if (userId && demoMode) setDemoMode(false);
-  }, [userId, demoMode]);
-
-  usePlannerShell(
-    Boolean(userId) || demoMode || googleAuthPending || signOutPending || isInfoRoute,
-  );
+  usePlannerShell(Boolean(userId) || googleAuthPending || signOutPending || isInfoRoute);
 
   useLayoutEffect(() => {
     resetPageScroll();
@@ -108,19 +100,7 @@ export function Root() {
     if (googleAuthPending) {
       return <AuthLoadingPage />;
     }
-    if (demoMode) {
-      return (
-        <div className="planner-app-root">
-          <App userId="" onSignOut={() => setDemoMode(false)} demoMode />
-        </div>
-      );
-    }
-    return (
-      <HomePage
-        externalAuthError={googleAuthError}
-        onTryDemo={() => setDemoMode(true)}
-      />
-    );
+    return <HomePage externalAuthError={googleAuthError} />;
   }
 
   return (
