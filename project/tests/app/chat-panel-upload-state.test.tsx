@@ -46,14 +46,13 @@ describe("ChatPanel academic progress state", () => {
     expect(screen.queryByText(/Drag and drop your Academic Progress/i)).not.toBeInTheDocument();
   });
 
-  it("discarding a pending transcript update clears transcript state and asks the user to start again", async () => {
+  it("declining a pending transcript update keeps the saved report", async () => {
     const user = userEvent.setup();
     const setMissingDetails = vi.fn();
     const setParsedRows = vi.fn();
     const setFileUploaded = vi.fn();
     const setPlanResult = vi.fn();
     const onTranscriptUploaded = vi.fn();
-    const onDiscardTranscript = vi.fn();
 
     function Harness() {
       const [messages, setMessages] = React.useState([
@@ -84,7 +83,6 @@ describe("ChatPanel academic progress state", () => {
           onPlanGenerated={() => {}}
           setParsedRows={setParsedRows}
           onTranscriptUploaded={onTranscriptUploaded}
-          onDiscardTranscript={onDiscardTranscript}
         />
       );
     }
@@ -102,17 +100,16 @@ describe("ChatPanel academic progress state", () => {
     await user.click(screen.getByRole("button", { name: "No" }));
 
     await waitFor(() => {
-      expect(setMissingDetails).toHaveBeenCalledWith([]);
-      expect(setParsedRows).toHaveBeenCalledWith([]);
-      expect(setFileUploaded).toHaveBeenCalledWith(false);
-      expect(setPlanResult).toHaveBeenCalledWith(null);
-      expect(onTranscriptUploaded).toHaveBeenCalledWith(null);
-      expect(onDiscardTranscript).toHaveBeenCalled();
+      expect(setMissingDetails).not.toHaveBeenCalled();
+      expect(setParsedRows).not.toHaveBeenCalled();
+      expect(setFileUploaded).not.toHaveBeenCalledWith(false);
+      expect(setPlanResult).not.toHaveBeenCalled();
+      expect(onTranscriptUploaded).not.toHaveBeenCalled();
     });
-    expect(screen.getByText(/Please upload your Academic Progress again/i)).toBeInTheDocument();
+    expect(screen.getByText(/keeping your current Academic Progress report/i)).toBeInTheDocument();
   });
 
-  it("allows re-upload via paperclip after discarding a pending transcript update", async () => {
+  it("allows replacing the report after declining then confirming a new upload", async () => {
     const user = userEvent.setup();
     mockedUploadTranscript.mockResolvedValue({
       missing_details: [{ requirement: "Core" }],
@@ -167,6 +164,7 @@ describe("ChatPanel academic progress state", () => {
 
     mockedUploadTranscript.mockClear();
     await user.upload(fileInput, fresh);
+    await user.click(screen.getByRole("button", { name: "Yes" }));
 
     await waitFor(() => {
       expect(mockedUploadTranscript).toHaveBeenCalledWith(fresh, "test-user");

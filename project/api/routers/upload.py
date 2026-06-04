@@ -20,10 +20,10 @@ async def upload_transcript(
     file: UploadFile = File(...),
     user_id: str = Form(""),
 ) -> dict:
-    if not file.filename or not file.filename.lower().endswith((".xlsx", ".xlsm")):
+    if not file.filename or not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(
             status_code=400,
-            detail="Expected an Excel file (.xlsx or .xlsm).",
+            detail="Expected an Academic Progress export (.xlsx).",
         )
     raw = await file.read()
     if not raw:

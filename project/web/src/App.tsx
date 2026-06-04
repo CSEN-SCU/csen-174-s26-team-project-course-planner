@@ -226,26 +226,6 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
       .catch(() => { /* ignore */ });
   }, [userId]);
 
-  const clearTranscriptMemory = useCallback(async () => {
-    try {
-      const r = await getMemory(userId);
-      const mems: Record<string, unknown>[] = Array.isArray(r.memories) ? r.memories : [];
-      await Promise.all(
-        mems
-          .filter((m) =>
-            m.kind === "academic_progress" ||
-            m.kind === "parsed_rows" ||
-            m.kind === "student_major",
-          )
-          .map((m) =>
-            typeof m.id === "number" ? deleteMemory(userId, m.id).catch(() => {}) : Promise.resolve(),
-          ),
-      );
-    } catch {
-      /* ignore */
-    }
-  }, [userId]);
-
   const refreshMajorDetection = useCallback(async () => {
     if (!fileUploaded || missingDetails.length === 0) return;
     try {
@@ -1186,7 +1166,6 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
             setMajorConfirmed(false);
           }
         }}
-        onDiscardTranscript={clearTranscriptMemory}
       />
       </div>
       <SiteFooter

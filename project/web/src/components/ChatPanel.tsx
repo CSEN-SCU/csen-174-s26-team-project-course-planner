@@ -65,8 +65,6 @@ export type ChatPanelProps = {
   onMajorConfirmed?: () => void;
   onRequestMajorChange?: () => void;
   onTranscriptUploaded?: (detection: MajorDetection | null, isSample?: boolean) => void;
-  /** Clears persisted transcript memory when the user discards a re-upload. */
-  onDiscardTranscript?: () => void | Promise<void>;
 };
 
 function planSummaryText(plan: Record<string, unknown>): string {
@@ -144,7 +142,6 @@ export function ChatPanel({
   onMajorConfirmed,
   onRequestMajorChange,
   onTranscriptUploaded,
-  onDiscardTranscript,
 }: ChatPanelProps) {
   const [input, setInput] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -215,14 +212,6 @@ export function ChatPanel({
     }
   }, [userId, setMissingDetails, setParsedRows, setFileUploaded, setMessages, onTranscriptUploaded]);
 
-  const resetUploadedTranscript = useCallback(() => {
-    setMissingDetails([]);
-    setParsedRows?.([]);
-    setFileUploaded(false);
-    setPlanResult(null);
-    onTranscriptUploaded?.(null);
-  }, [setMissingDetails, setParsedRows, setFileUploaded, setPlanResult, onTranscriptUploaded]);
-
   const confirmPendingUpdate = useCallback(async () => {
     if (!pendingFile) return;
     const f = pendingFile;
@@ -233,19 +222,16 @@ export function ChatPanel({
   const discardPendingUpdate = useCallback(() => {
     if (!pendingFile) return;
     setPendingFile(null);
-    setTranscriptDiscarded(true);
-    resetUploadedTranscript();
-    void onDiscardTranscript?.();
     setMessages((m) => [
       ...m,
       {
         id: `a-${Date.now()}`,
         role: "assistant",
         content:
-          "No problem. I discarded the uploaded Academic Progress Report and cleared your academic progress. Please upload your Academic Progress again to start over.",
+          "No problem — keeping your current Academic Progress report. The new file was not applied.",
       },
     ]);
-  }, [pendingFile, resetUploadedTranscript, setMessages, onDiscardTranscript]);
+  }, [pendingFile, setMessages]);
 
   const sendText = useCallback(async (text: string) => {
     const trimmed = text.trim();
@@ -423,20 +409,14 @@ export function ChatPanel({
   const handleFile = useCallback(
     (f: File) => {
       const name = f.name.toLowerCase();
-      if (name.endsWith(".pdf")) {
-        setMessages((m) => [
-          ...m,
-          { id: `a-${Date.now()}`, role: "assistant", content: "PDF analysis coming soon" },
-        ]);
-        return;
-      }
-      if (!name.endsWith(".xlsx") && !name.endsWith(".xlsm")) {
+      if (!name.endsWith(".xlsx")) {
         setMessages((m) => [
           ...m,
           {
             id: `a-${Date.now()}`,
             role: "assistant",
-            content: "Please upload an Academic Progress export from Workday (.xlsx or .xlsm files).",
+            content:
+              "Please upload your Academic Progress export from Workday as an .xlsx file.",
           },
         ]);
         return;
@@ -541,7 +521,7 @@ export function ChatPanel({
   const uploadHelperText = hasSavedTranscript
     ? "Academic Progress is saved. Use the paperclip if you want to update it."
     : canDropFiles
-    ? "Drag and drop your Academic Progress (.xlsx or .xlsm files) here, or use the paperclip to upload."
+    ? "Drag and drop your Academic Progress (.xlsx) here, or use the paperclip to upload."
     : "Upload your Academic Progress (.xlsx) file with the paperclip.";
 
   return (
@@ -562,7 +542,7 @@ export function ChatPanel({
         >
           <PaperclipIcon />
           <p className="text-sm font-semibold text-[var(--scu-text)]">Drop your Academic Progress file</p>
-          <p className="text-xs text-neutral-500">.xlsx or .xlsm export from Workday</p>
+          <p className="text-xs text-neutral-500">.xlsx export from Workday</p>
         </div>
       )}
 
@@ -645,7 +625,7 @@ export function ChatPanel({
         <input
           ref={fileInputRef}
           type="file"
-          accept=".pdf,.xlsx,.xlsm"
+          accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           className="hidden"
           onChange={onFileChange}
         />
