@@ -918,8 +918,20 @@ def _reconcile_followup_edit(
     #
     # Product requirement: follow-up edits are targeted diffs; we never remove
     # a course unless the student explicitly named its code.
+    #
+    # A "swap X for Y" names BOTH X and Y (and aliases) via _named_removal_codes,
+    # but only X should be dropped: Y is the replacement the student is ADDING.
+    # Restrict the hard removal to codes that were actually in the previous plan
+    # — you cannot remove a course that wasn't there, so a freshly-added swap
+    # target (e.g. "换成 CSEN 20") is never deleted by this rule.
     if named:
-        deduped = [r for r in deduped if _normalize_code(r.get("course")) not in named]
+        prev_codes = {
+            _normalize_code(r.get("course")) for r in prev if isinstance(r, dict)
+        }
+        removable = named & prev_codes
+        deduped = [
+            r for r in deduped if _normalize_code(r.get("course")) not in removable
+        ]
 
     return deduped
 

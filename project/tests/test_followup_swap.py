@@ -125,6 +125,30 @@ def test_swap_preserves_unrelated_courses():
     assert "ECEN 153L" not in codes
 
 
+def test_swap_to_named_code_keeps_replacement():
+    """Production bug: "把 X 换成 Y" named BOTH X and Y for removal, so the
+    new course Y was deleted by the hard-removal rule and the swap silently
+    did nothing. The replacement (named, but absent from the previous plan)
+    must survive; only the previous-plan course X is removed."""
+    llm_out = [_rec("CSEN 20"), _rec("ENGL 181")]  # LLM swapped ECEN 153 -> CSEN 20
+    out = _reconcile_followup_edit(llm_out, _PREV, "把 ECEN 153 换成 CSEN 20")
+    codes = {r["course"] for r in out}
+    assert "CSEN 20" in codes        # replacement kept (was NOT in previous plan)
+    assert "ECEN 153" not in codes   # swapped-out course removed
+    assert "ECEN 153L" not in codes  # its lab partner too
+    # Unrelated previous courses preserved
+    assert {"CSEN 122", "CSEN 122L", "CSEN 194", "CSEN 194L", "ENGL 181"} <= codes
+
+
+def test_english_swap_for_named_code_keeps_replacement():
+    """Same bug via English 'replace X with Y' / 'swap X for Y'."""
+    llm_out = [_rec("CSEN 20"), _rec("ENGL 181")]
+    out = _reconcile_followup_edit(llm_out, _PREV, "replace ECEN 153 with CSEN 20")
+    codes = {r["course"] for r in out}
+    assert "CSEN 20" in codes
+    assert "ECEN 153" not in codes
+
+
 def test_dedup_removes_repeated_course():
     """LLM repeated CHST 4 twice — only one survives."""
     llm_out = [_rec("CHST 4"), _rec("ENGL 181"), _rec("CHST 4")]
