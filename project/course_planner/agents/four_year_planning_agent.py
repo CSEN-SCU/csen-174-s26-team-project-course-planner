@@ -166,6 +166,52 @@ def _next_starting_term() -> tuple[str, int]:
     return "Winter", year + 1
 
 
+_ACAD_PERIOD_PATTERNS: tuple = (
+    (re.compile(r"^(Fall|Winter|Spring)\s+(\d{4})\s+Quarter$", re.I),
+     lambda m: (m.group(1).capitalize(), int(m.group(2)))),
+    (re.compile(r"^(\d{4})-(\d{4})\s+(Fall|Winter|Spring)\s+Quarter$", re.I),
+     lambda m: (m.group(3).capitalize(),
+                int(m.group(1)) if m.group(3).lower() == "fall" else int(m.group(1)) + 1)),
+    (re.compile(r"^(Fall|Winter|Spring)\s+(\d{4})-\d{4}$", re.I),
+     lambda m: (m.group(1).capitalize(), int(m.group(2)))),
+    (re.compile(r"^(Fall|Winter|Spring)\s+(\d{4})$", re.I),
+     lambda m: (m.group(1).capitalize(), int(m.group(2)))),
+)
+
+
+def _parse_academic_period(period: str) -> str | None:
+    """Normalize a transcript academic-period string to '<Season> YYYY'."""
+    p = str(period or "").strip()
+    for rx, fn in _ACAD_PERIOD_PATTERNS:
+        m = rx.match(p)
+        if m:
+            season, year = fn(m)
+            return f"{season} {year}"
+    return None
+
+
+def _latest_in_progress_term(parsed_rows: list[dict] | None) -> str | None:
+    """Latest term the student is currently enrolled in (status 'In Progress').
+
+    The four-year plan must start AFTER this quarter — the student's upcoming
+    quarter is already scheduled, so new courses don't belong there.
+    """
+    best: str | None = None
+    best_key: tuple[int, int] | None = None
+    for r in parsed_rows or []:
+        if not isinstance(r, dict):
+            continue
+        if "progress" not in str(r.get("status") or "").strip().lower():
+            continue
+        term = _parse_academic_period(str(r.get("academic_period") or ""))
+        if not term:
+            continue
+        k = _term_sort_key(term)
+        if best_key is None or k > best_key:
+            best_key, best = k, term
+    return best
+
+
 def _generate_term_sequence(start_q: str, start_year: int, n: int) -> list[str]:
     terms, q, yr = [], start_q, start_year
     for _ in range(n):
@@ -614,6 +660,8 @@ def run_four_year_plan_agent(
     from utils.major_requirements import (
         build_major_advisor_block,
         enforce_senior_design_in_final_quarters,
+        filter_superseded_missing_details,
+        normalize_major_id,
         resolve_major_id,
     )
     from utils.scu_course_schedule_xlsx import (
@@ -633,7 +681,39 @@ def run_four_year_plan_agent(
             "advice": "No remaining requirements found.",
         }
 
+    completed_set = extract_completed_course_codes(parsed_rows)
+    major_for_filter = normalize_major_id(
+        resolve_major_id(
+            confirmed_major_id=confirmed_major_id,
+            missing_details=missing_details,
+            parsed_rows=parsed_rows,
+        )
+    )
+    missing_details, superseded_advice_notes = filter_superseded_missing_details(
+        missing_details, completed_set, major_id=major_for_filter
+    )
+    if not missing_details:
+        advice = "No remaining requirements need to be scheduled."
+        if superseded_advice_notes:
+            advice = f"{advice} {' '.join(superseded_advice_notes)}"
+        return {
+            "quarters": [],
+            "graduation_term": "Unknown",
+            "total_remaining_units": 0,
+            "advice": advice[:900],
+        }
+
     start_q, start_year = _next_starting_term()
+
+    # If the student is already enrolled in an upcoming quarter (status "In
+    # Progress"), begin the plan the quarter AFTER it — that quarter is already
+    # full, so new courses must not be piled on top of the current enrollment.
+    in_progress_term = _latest_in_progress_term(parsed_rows)
+    if in_progress_term:
+        after_ip = _term_after(in_progress_term)
+        if _term_sort_key(after_ip) > _term_sort_key(f"{start_q} {start_year}"):
+            _parts = after_ip.split()
+            start_q, start_year = _parts[0], int(_parts[1])
 
     # Workday gap rows frequently omit `units`. Enrich a copy (lecture/lab
     # defaults + transcript lookups) so the unit budget below isn't computed
@@ -741,7 +821,6 @@ def run_four_year_plan_agent(
 
     pref_block = f"\nStudent preferences / constraints:\n{preferences.strip()}\n" if preferences and preferences.strip() else ""
 
-    completed_set = extract_completed_course_codes(parsed_rows)
     major_block, detected_major = build_major_advisor_block(
         missing_details=missing_details,
         parsed_rows=parsed_rows,
@@ -1087,10 +1166,13 @@ Output JSON matching the schema exactly.
     parsed = _enforce_course_count_cap(parsed)
 
     # Pin Senior Design to final three quarters for engineering majors.
-    major_id = detected_major or resolve_major_id(
-        confirmed_major_id=confirmed_major_id,
-        missing_details=missing_details,
-        parsed_rows=parsed_rows,
+    major_id = normalize_major_id(
+        detected_major
+        or resolve_major_id(
+            confirmed_major_id=confirmed_major_id,
+            missing_details=missing_details,
+            parsed_rows=parsed_rows,
+        )
     )
     parsed = enforce_senior_design_in_final_quarters(
         parsed, major_id, completed=completed_set
@@ -1102,6 +1184,10 @@ Output JSON matching the schema exactly.
     # often inconsistent). The UI compares this against the sum of scheduled
     # quarter units; a gap means a requirement could not be placed.
     parsed["total_remaining_units"] = total_units
+    if superseded_advice_notes:
+        base = str(parsed.get("advice") or "").strip()
+        extra = " ".join(superseded_advice_notes)
+        parsed["advice"] = f"{base} {extra}".strip()[:900] if base else extra[:900]
     parsed["meta"] = {
         "provider": "gemini",
         "model": candidate,

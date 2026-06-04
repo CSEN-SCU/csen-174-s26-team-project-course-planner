@@ -33,22 +33,6 @@ function takenCourseCodes(rows: ParsedRow[]): Set<string> {
   return codes;
 }
 
-function statusForCompletedCourse(
-  course: CompletedCourse,
-  termKey: string,
-  parsedRows: ParsedRow[],
-): FourYearPlanExportStatus {
-  for (const row of parsedRows) {
-    if ((row.course_code ?? "").trim() !== course.code) continue;
-    const rowTerm = row.academic_period ? parseTermKeyFromRow(row.academic_period) : null;
-    if (rowTerm !== termKey) continue;
-    const status = (row.status ?? "").trim();
-    if (status === "In Progress") return "In Progress";
-    if (status === "Satisfied") return "Completed";
-  }
-  return "Completed";
-}
-
 function parseTermKeyFromRow(period: string): string | null {
   const p = period.trim();
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
@@ -71,6 +55,29 @@ function parseTermKeyFromRow(period: string): string | null {
   if (m3) return `${cap(m3[1])} ${m3[2]}`;
 
   return null;
+}
+
+/**
+ * Decide whether a transcript course is finished or still enrolled.
+ *
+ * SCU's Workday export lists the same course under multiple requirement
+ * buckets, and the "Status" column reflects the *bucket's* status — so a
+ * long-finished course can show "In Progress" in one row while showing
+ * "Satisfied" in another. Treat the course as Completed if it is "Satisfied"
+ * in ANY matching row; only when no row marks it satisfied is it In Progress.
+ */
+function statusForCompletedCourse(
+  course: CompletedCourse,
+  termKey: string,
+  parsedRows: ParsedRow[],
+): FourYearPlanExportStatus {
+  for (const row of parsedRows) {
+    if ((row.course_code ?? "").trim() !== course.code) continue;
+    const rowTerm = row.academic_period ? parseTermKeyFromRow(row.academic_period) : null;
+    if (rowTerm !== termKey) continue;
+    if ((row.status ?? "").trim() === "Satisfied") return "Completed";
+  }
+  return "In Progress";
 }
 
 export function buildFourYearPlanExportRows(

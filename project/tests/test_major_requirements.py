@@ -7,13 +7,80 @@ from utils.major_requirements import (
     detect_major,
     detect_major_detailed,
     enforce_senior_design_in_final_quarters,
+    filter_superseded_missing_details,
     infer_academic_stage,
     load_major_markdown_excerpt,
     next_senior_design_course,
+    normalize_major_id,
     prerequisites_met,
     remaining_major_courses,
     resolve_major_id,
 )
+
+
+def test_filter_superseded_drops_csen10_when_coen11_and_csen12_done() -> None:
+    missing = [
+        {
+            "requirement": "Computer Science and Engineering Major: CSEN/COEN 10 & 10L",
+            "remaining": "Minimum 5 Unit(s)",
+        }
+    ]
+    completed = {"COEN 11", "COEN 11L", "CSEN 12", "CSEN 12L"}
+    kept, notes = filter_superseded_missing_details(missing, completed, major_id="csen")
+    assert kept == []
+    assert len(notes) == 1
+    assert "CSEN/COEN 10" in notes[0] or "10" in notes[0]
+
+
+def test_filter_superseded_keeps_csen10_for_freshman() -> None:
+    missing = [
+        {
+            "requirement": "Computer Science and Engineering Major: CSEN/COEN 10 & 10L",
+            "remaining": "Minimum 5 Unit(s)",
+        }
+    ]
+    kept, notes = filter_superseded_missing_details(missing, set(), major_id="csen")
+    assert len(kept) == 1
+    assert notes == []
+
+
+def test_normalize_major_id_aliases_coen_to_csen() -> None:
+    assert normalize_major_id("coen") == "csen"
+    assert normalize_major_id("COEN") == "csen"
+    assert normalize_major_id("csen") == "csen"
+    assert normalize_major_id("math") == "math"
+    assert normalize_major_id(None) is None
+
+
+def test_resolve_major_id_normalizes_confirmed_coen() -> None:
+    assert resolve_major_id(confirmed_major_id="coen") == "csen"
+
+
+def test_senior_design_pins_for_coen_major_alias() -> None:
+    """COEN students must still get 195→Winter / 196→Spring senior-design pinning."""
+    plan = {
+        "quarters": [
+            {
+                "term": "Winter 2027",
+                "courses": [
+                    {"course": "CSEN 122", "units": 4, "title": "Arch", "category": "M", "reason": "x"},
+                    {"course": "CSEN 195", "units": 4, "title": "SD", "category": "M", "reason": "x"},
+                ],
+                "total_units": 8,
+            },
+            {
+                "term": "Spring 2027",
+                "courses": [
+                    {"course": "CSEN 196", "units": 4, "title": "SD2", "category": "M", "reason": "x"},
+                ],
+                "total_units": 4,
+            },
+        ]
+    }
+    out = enforce_senior_design_in_final_quarters(plan, "coen")
+    by_term = {q["term"]: [c["course"] for c in q["courses"]] for q in out["quarters"]}
+    assert "CSEN 195" in by_term["Winter 2027"]
+    assert "CSEN 196" in by_term["Spring 2027"]
 
 
 def test_detect_major_detailed_high_confidence_csen() -> None:

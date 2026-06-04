@@ -419,6 +419,19 @@ def detect_major(
     return detailed.get("major_id")
 
 
+# SCU treats Computer Science & Engineering as one major; Workday/transcripts
+# may label it "coen" while the bulletin catalog is keyed "csen". Normalize so
+# catalog lookups (senior design, bulletin requirements) don't silently miss.
+_MAJOR_ID_ALIASES = {"coen": "csen"}
+
+
+def normalize_major_id(major_id: str | None) -> str | None:
+    if not major_id:
+        return major_id
+    mid = str(major_id).strip().lower()
+    return _MAJOR_ID_ALIASES.get(mid, mid)
+
+
 def resolve_major_id(
     *,
     confirmed_major_id: str | None = None,
@@ -427,8 +440,8 @@ def resolve_major_id(
 ) -> str | None:
     """User-confirmed major wins; otherwise infer from progress."""
     if confirmed_major_id and str(confirmed_major_id).strip():
-        return str(confirmed_major_id).strip().lower()
-    return detect_major(missing_details, parsed_rows)
+        return normalize_major_id(str(confirmed_major_id))
+    return normalize_major_id(detect_major(missing_details, parsed_rows))
 
 
 def major_display_name(major_id: str | None) -> str | None:
@@ -459,6 +472,116 @@ def _codes_from_missing(missing_details: list[dict[str, Any]] | None) -> set[str
             for m in _COURSE_CODE_RE.finditer(val.upper()):
                 codes.add(f"{m.group(1)} {m.group(2)}")
     return codes
+
+
+# Intro programming (CSEN/COEN 10) is superseded when the student already
+# completed the next courses in the track (e.g. COEN 11 → CSEN 12).
+_INTRO_PROGRAMMING_RE = re.compile(
+    r"\b(?:CSEN|COEN)\s*/?\s*(?:CSEN|COEN)?\s*10\b",
+    re.IGNORECASE,
+)
+_INTRO_PROGRAMMING_CODES = frozenset(
+    {"CSEN 10", "COEN 10", "CSEN 10L", "COEN 10L"},
+)
+_INTRO_SUPERSEDING_COMPLETED = frozenset(
+    {
+        "COEN 11", "COEN 11L", "CSEN 11", "CSEN 11L",
+        "CSEN 12", "CSEN 12L", "CSEN 19", "CSEN 20", "CSEN 20L",
+        "CSEN 79", "CSEN 79L",
+    },
+)
+
+
+def _requirement_is_intro_programming(req: str, codes: set[str]) -> bool:
+    if _INTRO_PROGRAMMING_RE.search(req):
+        return True
+    if not codes:
+        return False
+    return codes <= _INTRO_PROGRAMMING_CODES
+
+
+def _completed_supersedes_intro(completed: set[str], alias_map: dict[str, list[str]]) -> bool:
+    for marker in _INTRO_SUPERSEDING_COMPLETED:
+        if _expand_aliases(marker, alias_map) & completed:
+            return True
+    return False
+
+
+@lru_cache(maxsize=32)
+def _prerequisite_dependents(major_id: str) -> dict[str, list[str]]:
+    """Map prerequisite code → bulletin courses that list it."""
+    deps: dict[str, list[str]] = {}
+    for course, groups in _prerequisites_from_markdown(major_id).items():
+        for group in groups:
+            for prereq in group:
+                key = _normalize_code(prereq)
+                deps.setdefault(key, [])
+                if course not in deps[key]:
+                    deps[key].append(course)
+    return deps
+
+
+def filter_superseded_missing_details(
+    missing_details: list[dict[str, Any]] | None,
+    completed: set[str],
+    *,
+    major_id: str | None = None,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Drop Workday gaps the student has clearly already passed in practice.
+
+    Returns ``(kept, notes)`` where ``notes`` are short advisor messages for
+    the plan ``advice`` field (Workday may still show the requirement open).
+    """
+    if not missing_details:
+        return [], []
+
+    mid = normalize_major_id(major_id)
+    catalog = load_major_catalog()
+    alias_map = catalog.get("course_aliases") or {}
+    deps = _prerequisite_dependents(mid) if mid else {}
+
+    kept: list[dict[str, Any]] = []
+    notes: list[str] = []
+
+    for item in missing_details:
+        if not isinstance(item, dict):
+            continue
+        req = str(item.get("requirement") or item.get("category") or "").strip()
+        codes = set()
+        explicit = _normalize_code(item.get("course"))
+        if explicit:
+            codes.add(explicit)
+        for m in _COURSE_CODE_RE.finditer(req.upper()):
+            codes.add(f"{m.group(1)} {m.group(2)}")
+
+        if _requirement_is_intro_programming(req, codes) and _completed_supersedes_intro(
+            completed, alias_map
+        ):
+            notes.append(
+                f"{req}: not scheduled — you already completed later programming "
+                f"courses (e.g. COEN 11 / CSEN 12). Workday may still list "
+                f"CSEN/COEN 10 as open; resolve with your advisor if needed."
+            )
+            continue
+
+        superseded = False
+        for code in codes:
+            for dependent in deps.get(code, []):
+                if _expand_aliases(dependent, alias_map) & completed:
+                    notes.append(
+                        f"{req}: not scheduled — {dependent} is already completed, "
+                        f"so {code} is treated as satisfied for planning."
+                    )
+                    superseded = True
+                    break
+            if superseded:
+                break
+        if superseded:
+            continue
+
+        kept.append(item)
+
+    return kept, notes
 
 
 def _prereq_rule_satisfied(
@@ -751,6 +874,7 @@ def enforce_senior_design_in_final_quarters(
     completed: set[str] | None = None,
 ) -> dict[str, Any]:
     """Move 194/195/196 (+ labs) into the last three plan quarters when possible."""
+    major_id = normalize_major_id(major_id)
     if not major_id:
         return plan
     catalog = load_major_catalog()

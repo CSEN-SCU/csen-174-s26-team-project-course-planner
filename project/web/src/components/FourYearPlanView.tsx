@@ -128,9 +128,12 @@ function QuarterCard({ quarter }: { quarter: UnifiedQuarter }) {
 
   const totalCompletedUnits = completedCourses.reduce((s, c) => s + c.units, 0);
   const totalPlannedUnits = plannedQuarter ? plannedQuarter.total_units : 0;
+  // A current/future quarter can hold BOTH in-progress (enrolled) courses and
+  // newly planned ones, so the quarter total must sum both — otherwise a
+  // 17-unit enrolled quarter shows only the planned-course units.
   const totalUnits = isPast
     ? totalCompletedUnits
-    : totalPlannedUnits || totalCompletedUnits;
+    : totalCompletedUnits + totalPlannedUnits;
 
   const hasAnything =
     completedCourses.length > 0 || (plannedQuarter && plannedQuarter.courses.length > 0);
@@ -171,10 +174,9 @@ function QuarterCard({ quarter }: { quarter: UnifiedQuarter }) {
 
 function YearSection({ year }: { year: UnifiedYear }) {
   const totalUnits = year.quarters.reduce((s, q) => {
-    if (q.isPast) {
-      return s + q.completedCourses.reduce((su, c) => su + c.units, 0);
-    }
-    return s + (q.plannedQuarter?.total_units ?? 0);
+    const completed = q.completedCourses.reduce((su, c) => su + c.units, 0);
+    if (q.isPast) return s + completed;
+    return s + completed + (q.plannedQuarter?.total_units ?? 0);
   }, 0);
 
   return (

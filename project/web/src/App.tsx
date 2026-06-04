@@ -316,8 +316,10 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
     // Mirror the snapshot into planResult so chat follow-ups treat it as
     // the previous_plan baseline rather than appending to a stale conversation.
     setPlanResult({ recommended: row.recommended ?? [] });
-    const snap = planSnapshots.find((s) => s.id === row.id);
-    setFourYearPlan(snap?.fourYearPlan ?? null);
+    // Always start the Four-Year tab empty (show the "Generate Plan" prompt)
+    // rather than restoring a previously generated plan, so the user never
+    // sees a stale plan and explicitly regenerates a fresh one.
+    setFourYearPlan(null);
     if (row.messages && row.messages.length > 0) {
       setMessages(row.messages as ChatUiMessage[]);
     } else {

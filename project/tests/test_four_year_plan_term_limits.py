@@ -11,8 +11,32 @@ from agents.four_year_planning_agent import (
     _generate_term_sequence,
     _has_senior_design,
     _is_pseudo_course_code,
+    _latest_in_progress_term,
+    _parse_academic_period,
     _requirement_display_label,
 )
+
+
+def test_parse_academic_period_formats() -> None:
+    assert _parse_academic_period("Fall 2026") == "Fall 2026"
+    assert _parse_academic_period("Fall 2026 Quarter") == "Fall 2026"
+    assert _parse_academic_period("2025-2026 Winter Quarter") == "Winter 2026"
+    assert _parse_academic_period("2025-2026 Fall Quarter") == "Fall 2025"
+    assert _parse_academic_period("Spring 2026-2027") == "Spring 2026"
+    assert _parse_academic_period("nonsense") is None
+
+
+def test_latest_in_progress_term_picks_max_enrolled_quarter() -> None:
+    rows = [
+        {"status": "Satisfied", "academic_period": "Spring 2024"},
+        {"status": "In Progress", "academic_period": "Fall 2023"},
+        {"status": "In Progress", "academic_period": "Fall 2026"},
+    ]
+    assert _latest_in_progress_term(rows) == "Fall 2026"
+    assert _latest_in_progress_term([]) is None
+    assert _latest_in_progress_term(
+        [{"status": "Satisfied", "academic_period": "Spring 2024"}]
+    ) is None
 
 
 def test_requirement_display_label_strips_prefixes() -> None:

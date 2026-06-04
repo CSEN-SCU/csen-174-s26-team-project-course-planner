@@ -300,9 +300,25 @@ def run_llm_planner(
         )
 
     missing_details = enrich_missing_details(missing_details, parsed_rows)
-    units_lookup = build_units_lookup(missing_details, parsed_rows)
-
     completed_set = set(extract_completed_course_codes(parsed_rows))
+    from utils.major_requirements import (
+        filter_superseded_missing_details,
+        normalize_major_id,
+        resolve_major_id,
+    )
+
+    missing_details, _ = filter_superseded_missing_details(
+        missing_details,
+        completed_set,
+        major_id=normalize_major_id(
+            resolve_major_id(
+                confirmed_major_id=confirmed_major_id,
+                missing_details=missing_details,
+                parsed_rows=parsed_rows,
+            )
+        ),
+    )
+    units_lookup = build_units_lookup(missing_details, parsed_rows)
     for c in completed_course_codes or []:
         norm = _normalize_code(c)
         if norm:
