@@ -63,11 +63,36 @@ export function FirstLoginCarousel({ open, onFinish }: FirstLoginCarouselProps) 
           )}
 
           {step === 2 && (
-            <LinkStep
-              body="You will need to export your Academic Progress Report from Workday so the planner can understand your remaining requirements. Click the button below to read a tutorial on how to export if you need instructions on how to do it."
-              href={ACADEMIC_PROGRESS_TUTORIAL_HREF}
-              linkText="Open Academic Progress Export Tutorial"
-            />
+            <div className="mx-auto flex h-full max-w-xl flex-col items-center justify-center text-center">
+              <p className="text-lg leading-8 text-neutral-700">
+                You will need to export your Academic Progress Report from
+                Workday so the planner can understand your remaining
+                requirements. Click the button below to read a tutorial on how
+                to export if you need instructions on how to do it.
+              </p>
+              <a
+                href={ACADEMIC_PROGRESS_TUTORIAL_HREF}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-8 inline-flex rounded-full bg-[var(--scu-red)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--scu-dark-red)]"
+              >
+                Open Academic Progress Export Tutorial
+              </a>
+              <div className="mt-8 w-full rounded-2xl border border-[var(--scu-red)]/30 bg-red-50/60 px-5 py-4 text-left">
+                <p className="text-sm font-semibold text-[var(--scu-text)]">
+                  Just want to try it out first?
+                </p>
+                <p className="mt-1 text-sm leading-6 text-neutral-700">
+                  You don't need your own report to explore the planner. Click{" "}
+                  <span className="font-semibold text-[var(--scu-red)]">
+                    “Try a sample file”
+                  </span>{" "}
+                  at the bottom of the chat panel (just under the message box, to
+                  the right of the upload hint) to load an example Academic
+                  Progress Report and see how everything works.
+                </p>
+              </div>
+            </div>
           )}
 
           {step === 3 && (
