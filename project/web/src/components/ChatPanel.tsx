@@ -14,7 +14,10 @@ import {
   type MajorDetection,
 } from "../api/client";
 import { formatPlanCourseSummarySuffix } from "../lib/recommendedCourseDisplay";
-import { fetchSampleAcademicProgressFile } from "../lib/sampleAcademicProgress";
+import {
+  SAMPLE_ACADEMIC_PROGRESS_FILENAME,
+  fetchSampleAcademicProgressFile,
+} from "../lib/sampleAcademicProgress";
 import type { ParsedRow } from "../types";
 import { MajorConfirmPanel } from "./MajorConfirmPanel";
 import { PlannerColumnHeader } from "./PlannerColumnHeader";
@@ -61,7 +64,7 @@ export type ChatPanelProps = {
   onSelectMajor?: (majorId: string, name: string) => void;
   onMajorConfirmed?: () => void;
   onRequestMajorChange?: () => void;
-  onTranscriptUploaded?: (detection: MajorDetection | null) => void;
+  onTranscriptUploaded?: (detection: MajorDetection | null, isSample?: boolean) => void;
   /** Clears persisted transcript memory when the user discards a re-upload. */
   onDiscardTranscript?: () => void | Promise<void>;
 };
@@ -196,8 +199,15 @@ export function ChatPanel({
       setFileUploaded(true);
       setTranscriptDiscarded(false);
       const det = (data.major_detection as MajorDetection | undefined) ?? null;
-      onTranscriptUploaded?.(det);
-      const reply = `Got it! Found ${md.length} missing requirements${userId ? " and saved your progress" : ""}. Confirm your major below, then tell me your preferences for next quarter.`;
+      const isSample = f.name === SAMPLE_ACADEMIC_PROGRESS_FILENAME;
+      onTranscriptUploaded?.(det, isSample);
+      // For the bundled sample we auto-confirm the detected major (the sample
+      // report is generated for one specific major), so the user can jump
+      // straight to planning instead of confirming it manually.
+      const reply =
+        isSample && det?.major_id
+          ? `Loaded the sample Academic Progress report (${det.name ?? det.major_id}). Found ${md.length} missing requirements — tell me your preferences for next quarter and I'll build a schedule.`
+          : `Got it! Found ${md.length} missing requirements${userId ? " and saved your progress" : ""}. Confirm your major below, then tell me your preferences for next quarter.`;
       setMessages((m) => [...m, { id: `a-${Date.now()}`, role: "assistant", content: reply }]);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

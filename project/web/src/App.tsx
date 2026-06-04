@@ -1171,14 +1171,17 @@ export default function App({ userId, onSignOut, onDeleteUserData }: AppProps) {
         focusNonce={chatFocusNonce}
         setParsedRows={setParsedRows}
         onSignOut={onSignOut}
-        onTranscriptUploaded={(det) => {
+        onTranscriptUploaded={(det, isSample) => {
           setMajorDetection(det ?? null);
-          setMajorConfirmed(false);
           setMajorEditMode(false);
           if (det?.major_id) {
             setStudentMajorId(det.major_id);
+            // The bundled sample report is tied to one specific major, so
+            // auto-confirm it for the demo instead of forcing a manual pick.
+            setMajorConfirmed(Boolean(isSample));
           } else {
             setStudentMajorId(null);
+            setMajorConfirmed(false);
           }
         }}
         onDiscardTranscript={clearTranscriptMemory}
