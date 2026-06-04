@@ -12,6 +12,8 @@ SCU Course Planner is a web app for Santa Clara University students. The website
 
 View a live demo of SCU Course Planner [Here](https://csen-174-s26-team-project-course-planner.onrender.com/)
 
+Watch a demo video of SCU Course Planner [Here](https://youtu.be/tVj_4x3yKEU)
+
 ## Run locally
 
 **Backend**:
