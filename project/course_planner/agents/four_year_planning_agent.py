@@ -879,13 +879,13 @@ RULES:
     N quarters; aim for about ⌈N/4⌉ quarters unless prereqs or term-offering
     rules force more.
 5. Respect typical prerequisites: introductory/numbered-lower courses before advanced ones.
-6. Group lecture + lab pairs in the SAME quarter when the requirement includes a
-   lab (e.g. CSEN 194 + CSEN 194L). CSEN/COEN 195 and 196 do NOT have lab
-   sections — schedule only the lecture, each as 2 units (not 4).
+6. Group lecture + lab pairs in the SAME quarter for Senior Design and other
+   lab requirements (e.g. CSEN 194 + CSEN 194L, CSEN 195 + CSEN 195L,
+   CSEN 196 + CSEN 196L). Each is 1 unit lecture + 1 unit lab (NOT 4+1).
 7. CSEN/COEN/ECEN 194 / 195 / 196 are a 3-quarter Senior Design sequence taken
    ONLY in the senior (final) year, one per quarter and locked to the term:
-   194 in FALL (1 unit + 194L 1 unit), 195 in WINTER (2 units), 196 in SPRING
-   (2 units) — never two in the same quarter.
+   194 in FALL, 195 in WINTER, 196 in SPRING — each quarter is lecture + lab
+   (2 units total for that pair) — never two senior-design courses in one quarter.
    Senior Design runs CONCURRENT with other remaining major / Core courses
    (typical senior quarter: "CSEN 19x[/L] + 1–2 other courses").
 7b. SEQUENTIAL CORE PAIRS — "Cultures & Ideas 1 → 2" and "Critical Thinking &

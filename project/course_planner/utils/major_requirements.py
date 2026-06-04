@@ -30,19 +30,21 @@ _SENIOR_DESIGN_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Bulletin units for the design-project sequence (not standard 4-unit + lab pairs).
+# Bulletin: each design-project course is 1 unit + 1-unit lab (194/195/196).
 _SENIOR_DESIGN_UNITS: dict[str, int] = {
     "CSEN 194": 1,
     "COEN 194": 1,
     "CSEN 194L": 1,
     "COEN 194L": 1,
-    "CSEN 195": 2,
-    "COEN 195": 2,
-    "CSEN 196": 2,
-    "COEN 196": 2,
+    "CSEN 195": 1,
+    "COEN 195": 1,
+    "CSEN 195L": 1,
+    "COEN 195L": 1,
+    "CSEN 196": 1,
+    "COEN 196": 1,
+    "CSEN 196L": 1,
+    "COEN 196L": 1,
 }
-# 195 and 196 are single courses — no companion lab section (digit after 19x).
-_SENIOR_DESIGN_NO_LAB_DIGITS = frozenset({5, 6})
 
 # Upper-division CSEN courses that strongly indicate a senior CSEN student.
 _CSEN_SENIOR_MARKERS = frozenset(
@@ -989,8 +991,6 @@ def enforce_senior_design_in_final_quarters(
         placed: list[dict[str, Any]] = []
         for entry in groups[digit]:
             code = _normalize_code(str(entry.get("course") or ""))
-            if digit in _SENIOR_DESIGN_NO_LAB_DIGITS and code.endswith("L"):
-                continue
             if code in _SENIOR_DESIGN_UNITS:
                 entry = dict(entry)
                 entry["units"] = _SENIOR_DESIGN_UNITS[code]
@@ -1013,7 +1013,7 @@ def normalize_senior_design_courses(
     plan: dict[str, Any],
     major_id: str | None,
 ) -> dict[str, Any]:
-    """Apply correct units and drop spurious 195L/196L lab rows."""
+    """Apply bulletin units (1 + 1 lab) for 194/195/196; fix mistaken 4-unit defaults."""
     major_id = normalize_major_id(major_id)
     if not major_id:
         return plan
@@ -1022,40 +1022,24 @@ def normalize_senior_design_courses(
     if not spec.get("senior_design_final_year_only"):
         return plan
 
-    sd_bases = [
-        c for c in _senior_design_codes(major_id)
-        if not c.endswith("L") and c not in ("CSEN 192",)
-    ]
-
-    def _sd_digit(code: str) -> int | None:
-        m = re.search(r"19(\d)", _normalize_code(code))
-        return int(m.group(1)) if m else None
+    sd_codes = set(_senior_design_codes(major_id))
 
     def _is_sd(code: str) -> bool:
         norm = _normalize_code(code)
-        for sd in sd_bases:
-            if norm == sd or norm == sd + "L":
-                return True
-        return False
+        return norm in sd_codes or norm in _SENIOR_DESIGN_UNITS
 
     for q in plan.get("quarters") or []:
         if not isinstance(q, dict):
             continue
-        kept: list[dict[str, Any]] = []
         for c in q.get("courses") or []:
             if not isinstance(c, dict):
                 continue
             code = _normalize_code(str(c.get("course") or ""))
             if not _is_sd(code):
-                kept.append(c)
                 continue
-            digit = _sd_digit(code)
-            if digit in _SENIOR_DESIGN_NO_LAB_DIGITS and code.endswith("L"):
-                continue
-            row = dict(c)
             if code in _SENIOR_DESIGN_UNITS:
-                row["units"] = _SENIOR_DESIGN_UNITS[code]
-            kept.append(row)
-        q["courses"] = kept
-        q["total_units"] = sum(int(x.get("units") or 0) for x in kept)
+                c["units"] = _SENIOR_DESIGN_UNITS[code]
+        q["total_units"] = sum(
+            int(x.get("units") or 0) for x in (q.get("courses") or []) if isinstance(x, dict)
+        )
     return plan

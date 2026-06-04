@@ -19,7 +19,7 @@ from utils.major_requirements import (
 )
 
 
-def test_normalize_senior_design_drops_195l_and_sets_two_units() -> None:
+def test_normalize_senior_design_keeps_labs_and_sets_one_unit_each() -> None:
     plan = {
         "quarters": [
             {
@@ -34,8 +34,9 @@ def test_normalize_senior_design_drops_195l_and_sets_two_units() -> None:
     }
     out = normalize_senior_design_courses(plan, "csen")
     codes = [c["course"] for c in out["quarters"][0]["courses"]]
-    assert codes == ["CSEN 195"]
-    assert out["quarters"][0]["courses"][0]["units"] == 2
+    assert codes == ["CSEN 195", "CSEN 195L"]
+    assert out["quarters"][0]["courses"][0]["units"] == 1
+    assert out["quarters"][0]["courses"][1]["units"] == 1
     assert out["quarters"][0]["total_units"] == 2
 
 
