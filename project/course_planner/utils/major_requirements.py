@@ -30,6 +30,20 @@ _SENIOR_DESIGN_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Bulletin units for the design-project sequence (not standard 4-unit + lab pairs).
+_SENIOR_DESIGN_UNITS: dict[str, int] = {
+    "CSEN 194": 1,
+    "COEN 194": 1,
+    "CSEN 194L": 1,
+    "COEN 194L": 1,
+    "CSEN 195": 2,
+    "COEN 195": 2,
+    "CSEN 196": 2,
+    "COEN 196": 2,
+}
+# 195 and 196 are single courses — no companion lab section (digit after 19x).
+_SENIOR_DESIGN_NO_LAB_DIGITS = frozenset({5, 6})
+
 # Upper-division CSEN courses that strongly indicate a senior CSEN student.
 _CSEN_SENIOR_MARKERS = frozenset(
     {
@@ -972,7 +986,16 @@ def enforce_senior_design_in_final_quarters(
     for digit in sorted(groups):
         term = sd_terms.get(digit, spring)
         q = _get_or_create(term)
-        q["courses"] = list(q.get("courses") or []) + groups[digit]
+        placed: list[dict[str, Any]] = []
+        for entry in groups[digit]:
+            code = _normalize_code(str(entry.get("course") or ""))
+            if digit in _SENIOR_DESIGN_NO_LAB_DIGITS and code.endswith("L"):
+                continue
+            if code in _SENIOR_DESIGN_UNITS:
+                entry = dict(entry)
+                entry["units"] = _SENIOR_DESIGN_UNITS[code]
+            placed.append(entry)
+        q["courses"] = list(q.get("courses") or []) + placed
         q["total_units"] = sum(int(x.get("units") or 0) for x in q["courses"] if isinstance(x, dict))
 
     # Drop quarters left empty after the move and re-sort chronologically.
@@ -983,4 +1006,56 @@ def enforce_senior_design_in_final_quarters(
     plan["quarters"] = quarters
     if quarters:
         plan["graduation_term"] = str(quarters[-1].get("term") or "")
+    return normalize_senior_design_courses(plan, major_id)
+
+
+def normalize_senior_design_courses(
+    plan: dict[str, Any],
+    major_id: str | None,
+) -> dict[str, Any]:
+    """Apply correct units and drop spurious 195L/196L lab rows."""
+    major_id = normalize_major_id(major_id)
+    if not major_id:
+        return plan
+    catalog = load_major_catalog()
+    spec = (catalog.get("majors") or {}).get(major_id) or {}
+    if not spec.get("senior_design_final_year_only"):
+        return plan
+
+    sd_bases = [
+        c for c in _senior_design_codes(major_id)
+        if not c.endswith("L") and c not in ("CSEN 192",)
+    ]
+
+    def _sd_digit(code: str) -> int | None:
+        m = re.search(r"19(\d)", _normalize_code(code))
+        return int(m.group(1)) if m else None
+
+    def _is_sd(code: str) -> bool:
+        norm = _normalize_code(code)
+        for sd in sd_bases:
+            if norm == sd or norm == sd + "L":
+                return True
+        return False
+
+    for q in plan.get("quarters") or []:
+        if not isinstance(q, dict):
+            continue
+        kept: list[dict[str, Any]] = []
+        for c in q.get("courses") or []:
+            if not isinstance(c, dict):
+                continue
+            code = _normalize_code(str(c.get("course") or ""))
+            if not _is_sd(code):
+                kept.append(c)
+                continue
+            digit = _sd_digit(code)
+            if digit in _SENIOR_DESIGN_NO_LAB_DIGITS and code.endswith("L"):
+                continue
+            row = dict(c)
+            if code in _SENIOR_DESIGN_UNITS:
+                row["units"] = _SENIOR_DESIGN_UNITS[code]
+            kept.append(row)
+        q["courses"] = kept
+        q["total_units"] = sum(int(x.get("units") or 0) for x in kept)
     return plan

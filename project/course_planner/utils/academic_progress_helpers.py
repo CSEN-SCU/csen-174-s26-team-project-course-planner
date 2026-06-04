@@ -176,6 +176,115 @@ def default_units_for_code(code: str, lookup: dict[str, int]) -> int:
     return _DEFAULT_LECTURE_UNITS
 
 
+_UD_COURSES_MARKER = "3 ud courses"
+_ENRICHMENT_MARKER = "educational enrichment"
+_UD_COURSE_TARGET = 3
+_ENRICHMENT_COURSE_TARGET = 3
+
+
+def _lecture_base(code: str) -> str:
+    norm = _normalize_code(code)
+    if norm.endswith("L") and len(norm) > 2 and norm[-2].isdigit():
+        return norm[:-1]
+    return norm
+
+
+def _courses_counted_for_requirement(
+    parsed_rows: list[dict[str, Any]] | None,
+    requirement_key: str,
+) -> set[str]:
+    """Distinct lecture courses (labs collapse to lecture) tied to one requirement."""
+    bases: set[str] = set()
+    key = requirement_key.strip()
+    for row in parsed_rows or []:
+        if not isinstance(row, dict):
+            continue
+        req = str(row.get("requirement") or "").strip()
+        if req != key:
+            continue
+        status = str(row.get("status") or "").strip().lower()
+        if status not in _COMPLETED_STATUSES:
+            continue
+        code = _normalize_code(row.get("course_code"))
+        if code:
+            bases.add(_lecture_base(code))
+    return bases
+
+
+def expand_partial_requirement_gaps(
+    missing_details: list[dict[str, Any]] | None,
+    parsed_rows: list[dict[str, Any]] | None,
+) -> list[dict[str, Any]]:
+    """Add gap rows Workday omits when a combo requirement is only partly done.
+
+    Workday often marks "3 UD Courses" or "Educational Enrichment" as In Progress
+    once one course is enrolled, so ``not_satisfied`` never lists the remaining
+    slots. The four-year planner needs explicit rows for each remaining course.
+    """
+    out: list[dict[str, Any]] = [
+        dict(item) for item in (missing_details or []) if isinstance(item, dict)
+    ]
+    rows = [r for r in (parsed_rows or []) if isinstance(r, dict)]
+
+    ud_requirement: str | None = None
+    enrichment_requirement: str | None = None
+    for row in rows:
+        req = str(row.get("requirement") or "").strip()
+        low = req.lower()
+        if _UD_COURSES_MARKER in low and ud_requirement is None:
+            ud_requirement = req
+        if _ENRICHMENT_MARKER in low and enrichment_requirement is None:
+            enrichment_requirement = req
+    for item in out:
+        req = str(item.get("requirement") or "").strip()
+        low = req.lower()
+        if _UD_COURSES_MARKER in low and ud_requirement is None:
+            ud_requirement = req
+        if _ENRICHMENT_MARKER in low and enrichment_requirement is None:
+            enrichment_requirement = req
+
+    if ud_requirement:
+        have = len(_courses_counted_for_requirement(rows, ud_requirement))
+        existing = sum(
+            1 for item in out if _UD_COURSES_MARKER in str(item.get("requirement") or "").lower()
+        )
+        need = max(0, _UD_COURSE_TARGET - have - existing)
+        for i in range(need):
+            out.append(
+                {
+                    "requirement": ud_requirement,
+                    "remaining": (
+                        f"UD emphasis course ({have + existing + i + 1} of {_UD_COURSE_TARGET})"
+                    ),
+                    "status": "Not Satisfied",
+                    "units": 4,
+                }
+            )
+
+    if enrichment_requirement:
+        have = len(_courses_counted_for_requirement(rows, enrichment_requirement))
+        existing = sum(
+            1
+            for item in out
+            if _ENRICHMENT_MARKER in str(item.get("requirement") or "").lower()
+        )
+        need = max(0, _ENRICHMENT_COURSE_TARGET - have - existing)
+        for i in range(need):
+            out.append(
+                {
+                    "requirement": enrichment_requirement,
+                    "remaining": (
+                        f"Educational enrichment course "
+                        f"({have + existing + i + 1} of {_ENRICHMENT_COURSE_TARGET})"
+                    ),
+                    "status": "Not Satisfied",
+                    "units": 4,
+                }
+            )
+
+    return out
+
+
 def enrich_missing_details(
     missing_details: list[dict[str, Any]] | None,
     parsed_rows: list[dict[str, Any]] | None,

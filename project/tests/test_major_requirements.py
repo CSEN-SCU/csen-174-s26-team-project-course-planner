@@ -8,6 +8,7 @@ from utils.major_requirements import (
     detect_major_detailed,
     enforce_senior_design_in_final_quarters,
     filter_superseded_missing_details,
+    normalize_senior_design_courses,
     infer_academic_stage,
     load_major_markdown_excerpt,
     next_senior_design_course,
@@ -16,6 +17,26 @@ from utils.major_requirements import (
     remaining_major_courses,
     resolve_major_id,
 )
+
+
+def test_normalize_senior_design_drops_195l_and_sets_two_units() -> None:
+    plan = {
+        "quarters": [
+            {
+                "term": "Winter 2027",
+                "courses": [
+                    {"course": "CSEN 195", "units": 4, "title": "SD2", "category": "M", "reason": "x"},
+                    {"course": "CSEN 195L", "units": 1, "title": "SDL", "category": "M", "reason": "x"},
+                ],
+                "total_units": 5,
+            },
+        ]
+    }
+    out = normalize_senior_design_courses(plan, "csen")
+    codes = [c["course"] for c in out["quarters"][0]["courses"]]
+    assert codes == ["CSEN 195"]
+    assert out["quarters"][0]["courses"][0]["units"] == 2
+    assert out["quarters"][0]["total_units"] == 2
 
 
 def test_filter_superseded_drops_csen10_when_coen11_and_csen12_done() -> None:

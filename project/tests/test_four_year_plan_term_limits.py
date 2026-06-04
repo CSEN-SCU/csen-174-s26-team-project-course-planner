@@ -26,6 +26,31 @@ def test_parse_academic_period_formats() -> None:
     assert _parse_academic_period("nonsense") is None
 
 
+def test_expand_partial_requirement_gaps_adds_ud_and_enrichment_slots() -> None:
+    from utils.academic_progress_helpers import expand_partial_requirement_gaps
+
+    ud_req = (
+        "Computer Science and Engineering Major: 3 UD Courses including associated labs"
+    )
+    enrich_req = "Computer Science and Engineering Major: Educational Enrichment - Courses"
+    parsed = [
+        {
+            "requirement": ud_req,
+            "status": "In Progress",
+            "course_code": "CSEN 163",
+        },
+        {
+            "requirement": ud_req,
+            "status": "In Progress",
+            "course_code": "CSEN 163L",
+        },
+    ]
+    missing = [{"requirement": enrich_req, "remaining": "Minimum Combination Required"}]
+    out = expand_partial_requirement_gaps(missing, parsed)
+    assert sum(1 for m in out if "3 ud courses" in str(m.get("requirement", "")).lower()) == 2
+    assert sum(1 for m in out if "educational enrichment" in str(m.get("requirement", "")).lower()) == 3
+
+
 def test_latest_in_progress_term_picks_max_enrolled_quarter() -> None:
     rows = [
         {"status": "Satisfied", "academic_period": "Spring 2024"},

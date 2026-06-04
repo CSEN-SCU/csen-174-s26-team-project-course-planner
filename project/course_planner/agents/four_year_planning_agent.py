@@ -655,6 +655,7 @@ def run_four_year_plan_agent(
     )
     from utils.academic_progress_helpers import (
         enrich_missing_details,
+        expand_partial_requirement_gaps,
         extract_completed_course_codes,
     )
     from utils.major_requirements import (
@@ -662,6 +663,7 @@ def run_four_year_plan_agent(
         enforce_senior_design_in_final_quarters,
         filter_superseded_missing_details,
         normalize_major_id,
+        normalize_senior_design_courses,
         resolve_major_id,
     )
     from utils.scu_course_schedule_xlsx import (
@@ -692,6 +694,7 @@ def run_four_year_plan_agent(
     missing_details, superseded_advice_notes = filter_superseded_missing_details(
         missing_details, completed_set, major_id=major_for_filter
     )
+    missing_details = expand_partial_requirement_gaps(missing_details, parsed_rows)
     if not missing_details:
         advice = "No remaining requirements need to be scheduled."
         if superseded_advice_notes:
@@ -876,21 +879,27 @@ RULES:
     N quarters; aim for about ⌈N/4⌉ quarters unless prereqs or term-offering
     rules force more.
 5. Respect typical prerequisites: introductory/numbered-lower courses before advanced ones.
-6. Group lecture + lab pairs (e.g. CSEN 194 + CSEN 194L) in the SAME quarter.
+6. Group lecture + lab pairs in the SAME quarter when the requirement includes a
+   lab (e.g. CSEN 194 + CSEN 194L). CSEN/COEN 195 and 196 do NOT have lab
+   sections — schedule only the lecture, each as 2 units (not 4).
 7. CSEN/COEN/ECEN 194 / 195 / 196 are a 3-quarter Senior Design sequence taken
    ONLY in the senior (final) year, one per quarter and locked to the term:
-   194 in FALL, 195 in WINTER, 196 in SPRING — never two in the same quarter.
+   194 in FALL (1 unit + 194L 1 unit), 195 in WINTER (2 units), 196 in SPRING
+   (2 units) — never two in the same quarter.
    Senior Design runs CONCURRENT with other remaining major / Core courses
-   (typical senior quarter: "CSEN 19x/L + 1–2 other courses").
+   (typical senior quarter: "CSEN 19x[/L] + 1–2 other courses").
 7b. SEQUENTIAL CORE PAIRS — "Cultures & Ideas 1 → 2" and "Critical Thinking &
    Writing 1 → 2" are the SAME course taken back-to-back: level 2 is the same
    subject as level 1 with the next catalog number (e.g. HIST 11A → HIST 12A),
    scheduled the very next quarter (level 1 in Fall, level 2 in Winter). Pick a
    real course for level 1 from its candidate list; derive level 2 from it.
-7c. EDUCATIONAL ENRICHMENT — pick any one enrichment-tagged candidate, label its
-   category "Educational Enrichment", and note in `reason`/`advice` that
-   enrichment courses are interchangeable: if the chosen one isn't offered that
-   quarter the student can swap it for another enrichment course.
+7c. EDUCATIONAL ENRICHMENT — schedule THREE separate enrichment courses (same
+   department sequence, e.g. three HIST or three SOCI). Label category
+   "Educational Enrichment". They are interchangeable — note in `reason`/`advice`
+   that the student can swap for another enrichment course if one isn't offered.
+7e. UD EMPHASIS — when REMAINING lists "3 UD Courses" slots still open, schedule
+   each as a distinct upper-division CSEN/COEN/ECEN emphasis course (with lab if
+   required), spread across quarters before senior year when possible.
 7d. RTC (Religion, Theology & Culture) — RTC 1 must come BEFORE RTC 2 and RTC 3.
    RTC 2 and RTC 3 may be taken in either order (RTC 3 before RTC 2 is allowed).
 8. If a course is only offered in certain quarters (Fall/Spring), note that in reason.
@@ -1177,6 +1186,7 @@ Output JSON matching the schema exactly.
     parsed = enforce_senior_design_in_final_quarters(
         parsed, major_id, completed=completed_set
     )
+    parsed = normalize_senior_design_courses(parsed, major_id)
 
     # ────────────────────────────────────────────────────────────────────────
     # "Remaining" must reflect the authoritative requirement total from the
