@@ -184,16 +184,35 @@ def _parse_json_from_response(text: str) -> dict[str, Any]:
     return json.loads(text)
 
 # ── Plan-length budget ───────────────────────────────────────────────────────
-# Average target load per quarter; SCU CoE recommends 14–16 units.
-_TARGET_UNITS_PER_QUARTER = 14
-# Hard cap on per-quarter units (matches the prompt rule "never exceed 20").
-_HARD_UNIT_CAP_PER_QUARTER = 16
+# Target per-quarter load. A typical full-time SCU engineering quarter is
+# ~18 units: two Core/GE courses + two major courses (4 units each) plus a
+# 1-unit lab. We aim for 16–18 so quarters are packed realistically instead
+# of being spread thin across extra years.
+_TARGET_UNITS_LOW = 16
+_TARGET_UNITS_PER_QUARTER = 18
+# Hard cap on per-quarter units. 20 is a fine full load at SCU; anything above
+# 20 is overloading and must never be recommended.
+_HARD_UNIT_CAP_PER_QUARTER = 20
 # Course-count budget. A full-time SCU quarter is typically 3–4 courses; we
 # default to 4 and never schedule more than 5 in one quarter. This is the
 # decisive guard when Workday gap rows lack a `units` field (so the units
 # budget alone would collapse the plan into one over-stuffed quarter).
 _TARGET_COURSES_PER_QUARTER = 4
 _MAX_COURSES_PER_QUARTER = 5
+
+# Workday "pseudo" subject codes that are NOT real SCU courses — they are
+# placeholders the Academic Progress export emits for an unfilled Core/GE
+# requirement (e.g. "IDEAS 1" for the "Cultures & Ideas 1" requirement). They
+# must never appear in a plan as if they were a course; instead the requirement
+# is resolved to a real course via the candidate resolver.
+_WORKDAY_PSEUDO_SUBJECTS = {"IDEAS"}
+
+
+def _is_pseudo_course_code(code: str) -> bool:
+    """True for Workday placeholder codes (e.g. 'IDEAS 1') that aren't courses."""
+    parts = (code or "").strip().upper().split()
+    return bool(parts) and parts[0] in _WORKDAY_PSEUDO_SUBJECTS
+
 
 # Senior design sequence (CSEN/COEN 194, 195, 196 — with or without trailing L).
 _SENIOR_DESIGN_RE = re.compile(
@@ -274,6 +293,29 @@ def _term_after(term: str) -> str:
     if season == "Fall":  # Fall → Winter crosses the calendar year
         year += 1
     return f"{nxt} {year}"
+
+
+_SEASON_RANK = {"Fall": 0, "Winter": 1, "Spring": 2, "Summer": 3}
+
+
+def _term_sort_key(term: str) -> tuple[int, int]:
+    """Chronological sort key for a "<Season> YYYY" term.
+
+    SCU academic years run Fall→Winter→Spring, where Winter/Spring share the
+    calendar year *after* the Fall, so Fall 2026, Winter 2027, Spring 2027 all
+    belong to academic year 2026 and sort in that order.
+    """
+    parts = str(term).split()
+    if len(parts) != 2:
+        return (9999, 9)
+    season = parts[0].capitalize()
+    try:
+        year = int(parts[1])
+    except ValueError:
+        return (9999, 9)
+    rank = _SEASON_RANK.get(season, 9)
+    acad_year = year if season == "Fall" else year - 1
+    return (acad_year, rank)
 
 
 def _lab_base(code: str) -> str:
@@ -370,6 +412,152 @@ def _enforce_course_count_cap(
     return plan
 
 
+# Sequential Core sequences taken back-to-back. The level-2 course is the SAME
+# course as level 1 with the next catalog number (e.g. HIST 11A → HIST 12A),
+# scheduled the immediately following quarter. SCU offers these as a locked
+# fall→winter pair, and the next-quarter catalog only ever lists one of them, so
+# we DERIVE level 2 from the chosen level-1 course instead of trusting the
+# resolver (which otherwise leaves level 2 unfilled).
+_SEQUENTIAL_CORE_SEQUENCES = (
+    ("cultures and ideas 1", "cultures and ideas 2", "Cultures & Ideas"),
+    ("critical thinking and writing 1", "critical thinking and writing 2",
+     "Critical Thinking & Writing"),
+)
+
+_SEQ_CODE_RE = re.compile(r"\s*([A-Z]{2,6})\s+(\d{1,3})([A-Z]?)\s*$", re.IGNORECASE)
+
+
+def _norm_category(text: Any) -> str:
+    return re.sub(r"\s+", " ", str(text or "").lower().replace("&", " and ")).strip()
+
+
+def _requirement_display_label(req_text: str) -> str:
+    """Human-readable name for a requirement, for a generic placeholder card.
+
+    'Core: ENGR: University Core'                         -> 'University Core'
+    'Core: ENGR: Critical Thinking & Writing 2'           -> 'Critical Thinking & Writing 2'
+    '... Major: Educational Enrichment – Courses'         -> 'Educational Enrichment – Courses'
+    """
+    t = str(req_text or "").strip()
+    if ":" in t:
+        t = t.split(":")[-1].strip()
+    t = re.sub(r"\s*\([^)]*\)\s*", " ", t).strip()
+    return t or "Requirement"
+
+
+def _distribute_placeholders(
+    plan: dict[str, Any],
+    placeholders: list[dict[str, Any]],
+    max_courses: int = _MAX_COURSES_PER_QUARTER,
+) -> dict[str, Any]:
+    """Add generic requirement placeholders to the lightest quarters under cap."""
+    if not placeholders:
+        return plan
+    quarters = plan.get("quarters") or []
+    if not isinstance(quarters, list):
+        quarters = []
+    for ph in placeholders:
+        target = None
+        for q in sorted(
+            quarters,
+            key=lambda q: (len(q.get("courses") or []), _term_sort_key(str(q.get("term") or ""))),
+        ):
+            if len(q.get("courses") or []) < max_courses:
+                target = q
+                break
+        if target is None:
+            last_term = str(quarters[-1].get("term") or "") if quarters else ""
+            target = {"term": _term_after(last_term), "courses": [], "total_units": 0}
+            quarters.append(target)
+        target["courses"] = list(target.get("courses") or []) + [ph]
+        target["total_units"] = sum(
+            int(c.get("units") or 0) for c in target["courses"] if isinstance(c, dict)
+        )
+    quarters.sort(key=lambda q: _term_sort_key(str(q.get("term") or "")))
+    plan["quarters"] = quarters
+    return plan
+
+
+def _enforce_sequential_core_pairs(
+    plan: dict[str, Any],
+    missing_details: list[dict],
+) -> dict[str, Any]:
+    """Lock back-to-back Core sequences (Cultures & Ideas 1→2, CTW 1→2).
+
+    When BOTH levels are still required and the model has scheduled a real
+    course for level 1, the level-2 course is forced to the same subject with
+    the next catalog number, placed in the quarter immediately after level 1.
+    """
+    quarters = plan.get("quarters") or []
+    if not isinstance(quarters, list) or not quarters:
+        return plan
+
+    req_texts = [
+        _norm_category(it.get("requirement") or it.get("category") or "")
+        for it in (missing_details or [])
+        if isinstance(it, dict)
+    ]
+
+    for l1_tag, l2_tag, label in _SEQUENTIAL_CORE_SEQUENCES:
+        if not any(l2_tag in r for r in req_texts):
+            continue
+
+        # Find the scheduled level-1 course (by its category tag).
+        l1_idx: int | None = None
+        l1_course: dict | None = None
+        for qi, q in enumerate(quarters):
+            for c in q.get("courses") or []:
+                if isinstance(c, dict) and l1_tag in _norm_category(c.get("category")):
+                    l1_idx, l1_course = qi, c
+                    break
+            if l1_course is not None:
+                break
+        if l1_course is None:
+            continue
+
+        m = _SEQ_CODE_RE.match(str(l1_course.get("course") or ""))
+        if not m:
+            continue
+        subj, num, suffix = m.group(1).upper(), int(m.group(2)), m.group(3).upper()
+        level2_code = f"{subj} {num + 1}{suffix}"
+
+        # Drop any existing level-2 entry the model produced (placeholder or a
+        # mismatched catalog pick) so we replace it with the derived course.
+        for q in quarters:
+            q["courses"] = [
+                c
+                for c in (q.get("courses") or [])
+                if not (isinstance(c, dict) and l2_tag in _norm_category(c.get("category")))
+            ]
+
+        level2 = {
+            "course": level2_code,
+            "title": l1_course.get("title"),
+            "category": f"Core: {label} 2",
+            "units": l1_course.get("units"),
+            "reason": f"Back-to-back sequence with {l1_course.get('course')} (same course, next number)",
+        }
+        target_term = _term_after(str(quarters[l1_idx].get("term") or ""))
+        target_q = next(
+            (q for q in quarters if str(q.get("term") or "") == target_term), None
+        )
+        if target_q is None:
+            target_q = {"term": target_term, "courses": [], "total_units": 0}
+            quarters.append(target_q)
+        target_q["courses"] = list(target_q.get("courses") or []) + [level2]
+
+    for q in quarters:
+        if isinstance(q, dict):
+            q["total_units"] = sum(
+                int(c.get("units") or 0)
+                for c in (q.get("courses") or [])
+                if isinstance(c, dict)
+            )
+    quarters.sort(key=lambda q: _term_sort_key(str(q.get("term") or "")))
+    plan["quarters"] = quarters
+    return plan
+
+
 def _drop_empty_quarters(plan: dict[str, Any]) -> dict[str, Any]:
     """Remove quarters with no courses; recompute graduation_term safely."""
     quarters = plan.get("quarters") or []
@@ -457,6 +645,18 @@ def run_four_year_plan_agent(
         if isinstance(item.get("units"), (int, float, str))
     )
     total_courses = len(missing_details)
+
+    # Workday emits placeholder "course" codes (e.g. "IDEAS 1") for unfilled
+    # Core/GE requirements. Null those out for the prompt so the model fills the
+    # requirement from the real candidate list instead of echoing the fake code.
+    prompt_details: list[dict] = []
+    for item in missing_details:
+        if isinstance(item, dict) and _is_pseudo_course_code(str(item.get("course") or "")):
+            cleaned = dict(item)
+            cleaned["course"] = None
+            prompt_details.append(cleaned)
+        else:
+            prompt_details.append(item)
 
     # Trim the candidate term list to a tight budget derived from BOTH the
     # remaining units and the remaining course count. Giving the model 12
@@ -558,7 +758,7 @@ NEXT TERMS (in order): {", ".join(term_list)}
 PLAN-LENGTH BUDGET (HARD):
 - Remaining work:       {total_units} units across {len(missing_details)} requirements.
 - Use AT MOST           {budget['max_quarters']} quarters total.
-- Target                {budget['target_quarters']} quarters at ~14 units each.
+- Target                {budget['target_quarters']} quarters at ~{_TARGET_UNITS_PER_QUARTER} units each.
 - Per quarter:          schedule 3–4 courses (4 is the default full-time load);
                         NEVER more than {_MAX_COURSES_PER_QUARTER} courses in any quarter.
 - Senior design present? {"YES" if has_senior_design else "no"} (forces 3 consecutive quarters).
@@ -569,7 +769,7 @@ PLAN-LENGTH BUDGET (HARD):
   its lab (e.g. CSEN 20 + CSEN 20L) together count as one of those courses.
 
 REMAINING REQUIREMENTS ({len(missing_details)} courses, {total_units} total units):
-{json.dumps(missing_details, ensure_ascii=False, indent=2)}
+{json.dumps(prompt_details, ensure_ascii=False, indent=2)}
 
 {open_req_block}{major_block}{pref_block}
 RULES:
@@ -583,24 +783,37 @@ RULES:
    then covers multiple open requirements.
 3. Never emit placeholder names like "Core - RTC 3", "Open Elective", or
    "Educational Enrichment" — use a real course code.
-4. Target 12–16 units per quarter; never exceed 20. Aim for 3–4 courses per
-   quarter (4 is the default full-time load) and NEVER more than
+4. Target {_TARGET_UNITS_LOW}–{_TARGET_UNITS_PER_QUARTER} units per quarter
+   (a typical full-time engineering quarter is ~{_TARGET_UNITS_PER_QUARTER}:
+   two Core/GE + two major courses + a lab); never exceed 20. Aim for 3–4
+   courses per quarter (4 is the default full-time load) and NEVER more than
    {_MAX_COURSES_PER_QUARTER}. Quarters with only 1 course are NOT acceptable
    unless there is literally nothing else left to schedule in that quarter
    (e.g. the last quarter has a single lab pair). Balance the load across
    quarters rather than front-loading one quarter.
 4b. Use the MINIMUM number of quarters possible WITHOUT exceeding
-    {_MAX_COURSES_PER_QUARTER} courses (or 16 units) in any single quarter.
+    {_MAX_COURSES_PER_QUARTER} courses (or {_HARD_UNIT_CAP_PER_QUARTER} units) in any single quarter.
     NEVER include empty quarters. Never spread N courses across more than
     N quarters; aim for about ⌈N/4⌉ quarters unless prereqs or term-offering
     rules force more.
 5. Respect typical prerequisites: introductory/numbered-lower courses before advanced ones.
 6. Group lecture + lab pairs (e.g. CSEN 194 + CSEN 194L) in the SAME quarter.
-7. CSEN/COEN/ECEN 194 / 195 / 196 are a 3-quarter Senior Design sequence for
-   engineering majors — place them in the LAST THREE quarters of this plan
-   (one lecture + lab per quarter), in order 194 → 195 → 196. Senior Design
-   runs CONCURRENT with other remaining major / Core courses (typical senior
-   quarter: "CSEN 19x/L + 1–2 other courses"), NOT in otherwise-empty quarters.
+7. CSEN/COEN/ECEN 194 / 195 / 196 are a 3-quarter Senior Design sequence taken
+   ONLY in the senior (final) year, one per quarter and locked to the term:
+   194 in FALL, 195 in WINTER, 196 in SPRING — never two in the same quarter.
+   Senior Design runs CONCURRENT with other remaining major / Core courses
+   (typical senior quarter: "CSEN 19x/L + 1–2 other courses").
+7b. SEQUENTIAL CORE PAIRS — "Cultures & Ideas 1 → 2" and "Critical Thinking &
+   Writing 1 → 2" are the SAME course taken back-to-back: level 2 is the same
+   subject as level 1 with the next catalog number (e.g. HIST 11A → HIST 12A),
+   scheduled the very next quarter (level 1 in Fall, level 2 in Winter). Pick a
+   real course for level 1 from its candidate list; derive level 2 from it.
+7c. EDUCATIONAL ENRICHMENT — pick any one enrichment-tagged candidate, label its
+   category "Educational Enrichment", and note in `reason`/`advice` that
+   enrichment courses are interchangeable: if the chosen one isn't offered that
+   quarter the student can swap it for another enrichment course.
+7d. RTC (Religion, Theology & Culture) — RTC 1 must come BEFORE RTC 2 and RTC 3.
+   RTC 2 and RTC 3 may be taken in either order (RTC 3 before RTC 2 is allowed).
 8. If a course is only offered in certain quarters (Fall/Spring), note that in reason.
 9. Each course must appear in EXACTLY ONE quarter — no duplicates, no omissions.
 10. Use only the term names from the NEXT TERMS list above.
@@ -743,8 +956,14 @@ Output JSON matching the schema exactly.
     # candidate (e.g. SCTR 128 for RTC 3, ENGL 181 for Arts) is valid.
     for course in open_req_courses:
         required_codes.add(course.upper())
+    # Drop Workday placeholder codes (e.g. "IDEAS 1") so they can never be
+    # whitelisted — the real Cultures & Ideas course comes from the resolver.
+    required_codes = {c for c in required_codes if not _is_pseudo_course_code(c)}
 
     def _is_valid_course(course_code: str) -> bool:
+        # Workday placeholder codes (e.g. "IDEAS 1") are never a real course.
+        if _is_pseudo_course_code(course_code):
+            return False
         # If we couldn't identify any specific codes (e.g. all open-ended
         # requirements like "RTC 3"), skip the filter entirely.
         if not required_codes:
@@ -812,6 +1031,55 @@ Output JSON matching the schema exactly.
                     int(c.get("units") or 0) for c in (quarter.get("courses") or [])
                 )
 
+    # Lock back-to-back Core sequences (Cultures & Ideas 1→2, CTW 1→2): the
+    # second course is the same course as the first with the next catalog
+    # number, in the following quarter. Done before the cap so the derived
+    # course participates in load balancing.
+    parsed = _enforce_sequential_core_pairs(parsed, missing_details)
+
+    # Any required item that still has no real course scheduled (e.g.
+    # "University Core", "Religious Studies", "Critical Thinking & Writing 2"
+    # that aren't offered/tagged next quarter) gets a clearly-labeled generic
+    # placeholder card instead of being silently dropped — so the plan shows
+    # the student exactly what's left and Remaining matches Scheduled.
+    scheduled_codes: set[str] = set()
+    scheduled_cats: list[str] = []
+    for q in parsed.get("quarters") or []:
+        for c in q.get("courses") or []:
+            if isinstance(c, dict):
+                scheduled_codes.add(str(c.get("course") or "").strip().upper())
+                scheduled_cats.append(_norm_category(c.get("category")))
+    placeholders: list[dict[str, Any]] = []
+    seen_labels: set[str] = set()
+    for item in missing_details:
+        if not isinstance(item, dict):
+            continue
+        req_text = str(item.get("requirement") or item.get("category") or "")
+        label = _normalize_open_req_text(req_text)
+        norm_codes = {c.strip().upper() for c in _resolve_item_codes(item) if c}
+        candidates = {c.upper() for c in open_req_by_label.get(label, [])}
+        covered = bool(norm_codes & scheduled_codes) or bool(candidates & scheduled_codes)
+        if not covered and label:
+            covered = any(label in cat or (cat and cat in label) for cat in scheduled_cats)
+        if covered or not req_text:
+            continue
+        disp = _requirement_display_label(req_text)
+        if disp.lower() in seen_labels:
+            continue
+        seen_labels.add(disp.lower())
+        units = int(item.get("units") or 0) or 4
+        placeholders.append(
+            {
+                "course": disp,
+                "title": f"{disp} (choose a course)",
+                "category": disp,
+                "units": units,
+                "reason": "Requirement still open — pick any course that satisfies it.",
+                "placeholder": True,
+            }
+        )
+    parsed = _distribute_placeholders(parsed, placeholders)
+
     # Enforce the per-quarter course cap deterministically: spill any
     # overflow forward so no quarter holds more than 5 courses, regardless of
     # what the model returned. Runs before Senior Design pinning so that the
@@ -829,7 +1097,11 @@ Output JSON matching the schema exactly.
     )
 
     # ────────────────────────────────────────────────────────────────────────
-    parsed.setdefault("total_remaining_units", total_units)
+    # "Remaining" must reflect the authoritative requirement total from the
+    # Academic Progress report, NOT the model's self-reported number (which is
+    # often inconsistent). The UI compares this against the sum of scheduled
+    # quarter units; a gap means a requirement could not be placed.
+    parsed["total_remaining_units"] = total_units
     parsed["meta"] = {
         "provider": "gemini",
         "model": candidate,

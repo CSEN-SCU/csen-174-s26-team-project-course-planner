@@ -1,16 +1,102 @@
 from agents.four_year_planning_agent import (
     FOUR_YEAR_TERM_COUNT,
+    _HARD_UNIT_CAP_PER_QUARTER,
     _MAX_COURSES_PER_QUARTER,
+    _TARGET_UNITS_PER_QUARTER,
+    _distribute_placeholders,
     _drop_empty_quarters,
     _enforce_course_count_cap,
+    _enforce_sequential_core_pairs,
     _estimate_quarter_budget,
     _generate_term_sequence,
     _has_senior_design,
+    _is_pseudo_course_code,
+    _requirement_display_label,
 )
+
+
+def test_requirement_display_label_strips_prefixes() -> None:
+    assert _requirement_display_label("Core: ENGR: University Core") == "University Core"
+    assert (
+        _requirement_display_label("Core: ENGR: Critical Thinking & Writing 2")
+        == "Critical Thinking & Writing 2"
+    )
+
+
+def test_distribute_placeholders_fills_lightest_quarter_under_cap() -> None:
+    plan = {
+        "quarters": [
+            {"term": "Fall 2026", "courses": [{"course": "CSEN 174", "units": 4}], "total_units": 4},
+            {"term": "Winter 2027", "courses": [], "total_units": 0},
+        ]
+    }
+    ph = [{"course": "University Core", "title": "University Core (choose a course)",
+           "category": "University Core", "units": 4, "reason": "x", "placeholder": True}]
+    out = _distribute_placeholders(plan, ph, max_courses=_MAX_COURSES_PER_QUARTER)
+    winter = next(q for q in out["quarters"] if q["term"] == "Winter 2027")
+    assert any(c["course"] == "University Core" for c in winter["courses"])
+    assert winter["total_units"] == 4
+
+
+def test_hard_unit_cap_is_20() -> None:
+    assert _HARD_UNIT_CAP_PER_QUARTER == 20
+
+
+def test_sequential_core_pair_derives_level2_next_quarter() -> None:
+    """Cultures & Ideas 2 is the same subject as level 1, +1 number, next term."""
+    plan = {
+        "quarters": [
+            {
+                "term": "Fall 2026",
+                "courses": [
+                    {
+                        "course": "HIST 11A",
+                        "title": "World History",
+                        "category": "Core: ENGR: Cultures & Ideas 1",
+                        "units": 4,
+                        "reason": "x",
+                    }
+                ],
+                "total_units": 4,
+            },
+            {"term": "Winter 2027", "courses": [], "total_units": 0},
+        ]
+    }
+    missing = [
+        {"requirement": "Core: ENGR: Cultures & Ideas 1", "course": "IDEAS 1", "units": 4},
+        {"requirement": "Core: ENGR: Cultures & Ideas 2", "course": "IDEAS 2", "units": 4},
+    ]
+    out = _enforce_sequential_core_pairs(plan, missing)
+    winter = next(q for q in out["quarters"] if q["term"] == "Winter 2027")
+    derived = [c for c in winter["courses"] if c["course"] == "HIST 12A"]
+    assert derived, "level-2 course must be derived as HIST 12A in the next quarter"
+    assert derived[0]["title"] == "World History"
 
 
 def test_four_year_term_count_is_12() -> None:
     assert FOUR_YEAR_TERM_COUNT == 12
+
+
+def test_target_units_per_quarter_is_18() -> None:
+    """SCU full-time engineering quarters are ~18 units; the budget must aim
+    there so plans pack realistically instead of spilling into a 5th year."""
+    assert _TARGET_UNITS_PER_QUARTER == 18
+
+
+def test_pseudo_course_code_detects_workday_placeholders() -> None:
+    assert _is_pseudo_course_code("IDEAS 1") is True
+    assert _is_pseudo_course_code("ideas 2") is True
+    assert _is_pseudo_course_code("CSEN 122") is False
+    assert _is_pseudo_course_code("CSEN 194L") is False
+    assert _is_pseudo_course_code("") is False
+
+
+def test_budget_targets_fewer_quarters_at_18_units() -> None:
+    """~62 remaining units / 16 courses should fit in ~4 quarters, not 5."""
+    budget = _estimate_quarter_budget(
+        total_units=62, total_courses=16, has_senior_design=True
+    )
+    assert budget["target_quarters"] == 4
 
 
 def test_generate_term_sequence_length_and_uniqueness() -> None:

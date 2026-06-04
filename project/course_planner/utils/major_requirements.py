@@ -39,6 +39,57 @@ _CSEN_SENIOR_MARKERS = frozenset(
 )
 
 
+_SEASON_RANK = {"Fall": 0, "Winter": 1, "Spring": 2, "Summer": 3}
+_SEASON_NEXT = {"Fall": "Winter", "Winter": "Spring", "Spring": "Fall"}
+
+
+def _parse_term(term: str) -> tuple[str, int] | None:
+    parts = str(term).split()
+    if len(parts) != 2:
+        return None
+    season = parts[0].capitalize()
+    if season not in _SEASON_RANK:
+        return None
+    try:
+        return season, int(parts[1])
+    except ValueError:
+        return None
+
+
+def _term_key(term: str) -> tuple[int, int]:
+    """Chronological key; Winter/Spring share the academic year of the prior Fall."""
+    p = _parse_term(term)
+    if not p:
+        return (9999, 9)
+    season, year = p
+    acad_year = year if season == "Fall" else year - 1
+    return (acad_year, _SEASON_RANK[season])
+
+
+def _term_next(term: str) -> str:
+    p = _parse_term(term)
+    if not p:
+        return term
+    season, year = p
+    if season == "Fall":  # Fall → Winter crosses the calendar year
+        year += 1
+    return f"{_SEASON_NEXT[season]} {year}"
+
+
+def _term_prev(term: str) -> str:
+    """Previous SCU quarter (inverse of :func:`_term_next`)."""
+    p = _parse_term(term)
+    if not p:
+        return term
+    season, year = p
+    if season == "Fall":
+        return f"Spring {year}"
+    if season == "Winter":
+        return f"Fall {year - 1}"
+    # Spring → Winter (same calendar year)
+    return f"Winter {year}"
+
+
 def _normalize_code(code: str | None) -> str:
     return (code or "").strip().upper()
 
@@ -715,11 +766,11 @@ def enforce_senior_design_in_final_quarters(
         return plan
 
     quarters = plan.get("quarters") or []
-    if not isinstance(quarters, list) or len(quarters) < 3:
+    if not isinstance(quarters, list) or not quarters:
         return plan
 
     alias_map = catalog.get("course_aliases") or {}
-    completed_set = completed or set()
+    _ = completed  # accepted for API compatibility; placement is term-driven
 
     def _is_sd_course(course_code: str) -> bool:
         norm = _normalize_code(course_code)
@@ -731,6 +782,8 @@ def enforce_senior_design_in_final_quarters(
                 return True
         return False
 
+    # Pull every senior-design entry out of wherever the model put it; we
+    # re-place them deterministically below.
     sd_entries: list[dict[str, Any]] = []
     for q in quarters:
         if not isinstance(q, dict):
@@ -747,48 +800,63 @@ def enforce_senior_design_in_final_quarters(
     if not sd_entries:
         return plan
 
-    # Order: 194, 195, 196 (labs follow their lecture in same quarter).
-    def _sd_sort_key(entry: dict[str, Any]) -> tuple[int, int]:
+    # Group each course (lecture + its lab) by the 194/195/196 number so they
+    # stay together and map to the correct quarter of the senior year.
+    groups: dict[int, list[dict[str, Any]]] = {}
+    for entry in sd_entries:
         code = _normalize_code(str(entry.get("course") or ""))
         base = code[:-1] if code.endswith("L") else code
         m = re.search(r"19(\d)", base)
-        num = int(m.group(1)) if m else 99
-        return (num, 1 if code.endswith("L") else 0)
+        digit = int(m.group(1)) if m else 9
+        groups.setdefault(digit, []).append(entry)
+    for entries in groups.values():
+        entries.sort(key=lambda e: 1 if _normalize_code(str(e.get("course") or "")).endswith("L") else 0)
 
-    sd_entries.sort(key=_sd_sort_key)
+    # Senior design is a locked Fall→Winter→Spring sequence: 194 in Fall, 195
+    # in the following Winter, 196 in the following Spring of the SAME academic
+    # (senior) year. Anchor it to a Spring term at the END of the plan so the
+    # final three quarters are exactly Fall, Winter, Spring.
+    existing_terms = [
+        str(q.get("term") or "")
+        for q in quarters
+        if isinstance(q, dict) and (q.get("courses") or [])
+    ]
+    last_term = (
+        max(existing_terms, key=_term_key)
+        if existing_terms
+        else str(plan.get("graduation_term") or "")
+    )
+    spring = last_term
+    guard = 0
+    while _parse_term(spring) and _parse_term(spring)[0] != "Spring" and guard < 12:
+        spring = _term_next(spring)
+        guard += 1
+    winter = _term_prev(spring)
+    fall = _term_prev(winter)
+    sd_terms = {4: fall, 5: winter, 6: spring}
 
-    target_indices = list(range(max(0, len(quarters) - 3), len(quarters)))
-    idx = 0
-    for q_idx in target_indices:
-        if idx >= len(sd_entries):
-            break
-        q = quarters[q_idx]
-        if not isinstance(q, dict):
-            continue
-        courses = q.get("courses") or []
-        if not isinstance(courses, list):
-            courses = []
-        # One lecture + its lab per target quarter when possible.
-        batch: list[dict[str, Any]] = []
-        while idx < len(sd_entries) and len(batch) < 2:
-            batch.append(sd_entries[idx])
-            idx += 1
-            if batch and not str(batch[-1].get("course") or "").endswith("L"):
-                # Prefer adding matching lab next if present.
-                if idx < len(sd_entries):
-                    nxt = _normalize_code(str(sd_entries[idx].get("course") or ""))
-                    lec = _normalize_code(str(batch[-1].get("course") or ""))
-                    if nxt == lec + "L":
-                        batch.append(sd_entries[idx])
-                        idx += 1
-        for entry in batch:
-            code = _normalize_code(str(entry.get("course") or ""))
-            if code and prerequisites_met(code.replace("L", ""), completed_set, catalog=catalog):
-                courses.append(entry)
-            elif code:
-                courses.append(entry)  # still place; student may be in-progress on prereqs
-        q["courses"] = courses
-        q["total_units"] = sum(int(x.get("units") or 0) for x in courses if isinstance(x, dict))
+    qmap = {str(q.get("term") or ""): q for q in quarters if isinstance(q, dict)}
 
+    def _get_or_create(term: str) -> dict[str, Any]:
+        q = qmap.get(term)
+        if q is None:
+            q = {"term": term, "courses": [], "total_units": 0}
+            qmap[term] = q
+            quarters.append(q)
+        return q
+
+    for digit in sorted(groups):
+        term = sd_terms.get(digit, spring)
+        q = _get_or_create(term)
+        q["courses"] = list(q.get("courses") or []) + groups[digit]
+        q["total_units"] = sum(int(x.get("units") or 0) for x in q["courses"] if isinstance(x, dict))
+
+    # Drop quarters left empty after the move and re-sort chronologically.
+    quarters = [
+        q for q in quarters if isinstance(q, dict) and (q.get("courses") or [])
+    ]
+    quarters.sort(key=lambda q: _term_key(str(q.get("term") or "")))
     plan["quarters"] = quarters
+    if quarters:
+        plan["graduation_term"] = str(quarters[-1].get("term") or "")
     return plan

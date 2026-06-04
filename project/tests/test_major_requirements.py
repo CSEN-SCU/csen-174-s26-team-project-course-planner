@@ -147,3 +147,44 @@ def test_enforce_senior_design_moves_to_last_three_quarters() -> None:
     assert "CSEN 194" in sd_in_last
     assert "CSEN 195" in sd_in_last
     assert "CSEN 196" in sd_in_last
+
+
+def test_senior_design_pins_to_fall_winter_spring_one_per_quarter() -> None:
+    """194→Fall, 195→Winter, 196→Spring, never two in the same quarter."""
+    plan = {
+        "quarters": [
+            {
+                "term": "Fall 2026",
+                "courses": [{"course": "CSEN 174", "units": 4, "title": "SE", "category": "Major", "reason": "x"}],
+                "total_units": 4,
+            },
+            {
+                "term": "Winter 2027",
+                "courses": [{"course": "CSEN 175", "units": 4, "title": "Compilers", "category": "Major", "reason": "x"}],
+                "total_units": 4,
+            },
+            {
+                # The bug: all three senior-design courses crammed in one quarter.
+                "term": "Spring 2027",
+                "courses": [
+                    {"course": "CSEN 194", "units": 1, "title": "SD I", "category": "Major", "reason": "x"},
+                    {"course": "CSEN 195", "units": 3, "title": "SD II", "category": "Major", "reason": "x"},
+                    {"course": "CSEN 196", "units": 3, "title": "SD III", "category": "Major", "reason": "x"},
+                ],
+                "total_units": 7,
+            },
+        ]
+    }
+    out = enforce_senior_design_in_final_quarters(plan, "csen")
+
+    def term_of(code: str) -> str:
+        for q in out["quarters"]:
+            if any(c["course"] == code for c in q["courses"]):
+                return str(q["term"])
+        return ""
+
+    t194, t195, t196 = term_of("CSEN 194"), term_of("CSEN 195"), term_of("CSEN 196")
+    assert t194.startswith("Fall")
+    assert t195.startswith("Winter")
+    assert t196.startswith("Spring")
+    assert len({t194, t195, t196}) == 3, "each senior-design course in its own quarter"

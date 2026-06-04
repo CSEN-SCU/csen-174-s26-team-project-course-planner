@@ -1322,13 +1322,21 @@ def _normalize_open_req_text(req_text: str) -> str:
     'Core: ENGR: RTC 3'  →  'rtc 3'
     'Core: ENGR: Experiential Learning for Social Justice'  →  'experiential learning for social justice'
     'Core: ENGR: Arts (ENGL 181 & …)'  →  'arts'
+    'Core: ENGR: Cultures & Ideas 1'  →  'cultures and ideas 1'
+
+    The category index built from the schedule xlsx spells ampersands out as
+    'and' (e.g. 'cultures and ideas 1'), so we MUST do the same here or the
+    lookup silently misses and the Workday placeholder code (e.g. 'IDEAS 1')
+    leaks into the plan instead of a real course.
     """
     text = req_text.strip()
     for prefix in _OPEN_REQ_STRIP_PREFIXES:
         if text.startswith(prefix):
             text = text[len(prefix):]
             break
-    text = _OPEN_REQ_PAREN_RE.sub(" ", text).strip()
+    text = _OPEN_REQ_PAREN_RE.sub(" ", text)
+    text = text.replace("&", " and ")
+    text = re.sub(r"\s+", " ", text).strip()
     return text.lower()
 
 

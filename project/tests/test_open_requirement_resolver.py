@@ -34,6 +34,12 @@ from agents.planning_agent import (
         ("Core: ENGR: Advanced Writing", "advanced writing"),
         ("Core: ENGR: Experiential Learning for Social Justice",
          "experiential learning for social justice"),
+        # Ampersand must be spelled out to match the category-index keys
+        # (which use "and"), otherwise the Workday "IDEAS N" placeholder leaks
+        # through instead of a real Cultures & Ideas course.
+        ("Core: ENGR: Cultures & Ideas 1", "cultures and ideas 1"),
+        ("Core: ENGR: Critical Thinking & Writing 2",
+         "critical thinking and writing 2"),
         # Strip parenthetical detail
         ("Core: ENGR: Arts (ENGL 181 & Design Project, OR 4 quarter units)",
          "arts"),
@@ -81,6 +87,18 @@ def test_resolve_exact_tag_match_returns_courses_in_schedule():
     assert "SCTR 128" in out
     assert "THEO 111" in out
     assert "THEO 99X" not in out, "must filter to courses actually in next-term schedule"
+
+
+def test_resolve_cultures_and_ideas_matches_ampersand_requirement():
+    """Regression: 'Cultures & Ideas 1' must hit the 'cultures and ideas 1' tag.
+
+    Before the &→and fix this returned [], so the Workday placeholder code
+    ('IDEAS 1') leaked into the four-year plan as a fake course.
+    """
+    cat = {"cultures and ideas 1": ["ANTH 11A", "HIST 11A"]}
+    sched = {("ANTH", "11A"): _slot(), ("HIST", "11A"): _slot()}
+    out = _resolve_open_requirement("Core: ENGR: Cultures & Ideas 1", cat, sched)
+    assert set(out) == {"ANTH 11A", "HIST 11A"}
 
 
 def test_resolve_returns_empty_for_unknown_requirement_text():
