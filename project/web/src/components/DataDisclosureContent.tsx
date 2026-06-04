@@ -13,10 +13,10 @@ export function DataDisclosureContent({ showDeleteDataLink = false }: DataDisclo
           <li>
             <strong>Academic Progress Data</strong>  Remaining course requirements parsed
             from uploaded Academic Progress reports. Names and grades are stripped
-            before sotring.
+            before storing.
           </li>
           <li>
-            <strong>Course Plan Snapshots</strong>  Generate Schedules are stored for your future reference and use.
+            <strong>Course Plan Snapshots</strong>  Generated Schedules are stored for your future reference and use.
           </li>
           <li>
             <strong>Preferences and Notes</strong>  Summaries of scheduling preferences

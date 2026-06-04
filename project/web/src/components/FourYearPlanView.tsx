@@ -345,7 +345,7 @@ export function FourYearPlanView({
                   {isExporting ? "Exporting…" : "Export to Spreadsheet"}
                 </button>
                 <p className="text-center text-xs italic text-neutral-500">
-                  Please double check any generated Four Year Plan with your major requirmenets and course availability. Planned courses not yet taken appear in <span className="font-bold">bold</span> in
+                  Please double check any generated Four-Year Plan with your major requiremenets and course availability. Planned courses not yet taken appear in <span className="font-bold">bold</span> in
                   the spreadsheet.
                 </p>
               </div>

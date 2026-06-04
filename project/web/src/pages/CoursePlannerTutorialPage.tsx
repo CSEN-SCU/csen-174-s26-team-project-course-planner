@@ -40,15 +40,15 @@ const STEPS = [
   },
   {
     number: 4,
-    text: "Write your courses preferences in the chat, such as difficulty, quality, time, or day of the week, then click Send",
+    text: "Write your course preferences in the chat, such as difficulty, quality, time, or day of the week, then click Send",
     image: step4Img,
     imageWidth: 1920,
     imageHeight: 1040,
-    alt: "Chat panel with a  highlighted message box containing a scheduling preference typed out",
+    alt: "Chat panel with a highlighted message box containing a scheduling preference typed out",
   },
   {
     number: 5,
-    text: "Carefully review your generated schedule, it is only intended to be a starting point. Modify it by either clicking on an open spot to add a new course, clicking on a course to change sections, clicking on the small X icon to remove it, or clicking Browse Courses to view a full ist of courses",
+    text: "Carefully review your generated schedule, it is only intended to be a starting point. Modify it by either clicking on an open spot to add a new course, clicking on a course to change sections, clicking on the small X icon to remove it, or clicking Browse Courses to view a full list of courses",
     image: step5Img,
     imageWidth: 1920,
     imageHeight: 1042,
@@ -72,7 +72,7 @@ const STEPS = [
   },
   {
     number: 8,
-    text: "The Four-Year Plan page will initially be filled with your courses up as layed out in you Academic Progress Report. Click the Generate Plan button to recommend courses into the future and download it using the Export to Spreadsheet button. Similar to the Course Schedules, these generated plans should be only be considered a starting point for you to work off of",
+    text: "The Four-Year Plan page will initially be filled with your courses laid out in your Academic Progress Report. Click the Generate Plan button to recommend courses into the future and download it using the Export to Spreadsheet button. Similar to the Course Schedules, these generated plans should only be considered a starting point for you to work off of",
     image: step8Img,
     imageWidth: 1920,
     imageHeight: 1041,
@@ -130,7 +130,7 @@ export function CoursePlannerTutorialPage({
       <div className="mx-auto mb-8 h-px w-12 bg-[var(--scu-red)]" aria-hidden />
 
       <p className="mb-10 text-left text-sm leading-relaxed text-neutral-600 sm:text-base">
-        Welcome to SCU Course Planner! This tutorial will walk you through the basic functionality of this web app. Please note, the generated recommnedations of SCU Course Planner are only intended as a starting point to save you time in picking classes and may be contain errors. You should use them as a starting point to refine them based on your needs and desires. Please make sure to check any recommendations before relying on them.
+        Welcome to SCU Course Planner! This tutorial will walk you through the basic functionality of this web app. Please note, the generated recommendations of SCU Course Planner are only intended as a starting point to save you time in picking classes and may contain errors. You should use them as a starting point to refine them based on your needs and desires. Please make sure to check any recommendations before relying on them.
       </p>
 
       <ol className="space-y-10">

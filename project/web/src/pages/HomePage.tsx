@@ -4,7 +4,7 @@ import { SiteFooter } from "../components/SiteFooter";
 import { resetPageScroll } from "../lib/scroll";
 
 const TAGLINE =
-  "Build your upcoming SCU schedule, perzonalized with on your major requirements and course preferences.";
+  "Build your upcoming SCU schedule, personalized with your major requirements and course preferences.";
 
 export type HomePageProps = {
   externalAuthError?: string | null;

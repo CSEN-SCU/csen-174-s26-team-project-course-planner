@@ -68,7 +68,7 @@ export function FirstLoginCarousel({ open, onFinish }: FirstLoginCarouselProps) 
                 You will need to export your Academic Progress Report from
                 Workday so the planner can understand your remaining
                 requirements. Click the button below to read a tutorial on how
-                to export if you need instructions on how to do it.
+                to export if you need instructions.
               </p>
               <a
                 href={ACADEMIC_PROGRESS_TUTORIAL_HREF}
