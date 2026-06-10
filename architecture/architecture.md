@@ -58,8 +58,8 @@ C4Container
     }
 
     System_Ext(geminiApi, "Google Gemini API", "LLM inference")
-    System_Ext(majorReqUrl, "SCU Undergradaute Bulletin", "Major requirements source")
-    System_Ext(courseFeeds, "SCU Course Data Sources", "CCurse catalog/section feed")
+    System_Ext(majorReqUrl, "SCU Undergraduate Bulletin", "Major requirements source")
+    System_Ext(courseFeeds, "SCU Course Data Sources", "Course catalog/section feed")
 
     Rel(student, frontend, "Uses", "HTTPS")
     Rel(frontend, backend, "Calls REST API", "HTTPS/JSON")

@@ -39,7 +39,7 @@ Our product vision has not changed since we first created it.
 
 
 ## Week 4 C4 Context Diagram and Container Diagram
-Our orignal Week 4 Context Diagram and Container Diagram can be found here: [architecture.md](architecture.md)
+Our original Week 4 Context Diagram and Container Diagram can be found here: [architecture.md](architecture.md)
 
 ## Current C4 Context Diagram
 
@@ -76,7 +76,7 @@ C4Container
         ContainerDb(mem, "Per-User Memory Files", "Markdown per user", "Long-term memory blocks; Gemini embeddings for retrieval")
     }
 
-    System_Ext(geminiApi, "Google Gemini API", "LLM used throughout course planning proccess")
+    System_Ext(geminiApi, "Google Gemini API", "LLM used throughout course planning process")
     System_Ext(googleOAuth, "Google OAuth", "Google account sign in")
     System_Ext(rmp, "RateMyProfessor", "Professor ratings API")
 
@@ -117,10 +117,10 @@ Prudent, Deliberate: We are running the live app as two separate Render services
 Reckless, Deliberate: Much of the documentation, such as the README is out of date from the current implementation. We are aware this will need to be cleaned up the code to make it easier to understand by someone else.
 
 
-Prudent, Inadvertent: We quickly developed the front end to make it functional, but this had the side effect of lacking good design. Now, as we go back and begin revising we see how we need to make the same functiaonltiy look and feel better for users.
+Prudent, Inadvertent: We quickly developed the front end to make it functional, but this had the side effect of lacking good design. Now, as we go back and begin revising we see how we need to make the same functionaltiy look and feel better for users.
 
 
-Prudent + Inadvertant: We used a # link work around to host multiple separate pages on Render because it worked separately than how front end files were layed out on our local machines for testing. If we were to refine the project further, we would want to design our code base around our hosting infastructure and vice versa.
+Prudent + Inadvertent: We used a # link work around to host multiple separate pages on Render because it worked separately than how front end files were laid out on our local machines for testing. If we were to refine the project further, we would want to design our code base around our hosting infrastructure and vice versa.
 
 ## What we would do differently in another sprint
 If we were to do another sprint, we would work on front-end optimizations to make the user experience better, and we would also work on general backend optimizations and clean ups to make sure it runs as smoothly as possible.
