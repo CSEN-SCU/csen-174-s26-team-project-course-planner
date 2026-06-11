@@ -8,13 +8,15 @@
 
 SCU Course Planner is a web app for Santa Clara University students. The website allows students to upload their Academic Progress Report in order to receive tailored course recommendations to aid students in planning their upcoming schedules. Next, students can manually add and remove classes to refine their schedule and save it for future reference. SCU Course Planner also visually lays out academic progress in a Four-Year Plan table, where students can then receive tailored Four-Year Plan recommendations.
 
-## Demo Link
+## Demo Links
+
+Read the technical report [Here](https://github.com/CSEN-SCU/csen-174-s26-team-project-course-planner/blob/main/docs/technical-report.md)
 
 View a live demo of SCU Course Planner [Here](https://csen-174-s26-team-project-course-planner.onrender.com/)
 
 Watch a demo video of SCU Course Planner [Here](https://youtu.be/tVj_4x3yKEU)
 
-## Run locally
+## Run Locally
 
 **Backend**:
 
